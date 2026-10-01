@@ -1,0 +1,5 @@
+# Files executed or parsed on the Raspberry Pi must have LF line endings
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf
+*.path text eol=lf

@@ -1,0 +1,10 @@
+[Unit]
+Description=Restart the NeuroEdge web app when a new verified model version is activated
+
+[Path]
+# edge.sync rewrites history.json only after a new version passed trial decryption + signature check.
+PathChanged=/var/lib/neuroedge/models/mri/history.json
+Unit=neuroedge-web-restart.service
+
+[Install]
+WantedBy=multi-user.target

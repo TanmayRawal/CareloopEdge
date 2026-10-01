@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart NeuroEdge web app (triggered by neuroedge-web-restart.path)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart neuroedge-web.service

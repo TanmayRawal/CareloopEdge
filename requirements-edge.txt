@@ -1,0 +1,14 @@
+# Raspberry Pi 5 (64-bit Raspberry Pi OS). Installed by edge/install_pi.sh. The fast path needs no PyTorch.
+numpy
+opencv-python-headless
+onnxruntime
+pydicom
+pyyaml
+scipy
+cryptography
+model-signing        # OpenSSF Model Signing: verifies the publisher signature of every bundle
+flask
+gunicorn
+# Deep Explain mode only (FP32 LayerCAM, implemented in edge/deep_explain.py without pytorch-grad-cam):
+#   torch + torchvision (CPU aarch64 wheels from download.pytorch.org/whl/cpu) and timm
+#   -> install_pi.sh --with-deep-explain

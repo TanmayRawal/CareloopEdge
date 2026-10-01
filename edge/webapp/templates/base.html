@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}NeuroEdge{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}"><span class="logo" aria-hidden="true"></span>NeuroEdge</a>
+    <nav>
+      <a href="{{ url_for('index') }}">Analyze</a>
+      <a href="{{ url_for('about') }}">Model card</a>
+    </nav>
+  </header>
+  <div class="disclaimer" role="note">{{ disclaimer }}</div>
+  <main>{% block content %}{% endblock %}</main>
+  <footer>Runs entirely on this device · images are processed in memory and never stored</footer>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

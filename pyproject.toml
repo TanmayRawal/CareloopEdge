@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuroedge"
+version = "0.1.0"
+description = "Secure, explainable brain-tumor MRI/CT classification for Raspberry Pi 5"
+requires-python = ">=3.10"
+# Core runtime needed on every target (training PC, server, Pi).
+# torch is deliberately NOT a core dependency: the Pi fast path runs on onnxruntime + numpy.
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "pydicom>=2.4",
+    "scipy>=1.10",
+    "pyyaml>=6.0",
+    "cryptography>=41",
+]
+
+[project.optional-dependencies]
+train = ["torch>=2.2", "torchvision", "timm>=1.0", "grad-cam>=1.5", "scikit-learn>=1.3",
+         "imagehash>=4.3", "pandas", "matplotlib", "tqdm", "onnx", "onnxruntime"]
+server = ["fastapi", "uvicorn", "argon2-cffi", "pyjwt", "model-signing"]
+edge = ["onnxruntime", "flask", "gunicorn", "model-signing"]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["neuroedge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

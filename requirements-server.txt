@@ -1,0 +1,6 @@
+# Model registry server (installed in the Docker image). Signing happens on the training PC
+# (server/publish.py, needs model-signing there) — the server itself never signs or decrypts models.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+argon2-cffi>=23
+cryptography>=41

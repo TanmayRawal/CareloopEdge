@@ -1,0 +1,22 @@
+[Unit]
+Description=NeuroEdge model sync (download, trial-decrypt and verify the latest signed bundle)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=neuroedge
+Group=neuroedge
+WorkingDirectory=/opt/neuroedge/src
+Environment=NEUROEDGE_HOME=/var/lib/neuroedge
+ExecStart=/opt/neuroedge/venv/bin/python -m edge.sync pull --model mri
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/neuroedge
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
