@@ -1,0 +1,21 @@
+# Clients that connect by IP address send no SNI; DEFAULT_SNI picks the certificate for them (e.g. the LAN IP).
+{
+	default_sni {$DEFAULT_SNI:localhost}
+}
+
+# TLS={$TLS}: "internal" = Caddy's local CA (LAN / localhost; devices must trust its root.crt),
+# or an e-mail address = Let's Encrypt for a public DOMAIN.
+{$DOMAIN} {
+	tls {$TLS}
+	encode gzip
+	request_body {
+		max_size 400MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	reverse_proxy api:8000
+}

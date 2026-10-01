@@ -1,0 +1,31 @@
+[Unit]
+Description=NeuroEdge offline LLM (llama.cpp server, Qwen3-1.7B Q4_K_M, loopback only)
+After=network.target
+
+[Service]
+User=neuroedge
+Group=neuroedge
+# One slot: the whole 4096-token context for one request at a time, minimal RAM. Requests queue.
+ExecStart=/opt/neuroedge/bin/llama-server -m /opt/neuroedge/llm/Qwen3-1.7B-Q4_K_M.gguf \
+          -c 4096 -np 1 -t 4 --host 127.0.0.1 --port 8081
+Restart=on-failure
+RestartSec=5
+# Image analysis has priority over text generation when both run.
+Nice=5
+MemoryMax=3G
+# Hardening: it only needs to read its binary and model and listen on loopback.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

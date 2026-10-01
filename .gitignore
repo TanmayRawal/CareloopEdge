@@ -1,0 +1,37 @@
+# Data and model artifacts never go into git (size + licensing + patient privacy)
+/data/
+/datasets/
+*.zip
+*.nii
+*.nii.gz
+*.dcm
+runs/
+checkpoints/
+artifacts/
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.npz
+*.enc
+keys/
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Generated reports (regenerate from code)
+training/reports/*
+!training/reports/.gitkeep
+server/server_data/
+server/.env
+keys/
+server/.admin_token
+.claude/settings.local.json
+server/.init_*
+*.log

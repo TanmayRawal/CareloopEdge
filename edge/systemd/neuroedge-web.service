@@ -1,0 +1,38 @@
+[Unit]
+Description=NeuroEdge web app (Flask under gunicorn)
+Wants=network-online.target neuroedge-llm.service
+After=network-online.target neuroedge-llm.service
+# Start only once a model is available: an enrolled, verified bundle (normal) or a dev bundle directory.
+ConditionPathExists=|/var/lib/neuroedge/models/mri/history.json
+ConditionPathExists=|/var/lib/neuroedge/dev_bundle/bundle.json
+
+[Service]
+User=neuroedge
+Group=neuroedge
+WorkingDirectory=/opt/neuroedge/src
+# NEUROEDGE_SECRET, NEUROEDGE_HOME, NEUROEDGE_MODEL, NEUROEDGE_LLM_URL (and NEUROEDGE_BUNDLE_DIR in dev mode)
+EnvironmentFile=/etc/neuroedge/web.env
+Environment=XDG_CACHE_HOME=/tmp/cache
+# Exactly ONE worker: cases live in an in-memory store (patient images never touch the disk), so
+# requests for a case must reach the process that analysed it. Threads give concurrency.
+# Long timeout: an LLM narrative on the Pi can take ~30 s.
+ExecStart=/opt/neuroedge/venv/bin/gunicorn --workers 1 --threads 4 --timeout 180 --worker-tmp-dir /dev/shm --no-control-socket \
+          --bind 0.0.0.0:8080 "edge.serve:wsgi()"
+Restart=on-failure
+RestartSec=5
+MemoryMax=3G
+# Hardening. The model is decrypted and verified in RAM (/dev/shm); nothing on disk needs writing.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

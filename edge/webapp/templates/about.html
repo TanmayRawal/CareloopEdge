@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Model card · NeuroEdge{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Model card</h1>
+  <table class="kv">
+    <tr><th>Task</th><td>4-class 2D brain MRI slice classification + tumor segmentation</td></tr>
+    <tr><th>Classes</th><td>{% for c in model_info.get('class_names', []) %}{{ class_text.get(c, c) }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+    <tr><th>Architecture</th><td>ResNet-50 (output stride 16), GAP→Linear classifier, FPN segmentation head</td></tr>
+    <tr><th>Precision on device</th><td>{{ model_info.get('precision', '—') }}</td></tr>
+    <tr><th>Version</th><td>{{ model_info.get('version', '—') }}</td></tr>
+  </table>
+  {% if model_info.get('metrics') %}
+  <h2>Measured performance</h2>
+  <table class="kv">
+    {% for split, m in model_info['metrics'].items() %}
+    <tr><th>{{ split }}</th><td>accuracy {{ '%.3f'|format(m.accuracy) }} · macro-F1 {{ '%.3f'|format(m.macro_f1) }}{% if m.macro_auroc == m.macro_auroc %} · AUROC {{ '%.3f'|format(m.macro_auroc) }}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <h2>Intended use</h2>
+  <p>Research and education. Not a medical device; not for clinical decisions.</p>
+  <h2>Known limitations</h2>
+  <ul>
+    <li>Single 2D slices only; T1-weighted (contrast-enhanced) MRI. Other sequences and CT are rejected or unreliable.</li>
+    <li>Trained on public data (BRISC 2025, re-split to remove duplicate and same-patient leakage). Accuracy drops on data
+        from other hospitals (external test macro-F1 ≈ 0.84).</li>
+    <li>For pituitary tumors the classifier relies largely on surrounding anatomy rather than the lesion itself; the
+        lesion outline comes from a separate segmentation head.</li>
+  </ul>
+  <h2>How the explanations work</h2>
+  <p><b>Grad-CAM</b> (exact): for this architecture the map is an exact decomposition — its values sum to the model's
+     score for the class. <b>Finer-CAM</b> shows what separates the predicted class from the runner-up.
+     <b>Deep Explain</b> (LayerCAM) is a sharper, less faithful detail view. Explanations show what the model used,
+     not where the disease is.</p>
+</section>
+{% endblock %}

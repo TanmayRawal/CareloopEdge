@@ -1,0 +1,21 @@
+# Modality / out-of-scope gate: rejects anything that is not a brain MRI or brain CT slice.
+name: gate
+class_names: [brain_mri, brain_ct, other]
+manifest: data/manifests/gate.csv
+output_dir: runs/gate
+
+preprocess:
+  image_size: 224
+  brain_crop: false     # the gate must see the raw upload
+
+model:
+  backbone: mobilenetv3_small_100
+  pretrained: true
+  segmentation: false
+
+train:
+  epochs: 15
+  batch_size: 64
+  lr_head: 1.0e-3
+  lr_backbone: 3.0e-4
+  seeds: [0]

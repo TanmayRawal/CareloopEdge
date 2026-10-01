@@ -1,0 +1,41 @@
+# NeuroEdge registry: FastAPI (internal only) behind Caddy (TLS).
+#   1. docker compose -f server/docker-compose.yml run --rm api python -m server.manage init --data /data
+#      (prints the admin token ONCE). All live state (SQLite, encrypted blobs, server key) is in the named
+#      volume "registry_data", never in a host folder: SQLite's WAL locking does not work across the Docker
+#      Desktop VM boundary, and a host-side read of a bind-mounted live database lost committed writes in
+#      testing (docs/FINDINGS.md §8). Back up with:  docker compose ... cp api:/data ./registry_backup
+#   2. server/.env:  DOMAIN=<hostname or LAN IP>   TLS=internal (LAN: Caddy's own CA; give its root.crt to the
+#      devices) or TLS=<your e-mail> (public domain: Let's Encrypt)   [HTTP_PORT=80  HTTPS_PORT=443]
+#   3. docker compose -f server/docker-compose.yml up -d --build
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    volumes:
+      - registry_data:/data                # admin.env (token hash only), registry.sqlite3, blobs/, secrets/
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    expose: ["8000"]                       # not published: only reachable through Caddy
+
+  caddy:
+    image: caddy:2
+    depends_on: [api]
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - TLS=${TLS:-internal}
+      - DEFAULT_SNI=${DEFAULT_SNI:-localhost}
+    # Host ports are configurable in server/.env (HTTP_PORT / HTTPS_PORT) for machines where 80/443 are taken.
+    ports: ["${HTTP_PORT:-80}:80", "${HTTPS_PORT:-443}:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  registry_data:
+  caddy_data:
+  caddy_config:

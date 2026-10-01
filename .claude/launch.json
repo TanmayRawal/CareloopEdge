@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "neuroedge-web",
+      "runtimeExecutable": "C:/Users/Tanmay/anaconda3/envs/yolo/python.exe",
+      "runtimeArgs": ["-m", "edge.serve", "--bundle-dir", "C:/Users/Tanmay/neuroedge_data/bundles/mri_v0_int8", "--port", "8080"],
+      "port": 8080
+    },
+    {
+      "name": "neuroedge-llm",
+      "runtimeExecutable": "C:/Users/Tanmay/neuroedge_data/llm/llama.cpp/llama-server.exe",
+      "runtimeArgs": ["-m", "C:/Users/Tanmay/neuroedge_data/llm/Qwen3-1.7B-Q4_K_M.gguf", "-c", "4096", "-t", "4",
+                      "--host", "127.0.0.1", "--port", "8081"],
+      "port": 8081
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Report · NeuroEdge{% endblock %}
+{% block content %}
+<section class="card narrow report" id="report" data-cid="{{ cid }}">
+  <div class="report-head">
+    <h1>Model output report — draft</h1>
+    <button class="btn no-print" id="print-btn" type="button">Print / save as PDF</button>
+  </div>
+  <p class="muted small">Generated {{ generated }} · model {{ version }} · research use only — not a diagnosis.</p>
+  {% if r.status == "ok" %}
+  <div class="report-images">
+    <figure><img src="{{ url_for('case_img', cid=cid, kind='original') }}" alt="Input"><figcaption>Input</figcaption></figure>
+    <figure><img src="{{ url_for('case_img', cid=cid, kind='cam') }}" alt="Grad-CAM"><figcaption>Grad-CAM ({{ class_text.get(r.prediction, r.prediction) }})</figcaption></figure>
+    <figure><img src="{{ url_for('case_img', cid=cid, kind='lesion') }}" alt="Lesion outline"><figcaption>Lesion outline</figcaption></figure>
+  </div>
+  {% endif %}
+  {% for title, text in sections %}
+  <h2>{{ title }}</h2><p>{{ text }}</p>
+  {% endfor %}
+  <h2>AI narrative <span class="muted small">(local LLM, checked against the facts above)</span></h2>
+  <p id="narrative">{% if narrative %}{{ narrative }}{% else %}<span class="muted">Not generated.</span>{% endif %}</p>
+  {% if r.status == "ok" %}
+  <button class="btn no-print" id="narrative-btn" type="button" {% if not llm_ready %}disabled title="Local LLM is offline"{% endif %}>
+    {% if llm_ready %}Generate AI narrative{% else %}AI narrative unavailable (LLM offline){% endif %}</button>
+  {% endif %}
+  <div class="signoff">
+    <p>Reviewed by: ______________________ &nbsp; Date: ____________ &nbsp; Signature: ______________________</p>
+    <p class="muted small">This draft is not valid without review by a qualified radiologist.</p>
+  </div>
+  <p class="no-print"><a href="{{ url_for('case', cid=cid) }}">← Back to result</a></p>
+</section>
+{% endblock %}

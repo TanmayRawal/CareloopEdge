@@ -1,0 +1,23 @@
+# 2D CT. Binary by default (Kaggle multimodal CT subset). If the IEEE Dataport 4-class set
+# (healthy / hemorrhage / ischemia / tumor) is obtained, switch class_names accordingly.
+name: ct
+class_names: [healthy, tumor]
+manifest: data/manifests/ct.csv
+output_dir: runs/ct
+conformal_alpha: 0.05
+
+preprocess:
+  image_size: 224
+  brain_crop: true
+
+model:
+  backbone: resnet50
+  output_stride: 16
+  pretrained: true
+  dropout: 0.3
+  segmentation: false   # no public CT tumor masks
+
+train:
+  epochs: 30
+  batch_size: 16
+  seeds: [0, 1, 2]
