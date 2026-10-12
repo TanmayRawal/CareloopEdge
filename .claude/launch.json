@@ -4,7 +4,7 @@
     {
       "name": "neuroedge-web",
       "runtimeExecutable": "C:/Users/Tanmay/anaconda3/envs/yolo/python.exe",
-      "runtimeArgs": ["-m", "edge.serve", "--bundle-dir", "C:/Users/Tanmay/neuroedge_data/bundles/mri_v0_int8",
+      "runtimeArgs": ["-m", "edge.serve", "--bundle-dir", "C:/Users/Tanmay/neuroedge_data/bundles/mri_v1_0.2.0_int8",
                       "--portal-data", "C:/Users/Tanmay/neuroedge_data/portal_dev", "--init-dev", "--port", "8080"],
       "port": 8080
     },
