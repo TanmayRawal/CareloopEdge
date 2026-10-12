@@ -1,15 +1,13 @@
 """Edge benchmark: what the Pi actually delivers (plan §6 targets), measured, not assumed.
 
-  python -m edge.bench --images DIR [--bundle-dir D | --model mri] [--n 50] [--deep 3] [--llm 3] [--out bench.json]
+  python -m edge.bench --images DIR [--bundle-dir D | --model mri] [--n 50] [--llm 3] [--out bench.json]
 
 Measures, after a warm-up:
-  analyze      end-to-end engine.analyze() per image (decode, preprocess, INT8 ONNX, exact CAM, Finer-CAM,
+  analyze      end-to-end engine.analyze() per image (decode, preprocess, INT8 ONNX, exact Grad-CAM, lesion,
                conformal, OOD, overlays): median / p95 wall time and the engine's per-stage timings
-  finer        re-rendering Finer-CAM at a new gamma (the slider)
-  deep         Deep Explain (FP32 LayerCAM), if the bundle and PyTorch allow it
   llm          one assistant narrative: tokens/s for prompt and generation from llama-server's own timings
   system       peak RSS, SoC temperature before/after, throttling flags (vcgencmd), CPU model
-Targets (plan §6): classifier + seg INT8 < 400 ms, exact CAM + Finer-CAM < 5 ms, Deep Explain < 6 s.
+Target: the full analysis (classifier + seg INT8, Grad-CAM, lesion, overlays) < 400 ms.
 Run on the Pi with the active cooler fitted; note the ambient temperature.
 """
 
@@ -125,7 +123,6 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=50)
     ap.add_argument("--warmup", type=int, default=3)
     ap.add_argument("--threads", type=int, default=4)
-    ap.add_argument("--deep", type=int, default=3, help="Deep Explain runs (0 = skip)")
     ap.add_argument("--llm", type=int, default=3, help="LLM narrative runs (0 = skip)")
     ap.add_argument("--llm-url", default="http://127.0.0.1:8081")
     ap.add_argument("--out", type=Path, default=Path("bench.json"))
@@ -153,7 +150,7 @@ def main() -> None:
     for i in range(args.warmup):
         eng.analyze(datas[i % len(datas)], filename=imgs[i % len(imgs)].name)
 
-    walls, stages, finer, last_ok = [], {}, [], None
+    walls, stages, last_ok = [], {}, None
     for i in range(args.n):
         j = i % len(datas)
         t = time.perf_counter()
@@ -163,33 +160,15 @@ def main() -> None:
             stages.setdefault(k, []).append(v)
         if res["status"] == "ok":
             last_ok = res
-            t = time.perf_counter()
-            eng.finer_png(res["_state"], 0.5)
-            finer.append((time.perf_counter() - t) * 1000)
     report["analyze_ms"] = stats_ms(walls)
     report["stage_ms"] = {k: stats_ms(v) for k, v in stages.items()}
-    if finer:
-        report["finer_rerender_ms"] = stats_ms(finer)
-
-    if args.deep and eng.has_deep_explain:
-        t = time.perf_counter()               # first call loads the FP32 weights: report it separately
-        eng.deep_explain(datas[0], filename=imgs[0].name)
-        report["deep_explain_cold_ms"] = round((time.perf_counter() - t) * 1000, 1)
-        ds = []
-        for i in range(args.deep):
-            t = time.perf_counter()
-            eng.deep_explain(datas[i % len(datas)], filename=imgs[i % len(imgs)].name)
-            ds.append((time.perf_counter() - t) * 1000)
-        report["deep_explain_ms"] = stats_ms(ds)
-    else:
-        report["deep_explain_ms"] = "skipped (no FP32 weights in bundle or PyTorch not installed)" if args.deep else "skipped"
 
     if args.llm and last_ok:
         last_ok = {k: v for k, v in last_ok.items() if k not in ("_state", "overlays")}
         report["llm"] = llm_bench(last_ok, args.llm_url, args.llm)
 
     report.update(peak_rss_mb=peak_rss_mb(), temp_end_c=soc_temp_c(), throttled_end=throttled(),
-                  targets={"analyze_lt_ms": 400, "deep_explain_lt_ms": 6000})
+                  targets={"analyze_lt_ms": 400})
     args.out.write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2))
 

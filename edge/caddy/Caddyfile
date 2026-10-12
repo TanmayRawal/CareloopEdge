@@ -1,0 +1,41 @@
+# NeuroEdge portal on the Pi: HTTPS in front of the loopback-only Flask app (edge/systemd/neuroedge-web.service).
+#
+# Certificates come from Caddy's own local CA ("tls internal"), issued on demand for the name the browser used:
+# https://<hostname>.local or https://<LAN IP> (the hotspot hands out changing IPs, so no IP is hard-coded).
+# Browsers that connect by IP send no SNI; Caddy then uses the connection's local IP as the name.
+# The portal's /_tls_ask endpoint approves only this device's names and private IPs.
+# Devices trust the portal once they install the CA root: http://<pi>/neuroedge-ca.crt (check its fingerprint
+# against the one printed by the installer / `sudo neuroedge-ca`).
+{
+	on_demand_tls {
+		ask http://127.0.0.1:8080/_tls_ask
+	}
+	admin off
+}
+
+https:// {
+	tls internal {
+		on_demand
+	}
+	encode gzip
+	request_body {
+		max_size 22MB
+	}
+	header {
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8080
+}
+
+# Plain HTTP: only the CA certificate (so devices can install it) and a redirect to HTTPS.
+http:// {
+	handle /neuroedge-ca.crt {
+		root * /srv/neuroedge-public
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}

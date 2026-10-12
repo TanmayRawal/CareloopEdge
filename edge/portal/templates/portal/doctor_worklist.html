@@ -2,8 +2,7 @@
 {% block title %}Worklist{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Worklist</h1>
-  <p class="muted">Ordered by AI triage: images the AI could not analyse first, then cases the AI flags for attention, then routine — oldest first within each group.</p></div>
+  <div><h1>Worklist</h1></div>
 </div>
 <div class="kpis">
   <a class="kpi {{ 'on' if status == 'open' }}" href="{{ url_for('doctor.worklist', status='open') }}"><b>{{ counts.awaiting_review + counts.in_review }}</b><span>Open</span></a>
@@ -21,13 +20,13 @@
     <tbody>
     {% for it in items %}{% set c = it.case %}{% set r = it.ai %}
       <tr>
-        <td>{% if c.priority >= 3 %}<span class="pri p3">AI could not analyse</span>
+        <td>{% if c.priority >= 3 %}<span class="pri p3">Not analysed</span>
             {% elif c.priority == 2 %}<span class="pri p2">Attention</span>{% else %}<span class="pri p1">Routine</span>{% endif %}</td>
         <td><b>{{ c.patient_name }}</b><br><span class="small muted mono">#{{ c.id[:8] }}</span></td>
         <td>{{ fmt_time(c.created) }}</td>
         <td>{% if r and r.status == 'ok' %}{{ class_text[r.prediction] }} <span class="muted small">{{ '%.0f'|format(100 * r.probabilities[r.prediction]) }}%</span>
-            {% elif r %}<span class="muted">Rejected input</span>{% else %}—{% endif %}</td>
-        <td>{% if r %}{% for f in r.flags if f in flag_text %}<span class="tag" title="{{ flag_text[f] }}">{{ f|replace('_', ' ') }}</span>{% endfor %}{% endif %}</td>
+            {% elif r %}<span class="muted">Not analysed</span>{% else %}—{% endif %}</td>
+        <td>{% if r %}{% for f in r.flags if f in flag_text %}<span class="tag" title="{{ flag_text[f] }}">{{ flag_short.get(f, f|replace('_', ' ')) }}</span>{% endfor %}{% endif %}</td>
         <td><span class="status s-{{ c.status }}">{{ status_text[c.status] }}</span>{% if c.doctor_name %}<br><span class="small muted">{{ c.doctor_name }}</span>{% endif %}</td>
         <td class="right"><a class="btn small {{ 'primary' if c.status in ('awaiting_review', 'in_review') }}" href="{{ url_for('doctor.case_review', cid=c.id) }}">{{ 'Review' if c.status in ('awaiting_review', 'in_review') else 'Open' }}</a></td>
       </tr>

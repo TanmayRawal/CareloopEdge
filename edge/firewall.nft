@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+# NeuroEdge inbound firewall (loaded by neuroedge-firewall.service). Only SSH, HTTP (redirect + CA download),
+# HTTPS (portal) and mDNS are reachable from the network; the Flask app and llama-server listen on loopback anyway.
+# Outbound traffic (registry sync, apt) is unrestricted. Re-loading is idempotent.
+table inet neuroedge
+delete table inet neuroedge
+table inet neuroedge {
+	chain input {
+		type filter hook input priority 0; policy drop;
+		iif "lo" accept
+		ct state established,related accept
+		ct state invalid drop
+		meta l4proto icmp accept
+		meta l4proto ipv6-icmp accept                      # IPv6 neighbour discovery needs this
+		udp dport 68 accept                                # DHCPv4 client
+		udp dport 546 accept                               # DHCPv6 client
+		udp dport 5353 accept                              # mDNS (<hostname>.local)
+		tcp dport 22 ct state new limit rate 10/minute burst 20 packets accept
+		tcp dport { 80, 443 } accept
+	}
+}

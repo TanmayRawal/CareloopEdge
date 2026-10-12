@@ -103,17 +103,21 @@ _CMAPS = {"inferno": cv2.COLORMAP_INFERNO, "turbo": cv2.COLORMAP_TURBO,
           "magma": cv2.COLORMAP_MAGMA, "viridis": cv2.COLORMAP_VIRIDIS}
 
 
-def overlay(gray_u8: np.ndarray, cam01: np.ndarray, cmap: str = "inferno", alpha: float = 0.6) -> np.ndarray:
-    """RGB overlay. Per-pixel opacity = alpha * cam01, so zero-evidence areas show raw anatomy.
+def overlay(gray_u8: np.ndarray, cam01: np.ndarray, cmap: str = "turbo", alpha: float = 0.7,
+            fade: tuple[float, float] = (0.1, 0.4)) -> np.ndarray:
+    """RGB overlay. Colour = cmap(cam01); per-pixel opacity = alpha * smoothstep(fade[0], fade[1], cam01).
 
-    This is a monotone display mapping of the same values (no thresholding).
+    Both mappings are monotone in the CAM value. Opacity fades to zero below fade[0] (10% of the map's maximum),
+    so weak evidence leaves the anatomy clean grey instead of tinting the whole brain.
     """
     if cam01.shape != gray_u8.shape:
         cam01 = upsample(cam01, gray_u8.shape)
-    heat = cv2.applyColorMap((np.clip(cam01, 0, 1) * 255).astype(np.uint8), _CMAPS[cmap])
+    c = np.clip(cam01, 0, 1)
+    heat = cv2.applyColorMap((c * 255).astype(np.uint8), _CMAPS[cmap])
     heat = cv2.cvtColor(heat, cv2.COLOR_BGR2RGB).astype(np.float32)
     base = np.repeat(gray_u8[..., None], 3, axis=-1).astype(np.float32)
-    a = (alpha * np.clip(cam01, 0, 1))[..., None]
+    t = np.clip((c - fade[0]) / (fade[1] - fade[0]), 0, 1)
+    a = (alpha * t * t * (3 - 2 * t))[..., None]
     return np.clip(base * (1 - a) + heat * a, 0, 255).astype(np.uint8)
 
 

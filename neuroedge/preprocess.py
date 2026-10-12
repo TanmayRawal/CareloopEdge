@@ -14,6 +14,7 @@ patient-identifying information never leaves `read_image`.
 from __future__ import annotations
 
 import io
+import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,44 @@ class PreprocessResult:
 
 
 # --------------------------------------------------------------------------------------- reading
+# Decompression-bomb guard: a 20 MB upload can declare e.g. 60000 x 60000 pixels. Dimensions are checked from the
+# file header BEFORE decoding (OpenCV is additionally capped via OPENCV_IO_MAX_IMAGE_PIXELS in edge/serve.py).
+MAX_PIXELS = 4096 * 4096
+
+
+def _check_dims(h: int, w: int, frames: int = 1) -> None:
+    if h <= 0 or w <= 0:
+        return                                       # unknown: the decoder decides (and is capped itself)
+    if h * w * max(frames, 1) > MAX_PIXELS:
+        raise ValueError(f"Image too large ({w} x {h} pixels); the limit is {MAX_PIXELS // 1_000_000} megapixels.")
+
+
+def raster_dims(data: bytes) -> tuple[int, int]:
+    """(height, width) from a PNG / JPEG / BMP header without decoding; (0, 0) if unknown."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        w, h = struct.unpack(">II", data[16:24])
+        return h, w
+    if data[:2] == b"BM" and len(data) >= 26:
+        w, h = struct.unpack("<ii", data[18:26])
+        return abs(h), abs(w)
+    if data[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            seg = struct.unpack(">H", data[i + 2:i + 4])[0]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                return h, w
+            i += 2 + seg
+    return 0, 0
+
+
 def _is_dicom(data: bytes, filename: str | None) -> bool:
     if filename and filename.lower().endswith((".dcm", ".dicom")):
         return True
@@ -74,6 +113,8 @@ def _read_dicom(data: bytes) -> RawImage:
     import pydicom
 
     ds = pydicom.dcmread(io.BytesIO(data), force=True)
+    _check_dims(int(getattr(ds, "Rows", 0) or 0), int(getattr(ds, "Columns", 0) or 0),
+                int(getattr(ds, "NumberOfFrames", 1) or 1))
     arr = ds.pixel_array.astype(np.float32)
     photometric = str(getattr(ds, "PhotometricInterpretation", "MONOCHROME2"))
     if arr.ndim == 3 and photometric not in ("RGB", "YBR_FULL", "YBR_FULL_422"):
@@ -96,6 +137,7 @@ def _read_dicom(data: bytes) -> RawImage:
 
 
 def _read_raster(data: bytes) -> RawImage:
+    _check_dims(*raster_dims(data))
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
     if img is None:
         raise ValueError("Could not decode image (supported: PNG, JPG, BMP, TIFF, DICOM).")

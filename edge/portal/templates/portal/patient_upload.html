@@ -1,8 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Upload scan{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Upload a brain MRI scan</h1>
-  <p class="muted">A clinic doctor will review your image and write a report.</p></div></div>
+<div class="page-head"><div><h1>Upload a brain MRI scan</h1></div></div>
 <section class="card narrow">
   {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
   <form method="post" enctype="multipart/form-data" class="form" id="upload-form">
@@ -17,8 +16,7 @@
     <label>Note for the doctor <span class="muted">(optional)</span>
       <textarea name="note" rows="3" maxlength="1000" placeholder="e.g. symptoms, reason for the scan"></textarea></label>
     <label class="check"><input type="checkbox" name="consent" value="yes" required>
-      <span>I consent to this image being stored encrypted on the clinic device and reviewed by clinic doctors with
-      the help of a research AI system.</span></label>
+      <span>I consent to this image being stored securely on the clinic device and reviewed by clinic doctors.</span></label>
     <button class="btn primary block" id="submit" type="submit">Submit for review</button>
   </form>
 </section>

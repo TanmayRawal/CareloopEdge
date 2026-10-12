@@ -45,11 +45,9 @@
         {% if report.recommendation %}<dt>Recommendation</dt><dd class="pre">{{ report.recommendation }}</dd>{% endif %}
         <dt>Signed</dt><dd>{{ report.doctor_name }} · {{ fmt_time(report.signed_at) }}{% if report.version > 1 %} · amended (version {{ report.version }}){% endif %}</dd>
       </dl>
-      <p class="small muted">Please discuss this report with your doctor. Do not make treatment decisions from this page alone.</p>
     {% else %}
       <h2>Waiting for your doctor</h2>
-      <p>Your image has been received and is in the clinic's review queue. You will see the report here once a doctor has signed it.</p>
-      <p class="small muted">Results are only released after review by a qualified doctor.</p>
+      <p>Your scan has been received. The report will appear here once your doctor has reviewed it.</p>
     {% endif %}
   </section>
 </div>

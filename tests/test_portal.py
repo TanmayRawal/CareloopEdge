@@ -245,3 +245,71 @@ def test_admin_creates_doctor_and_disables_user(env):
     a.post(f"/admin/users/{u['id']}/toggle", data={"csrf": tok})
     n = env["app"].test_client()
     assert "disabled" in login(n, "new@clinic.test").get_data(as_text=True)
+
+
+# --------------------------------------------------------------------------------------- HTTPS / reverse proxy
+def test_tls_name_allowlist():
+    import socket
+    from edge.portal.app import tls_name_allowed
+    assert tls_name_allowed("10.219.120.61") and tls_name_allowed("192.168.1.5") and tls_name_allowed("fe80::1")
+    assert tls_name_allowed("localhost") and tls_name_allowed(f"{socket.gethostname()}.local")
+    assert not tls_name_allowed("8.8.8.8") and not tls_name_allowed("evil.example.com")
+    assert not tls_name_allowed("other-device.local")
+
+
+def test_tls_ask_only_from_loopback_without_proxy_headers(env):
+    c = env["app"].test_client()
+    assert c.get("/_tls_ask?domain=10.0.0.7").status_code == 200
+    assert c.get("/_tls_ask?domain=example.com").status_code == 403
+    assert c.get("/_tls_ask?domain=10.0.0.7", environ_base={"REMOTE_ADDR": "10.0.0.9"}).status_code == 404
+    assert c.get("/_tls_ask?domain=10.0.0.7", headers={"X-Forwarded-For": "10.0.0.9"}).status_code == 404
+
+
+def test_behind_proxy_secure_cookie_and_client_ip(tmp_path):
+    from edge.agent.orchestrator import Assistant
+    key = tmp_path / "portal.key"
+    generate_key(key)
+    app = create_app(StubEngine(), {"version": "t"}, tmp_path / "data", key, assistant=Assistant(llm=NoLLM()),
+                     behind_proxy=True)
+    db = app.extensions["portal"]["db"]
+    db.create_user("doc@clinic.test", "Dr Test", "doctor", auth.hash_password(PW))
+    c = app.test_client()
+    hdr = {"X-Forwarded-For": "10.0.0.42", "X-Forwarded-Proto": "https"}
+    page = c.get("/login", headers=hdr, base_url="https://localhost")
+    tok = re.search(r'name="csrf" value="([^"]+)"', page.get_data(as_text=True)).group(1)
+    r = c.post("/login", data={"csrf": tok, "email": "doc@clinic.test", "password": PW}, headers=hdr,
+               base_url="https://localhost")
+    assert r.status_code == 302
+    cookie = r.headers.get("Set-Cookie", "")
+    assert cookie.startswith("__Host-ne_session=") and "Secure" in cookie and "HttpOnly" in cookie
+    ips = [row["ip"] for row in db.conn.execute("SELECT ip FROM audit WHERE action = 'login'")]
+    assert ips == ["10.0.0.42"]
+
+
+def test_login_redirect_rejects_offsite_targets():
+    from edge.portal.app import safe_next
+    assert safe_next("/doctor/case/abc") == "/doctor/case/abc"
+    for bad in ("//evil.example", "/\\evil.example", "/x\\y", "https://evil.example", "evil", "/a\r\nSet-Cookie:x", ""):
+        assert safe_next(bad) is None, bad
+
+
+def test_decompression_bomb_rejected_from_header():
+    import struct
+    import zlib
+    from neuroedge.preprocess import _read_raster, raster_dims
+    ihdr = struct.pack(">IIBBBBB", 60000, 60000, 8, 0, 0, 0, 0)
+    png = (b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + ihdr + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr))
+           + b"\x00" * 64)
+    assert raster_dims(png) == (60000, 60000)
+    with pytest.raises(ValueError, match="too large"):
+        _read_raster(png)
+
+
+def test_raster_dims_real_formats():
+    import cv2
+    import numpy as np
+    from neuroedge.preprocess import raster_dims
+    img = np.zeros((123, 77), np.uint8)
+    for ext in (".png", ".jpg", ".bmp"):
+        ok, buf = cv2.imencode(ext, img)
+        assert raster_dims(buf.tobytes()) == (123, 77), ext
