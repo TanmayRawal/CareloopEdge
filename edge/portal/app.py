@@ -186,7 +186,7 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
         elif pw != f.get("password2", ""):
             err = "Passwords do not match."
         elif f.get("consent") != "yes":
-            err = "Please accept the research-use statement."
+            err = "Please confirm the consent statement."
         else:
             err = auth.password_problem(pw, email)
         if err is None and db.user_by_email(email) is not None:
