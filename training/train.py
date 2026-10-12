@@ -9,7 +9,8 @@ Split schemes
   official  BRISC's published split: official train (minus a grouped 15% val) -> evaluated on the
             official test set AND on its leakage-free subset (`official_test_clean`)
 
-Loss = CE(logits, y) + w_seg * [BCE + soft-Dice](seg, mask | mask known)
+Loss = CE(logits, y) + w_seg * [(focal) BCE + soft-Dice](seg, mask | mask known)
+       + w_seg * w_aux * same loss on the coarsest FPN level (deep supervision, v1)
        + w_guid * (1 - energy of CAM_y inside the tumor mask)        [ablation only, Rao et al. 2023]
 Optimisation: AdamW (discriminative LRs), linear warm-up + cosine decay per step, bf16 autocast,
 EMA of weights (evaluated + saved), early stopping on validation macro-F1.
@@ -38,7 +39,7 @@ from torch.utils.data import DataLoader
 from neuroedge.config import TaskConfig, load_config
 from neuroedge.metrics import classification_metrics
 from neuroedge.models import MultiTaskNet
-from training.data.paths import DATA_ROOT, MANIFESTS, RUNS
+from training.data.paths import DATA_ROOT, RUNS, manifest_path
 from training.dataset import TumorDataset, build_cache
 
 
@@ -61,8 +62,10 @@ def _as_bool(s: pd.Series) -> pd.Series:
 def make_splits(df: pd.DataFrame, scheme: str) -> dict[str, pd.DataFrame]:
     ext = {s: g for s, g in df.groupby("split") if s.startswith("external_")}
     if scheme == "grouped":
-        return {"train": df[df.split == "train"], "val": df[df.split == "val"],
-                "test": df[df.split == "test"], **ext}
+        out = {"train": df[df.split == "train"], "val": df[df.split == "val"], "test": df[df.split == "test"]}
+        if (df.split == "cal").any():          # split v2: dedicated calibration split
+            out["cal"] = df[df.split == "cal"]
+        return {**out, **ext}
     if scheme == "official":
         b = df[df.dataset == "brisc"]
         tr = b[b.source_split == "train"]
@@ -74,12 +77,21 @@ def make_splits(df: pd.DataFrame, scheme: str) -> dict[str, pd.DataFrame]:
 
 
 # ------------------------------------------------------------------------------- losses
-def seg_loss(logits: torch.Tensor, target: torch.Tensor, has_mask: torch.Tensor) -> torch.Tensor:
+def seg_loss(logits: torch.Tensor, target: torch.Tensor, has_mask: torch.Tensor,
+             focal_gamma: float = 0.0) -> torch.Tensor:
+    """(focal) BCE + soft Dice over images with a known mask (tumour annotation or no_tumor = empty).
+    focal_gamma > 0 down-weights the easy background pixels (Lin et al. ICCV'17): tumours are ~1.5% of
+    the image, so plain BCE is dominated by background."""
     sel = has_mask > 0
     if not sel.any():
         return logits.sum() * 0.0
     lg, tg = logits[sel].float(), target[sel]
-    bce = F.binary_cross_entropy_with_logits(lg, tg)
+    if focal_gamma > 0:
+        ce = F.binary_cross_entropy_with_logits(lg, tg, reduction="none")
+        pt = torch.exp(-ce)
+        bce = ((1 - pt) ** focal_gamma * ce).mean()
+    else:
+        bce = F.binary_cross_entropy_with_logits(lg, tg)
     p = torch.sigmoid(lg)
     inter = (p * tg).sum((1, 2, 3))
     dice = 1 - (2 * inter + 1) / (p.sum((1, 2, 3)) + tg.sum((1, 2, 3)) + 1)  # smooth=1: empty masks OK
@@ -147,9 +159,18 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None, help="subsample each split (smoke test)")
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
+                    help="override a config field, e.g. --set model.attn_eps=0.005 (repeatable)")
     args = ap.parse_args()
 
     cfg: TaskConfig = load_config(args.config)
+    for item in args.set:                               # ablations without one YAML per variant
+        key, val = item.split("=", 1)
+        sect, field = key.split(".", 1)
+        obj = getattr(cfg, sect)
+        old = getattr(obj, field)                       # AttributeError on typos: fail loudly
+        setattr(obj, field, type(old)(val) if not isinstance(old, bool) else val.lower() in ("1", "true"))
+        print(f"override {key} = {getattr(obj, field)!r}")
     tc = cfg.train
     epochs = args.epochs or tc.epochs
     torch.manual_seed(args.seed)
@@ -157,7 +178,7 @@ def main() -> None:
     torch.backends.cudnn.benchmark = True
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    df = pd.read_csv(MANIFESTS / f"{cfg.name}.csv", keep_default_na=False)
+    df = pd.read_csv(manifest_path(cfg), keep_default_na=False)
     splits = make_splits(df, args.scheme)
     if args.limit:
         splits = {k: v.groupby("label", group_keys=False).apply(
@@ -204,7 +225,9 @@ def main() -> None:
             with torch.autocast(**amp):
                 out = model(x)
             ce = F.cross_entropy(out["logits"].float(), y)
-            sl = seg_loss(out["seg_logits"], m, hm) if "seg_logits" in out else ce * 0
+            sl = seg_loss(out["seg_logits"], m, hm, tc.seg_focal_gamma) if "seg_logits" in out else ce * 0
+            if "seg_aux_logits" in out:
+                sl = sl + cfg.model.seg_aux_weight * seg_loss(out["seg_aux_logits"], m, hm, tc.seg_focal_gamma)
             gl = ce * 0
             if tc.guidance_loss_weight > 0:
                 tumor = hm * (~torch.isin(y, no_tumor_idx)).float() * (m.sum((1, 2, 3)) > 0).float()

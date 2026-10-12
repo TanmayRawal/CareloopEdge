@@ -1,0 +1,40 @@
+# v1: lesion-attention pooling (exact CAM), split v2 with a dedicated calibration split, focal seg loss,
+# deep supervision. Ablations override fields on the command line, e.g.
+#   python -m training.train --config training/configs/mri_v1.yaml --set model.output_stride=8 --set model.attn_eps=0.005
+name: mri
+class_names: [glioma, meningioma, no_tumor, pituitary]
+manifest: data/manifests/mri_v2.csv     # train / val (model selection) / cal (calibration) / test (= v0 test)
+output_dir: runs/mri
+conformal_alpha: 0.05
+
+preprocess:                             # unchanged from v0 (same fingerprint, same cache)
+  image_size: 224
+  brain_crop: true
+  clahe: false
+
+model:
+  backbone: resnet50
+  output_stride: 16                     # ablation: 8 (28x28 CAM grid)
+  pretrained: true
+  dropout: 0.3
+  segmentation: true
+  fpn_channels: 128
+  pooling: lesion                       # a_ij = (p_ij + eps) / sum(p + eps), p = detached seg probability
+  attn_eps: 0.02                        # ablation: 0.005, 0.05
+  seg_aux_weight: 0.4                   # deep supervision on the coarsest FPN level
+
+train:
+  epochs: 40
+  batch_size: 16
+  lr_head: 1.0e-3
+  lr_backbone: 1.0e-4
+  weight_decay: 0.05
+  warmup_epochs: 2
+  ema_decay: 0.999
+  seg_loss_weight: 1.0
+  seg_focal_gamma: 2.0
+  guidance_loss_weight: 0.0             # v0 negative result; off
+  early_stop_patience: 8
+  amp: true
+  num_workers: 4
+  seeds: [0, 1, 2]

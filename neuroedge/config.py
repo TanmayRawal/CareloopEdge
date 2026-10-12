@@ -55,6 +55,11 @@ class ModelConfig:
     dropout: float = 0.3
     segmentation: bool = True
     fpn_channels: int = 128
+    # Classifier pooling. "gap": mean over cells (v0). "lesion": weights a_ij = (p_ij + eps) / sum(p + eps)
+    # from the DETACHED segmentation probability p (pooled to the CAM grid); exact CAM is preserved.
+    pooling: str = "gap"
+    attn_eps: float = 0.02
+    seg_aux_weight: float = 0.0        # deep supervision on the coarsest FPN level (0 = off)
 
 
 @dataclass
@@ -67,6 +72,7 @@ class TrainConfig:
     warmup_epochs: int = 2
     ema_decay: float = 0.999
     seg_loss_weight: float = 1.0
+    seg_focal_gamma: float = 0.0       # 0 = plain BCE (v0); 2.0 = focal BCE for small lesions
     guidance_loss_weight: float = 0.0  # explanation-guidance ablation (energy-in-mask)
     early_stop_patience: int = 8
     amp: bool = True

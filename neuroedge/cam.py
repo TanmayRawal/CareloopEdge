@@ -14,7 +14,17 @@ dy_c/dA_k(i,j) = W_ck/(hw) at every cell, hence:
     HiResCAM_c = sum_k (dy_c/dA_k) * A_k            = S_c
     Grad-CAM_c = ReLU(sum_k mean_ij(dy_c/dA_k) A_k) = ReLU(S_c)
 
-(Selvaraju et al. ICCV'17; Draelos & Carin '20). Finer-CAM (Zhang et al. CVPR'25) explains
+(Selvaraju et al. ICCV'17; Draelos & Carin '20).
+
+Weighted pooling (v1 lesion-attention head): with pooling weights a_ij >= 0, sum a = 1 (GAP is a = 1/hw),
+
+    y_c = b_c + sum_{ij} a_ij sum_k W_ck A_k(i,j),     S_c(i,j) = a_ij * sum_k W_ck A_k(i,j)
+
+and S_c is again an exact additive decomposition of the logit. Every function below takes an optional
+`attention` (h,w); None means GAP. Note: dy_c/dA_k(i,j) = a_ij W_ck now varies over cells, so HiResCAM
+(sum_k grad*A) still equals S_c, but classic Grad-CAM (spatially averaged gradient) does NOT: it would drop
+the a_ij weighting (the known Grad-CAM failure mode, Draelos & Carin '20). The app therefore shows ReLU(S_c),
+the HiResCAM form of Grad-CAM, which is faithful for both heads. Finer-CAM (Zhang et al. CVPR'25) explains
 y_t - gamma * y_r, which by linearity equals S_t - gamma * S_r: what distinguishes the target
 from its most similar class. All of this needs only a forward pass -> works on the INT8 Pi model.
 
@@ -29,21 +39,30 @@ import numpy as np
 
 
 # ------------------------------------------------------------------------------- exact maps
-def contribution_maps(features: np.ndarray, weight: np.ndarray) -> np.ndarray:
+def _weights(features: np.ndarray, attention: np.ndarray | None) -> np.ndarray:
+    _, h, w = features.shape
+    if attention is None:
+        return np.full((h, w), 1.0 / (h * w))
+    a = np.asarray(attention, np.float64).reshape(h, w)
+    return a
+
+
+def contribution_maps(features: np.ndarray, weight: np.ndarray, attention: np.ndarray | None = None) -> np.ndarray:
     """All classes at once: (K,h,w), (C,K) -> (C,h,w) per-cell logit contributions S_c."""
-    k, h, w = features.shape
-    return np.einsum("ck,khw->chw", weight.astype(np.float64), features.astype(np.float64)) / (h * w)
+    raw = np.einsum("ck,khw->chw", weight.astype(np.float64), features.astype(np.float64))
+    return raw * _weights(features, attention)[None]
 
 
-def exact_cam(features: np.ndarray, weight: np.ndarray, class_idx: int) -> np.ndarray:
-    """Signed contribution map S_c (h, w). Equals HiResCAM; ReLU of it equals Grad-CAM."""
-    return contribution_maps(features, weight[class_idx:class_idx + 1])[0]
+def exact_cam(features: np.ndarray, weight: np.ndarray, class_idx: int,
+              attention: np.ndarray | None = None) -> np.ndarray:
+    """Signed contribution map S_c (h, w). For GAP it equals HiResCAM; ReLU of it equals Grad-CAM."""
+    return contribution_maps(features, weight[class_idx:class_idx + 1], attention)[0]
 
 
 def decomposition_error(features: np.ndarray, weight: np.ndarray, bias: np.ndarray,
-                        logits: np.ndarray) -> float:
+                        logits: np.ndarray, attention: np.ndarray | None = None) -> float:
     """max_c |sum S_c + b_c - y_c|. ~0 (float error) for FP32; quantifies drift for INT8 models."""
-    s = contribution_maps(features, weight).sum(axis=(1, 2)) + bias
+    s = contribution_maps(features, weight, attention).sum(axis=(1, 2)) + bias
     return float(np.max(np.abs(s - logits)))
 
 
@@ -55,9 +74,10 @@ def most_similar_class(logits: np.ndarray, target: int) -> int:
 
 
 def finer_cam(features: np.ndarray, weight: np.ndarray, target: int, reference: int,
-              gamma: float = 1.0) -> np.ndarray:
-    """S_target - gamma * S_reference: exact decomposition of the margin y_t - gamma*y_r (- biases)."""
-    maps = contribution_maps(features, weight[[target, reference]])
+              gamma: float = 1.0, attention: np.ndarray | None = None) -> np.ndarray:
+    """S_target - gamma * S_reference: exact decomposition of the margin y_t - gamma*y_r (- biases).
+    Kept for research/evaluation; the v1 app shows Grad-CAM + lesion only."""
+    maps = contribution_maps(features, weight[[target, reference]], attention)
     return maps[0] - gamma * maps[1]
 
 

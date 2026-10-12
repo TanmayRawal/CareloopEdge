@@ -55,7 +55,7 @@ class _Reader(CalibrationDataReader):
 
 def split_arrays(bundle: dict, split: str, limit: int | None = None, seed: int = 0, manifest: str | None = None):
     """(normalized images, labels, ids) for a manifest split, read from the preprocessing cache."""
-    df = pd.read_csv(MANIFESTS / (manifest or f"{bundle['task']}.csv"), keep_default_na=False)
+    df = pd.read_csv(MANIFESTS / (manifest or bundle.get("manifest") or f"{bundle['task']}.csv"), keep_default_na=False)
     df = df[df["split"] == split]
     if limit and len(df) > limit:
         df = df.sample(limit, random_state=seed)
@@ -75,16 +75,27 @@ def rows_arrays(bundle: dict, df: pd.DataFrame, what: str = "rows"):
     raise FileNotFoundError(f"no cache contains all '{what}' images")
 
 
-def float_nodes(model_path: Path) -> list[str]:
-    """Names of the pooling + classifier nodes to keep in FP32."""
-    g = onnx.load(str(model_path)).graph
+def _ancestors(g, outputs: list[str]) -> set[str]:
     producer = {o: n for n in g.node for o in n.output}
-    keep = [n.name for n in g.node if n.op_type in ("ReduceMean", "GlobalAveragePool")]
-    head = producer["logits"]
-    keep.append(head.name)
-    if head.op_type == "Add":                      # MatMul + Add form of a Linear layer
-        keep += [producer[i].name for i in head.input if i in producer and producer[i].op_type == "MatMul"]
-    return keep
+    seen, stack = set(), [producer[o] for o in outputs if o in producer]
+    while stack:
+        n = stack.pop()
+        if n.name in seen:
+            continue
+        seen.add(n.name)
+        stack += [producer[i] for i in n.input if i in producer]
+    return seen
+
+
+def float_nodes(model_path: Path) -> list[str]:
+    """Nodes kept in FP32: everything that computes the logits / attention from the CAM feature map and the
+    segmentation output, i.e. ancestors of {logits, attention} that are NOT ancestors of `features` (the
+    backbone) or `seg_logits` (the segmentation network). That is exactly the attention weights, the pooling
+    and the linear classifier, so  sum_ij a_ij W_c.A_ij + b_c == logit_c  holds on the INT8 model."""
+    g = onnx.load(str(model_path)).graph
+    heads = [o for o in ("logits", "attention") if o in {x.name for x in g.output}]
+    keep = _ancestors(g, heads) - _ancestors(g, ["features"]) - _ancestors(g, ["seg_logits"])
+    return sorted(keep)
 
 
 def run(sess: ort.InferenceSession, x: np.ndarray, bs: int = 32) -> dict[str, np.ndarray]:
@@ -142,8 +153,9 @@ def main() -> None:
         probs = {k: p / p.sum(1, keepdims=True) for k, p in probs.items()}
         m = {k: classification_metrics(y, p, bundle["class_names"]) for k, p in probs.items()}
         pred = {k: p.argmax(1) for k, p in probs.items()}
-        drift = [map_similarity(exact_cam(o["fp32"]["features"][i], w, pred["fp32"][i]),
-                                exact_cam(o["int8"]["features"][i], w, pred["fp32"][i])) for i in range(len(y))]
+        drift = [map_similarity(exact_cam(o["fp32"]["features"][i], w, pred["fp32"][i], o["fp32"]["attention"][i]),
+                                exact_cam(o["int8"]["features"][i], w, pred["fp32"][i], o["int8"]["attention"][i]))
+                 for i in range(len(y))]
         report[split] = {
             "n": len(y),
             "fp32": {k: m["fp32"][k] for k in ("accuracy", "macro_f1", "macro_auroc")},
@@ -151,7 +163,8 @@ def main() -> None:
             "prediction_agreement": float((pred["fp32"] == pred["int8"]).mean()),
             "mcnemar": mcnemar_exact(pred["fp32"] == y, pred["int8"] == y),
             "cam_drift": {k: float(np.nanmean([d[k] for d in drift])) for k in drift[0]},
-            "int8_cam_decomposition_error": max(decomposition_error(o["int8"]["features"][i], w, b, o["int8"]["logits"][i])
+            "int8_cam_decomposition_error": max(decomposition_error(o["int8"]["features"][i], w, b, o["int8"]["logits"][i],
+                                                                     o["int8"]["attention"][i])
                                                 for i in range(len(y))),
         }
         r = report[split]
