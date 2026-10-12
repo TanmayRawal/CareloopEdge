@@ -1,12 +1,13 @@
 """Build a self-contained review zip for an external reviewer (code + trained model + sample scans + run scripts).
 
-  python -m training.make_review_package [--no-deep-explain] [--out DIR]
+  python -m training.make_review_package [--out DIR]
 
-Contents (secrets, datasets and the 1.1 GB LLM are never included):
+Contents (secrets, datasets, patient data and the 1.1 GB LLM are never included):
   code/           `git archive HEAD` (exactly what is committed; ignored files and secrets cannot leak in)
-  model/          the INT8 bundle the app serves (+ FP32 weights for Deep Explain unless --no-deep-explain)
+  model/          the INT8 v1 bundle the portal serves (mri/0.2.0)
   sample_scans/   held-out BRISC 2025 test slices (CC BY 4.0, attribution file included)
-  README.md, run_demo.bat / run_demo.sh, requirements-demo.txt, requirements-deep.txt, SHA256SUMS.txt
+  README.md, run_demo.bat / run_demo.sh, requirements-demo.txt, SHA256SUMS.txt
+The demo portal's database, encryption key and test accounts are created on the reviewer's machine at first start.
 """
 
 from __future__ import annotations
@@ -22,7 +23,8 @@ from pathlib import Path
 from training.data.paths import DATA_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
-BUNDLE = DATA_ROOT / "bundles" / "mri_v0_int8"
+BUNDLE = DATA_ROOT / "bundles" / "mri_v1_0.2.0_int8"
+MODEL_DIR = "mri_v1"
 SAMPLES = DATA_ROOT / "bench_samples"
 
 REQ_DEMO = """# Laptop demo (Windows / macOS / Linux, 64-bit Python 3.10-3.13)
@@ -34,14 +36,11 @@ pyyaml
 scipy
 cryptography
 flask
-"""
-REQ_DEEP = """# Optional: enables the "Deep Explain" (FP32 LayerCAM) tab. CPU-only PyTorch is enough.
-torch
-timm
+argon2-cffi
 """
 
 RUN_BAT = r"""@echo off
-rem NeuroEdge review demo (Windows). Double-click, or run from a terminal. Add "deep" to also install Deep Explain.
+rem NeuroEdge review demo (Windows). Double-click, or run from a terminal.
 cd /d "%~dp0"
 set PY=python
 where py >nul 2>nul && set PY=py -3
@@ -53,12 +52,12 @@ call .venv\Scripts\activate.bat || goto :err
 python -m pip install --upgrade pip >nul
 echo Installing packages (first run only, ~150 MB) ...
 python -m pip install -r requirements-demo.txt || goto :err
-if /i "%1"=="deep" python -m pip install -r requirements-deep.txt --extra-index-url https://download.pytorch.org/whl/cpu || goto :err
 echo.
 echo NeuroEdge is starting: open http://localhost:8080 (Ctrl+C here to stop)
+echo Test logins (patient, doctor, admin) are in portal_data\DEV_ACCOUNTS.txt
 start "" http://localhost:8080
 cd code
-python -m edge.serve --bundle-dir ..\model\mri_v0_int8 --port 8080
+python -m edge.serve --bundle-dir ..\model\mri_v1 --portal-data ..\portal_data --init-dev --port 8080
 goto :eof
 :err
 echo.
@@ -67,7 +66,7 @@ pause
 """
 
 RUN_SH = """#!/usr/bin/env bash
-# NeuroEdge review demo (macOS / Linux):  bash run_demo.sh      (add "deep" to also install Deep Explain)
+# NeuroEdge review demo (macOS / Linux):  bash run_demo.sh
 set -e
 cd "$(dirname "$0")"
 PY=$(command -v python3 || command -v python)
@@ -76,19 +75,19 @@ PY=$(command -v python3 || command -v python)
 python -m pip install --upgrade pip >/dev/null
 echo "Installing packages (first run only, ~150 MB) ..."
 python -m pip install -r requirements-demo.txt
-if [ "$1" = "deep" ]; then python -m pip install -r requirements-deep.txt --extra-index-url https://download.pytorch.org/whl/cpu; fi
 echo; echo "NeuroEdge is starting: open http://localhost:8080 (Ctrl+C to stop)"
+echo "Test logins (patient, doctor, admin) are in portal_data/DEV_ACCOUNTS.txt"
 ( sleep 3; (command -v open >/dev/null && open http://localhost:8080) || (command -v xdg-open >/dev/null && xdg-open http://localhost:8080) ) >/dev/null 2>&1 &
 cd code
-exec python -m edge.serve --bundle-dir ../model/mri_v0_int8 --port 8080
+exec python -m edge.serve --bundle-dir ../model/mri_v1 --portal-data ../portal_data --init-dev --port 8080
 """
 
-README = """# NeuroEdge: review package
+README = """# NeuroEdge: review package (v1, model mri/0.2.0)
 
-Secure, explainable brain-tumor MRI classification that runs offline on a Raspberry Pi 5. This package lets you
-run the same web app and trained model **on your laptop** and review the code, results and documentation.
+Secure, explainable brain-tumor MRI review that runs offline on a Raspberry Pi 5. This package runs the same
+clinic portal and trained model **on your laptop** so you can review the workflow, code, results and documentation.
 
-> **Research and education only. Not a medical device.** Outputs must not be used for diagnosis or treatment.
+> Research prototype on public data; not a medical device.
 
 ## 1. Run it (about 5 minutes, internet needed only the first time)
 Requirements: 64-bit **Python 3.10–3.13** (python.org) and about 1 GB of free disk space.
@@ -98,56 +97,68 @@ Requirements: 64-bit **Python 3.10–3.13** (python.org) and about 1 GB of free 
 | Windows | double-click **`run_demo.bat`** |
 | macOS / Linux | `bash run_demo.sh` in a terminal opened in this folder |
 
-The script creates a private environment in `.venv` (nothing is installed system-wide), installs the packages,
-starts the app and opens **http://localhost:8080**. Upload any scan from `sample_scans/`; the file names start
-with the true class. Stop the app with Ctrl+C.
+The script:
+1. creates a private environment in `.venv` (nothing is installed system-wide);
+2. installs the packages;
+3. on first start, creates a local demo database with **test accounts**, listed in `portal_data/DEV_ACCOUNTS.txt`
+   (patient, doctor, admin);
+4. opens **http://localhost:8080**.
 
-What to look at on a result page:
-* **Calibrated probabilities** and the **95% prediction set** (conformal). Odd inputs are rejected, not classified.
-* **Grad-CAM** (exact for this architecture), **Finer-CAM** (with a slider for comparison strength γ), and the
-  **lesion outline** from the separate segmentation head.
-* **Draft report** (template report with a reviewer sign-off) and **Ask about this result**.
+Stop the app with Ctrl+C. On the Pi the same portal is served over HTTPS; on the laptop it is plain localhost.
 
-Optional extras:
-* **Deep Explain** (FP32 LayerCAM): run `run_demo.bat deep` or `bash run_demo.sh deep`. This adds CPU PyTorch,
-  about 300 MB.
-* **AI assistant narratives**: these need a local LLM server. Without it the app uses deterministic template
-  answers. To enable it:
-  1. Download a llama.cpp release for your OS from https://github.com/ggml-org/llama.cpp/releases.
-  2. Download the model from https://huggingface.co/unsloth/Qwen3-1.7B-GGUF (file `Qwen3-1.7B-Q4_K_M.gguf`,
-     SHA-256 `b139949c…1897`).
-  3. Start `llama-server -m Qwen3-1.7B-Q4_K_M.gguf -c 4096 --port 8081` before the demo.
+**Try the workflow**
+1. Sign in as the **patient**, upload a scan from `sample_scans/` (the file names start with the true class), and
+   sign out. The patient sees only "waiting for your doctor", never AI output.
+2. Sign in as the **doctor**. The case appears on the prioritised worklist. Open it and look at:
+   * the calibrated probabilities and the **95% prediction set**;
+   * **Grad-CAM** (exact for this architecture, lesion-focused) and the **lesion outline**;
+   * the review flags and the assistant.
+3. Pick the final diagnosis and **sign the report** (it asks for your password again).
+4. Sign in as the patient again: the doctor's signed report is now visible.
+5. The **admin** account manages users and shows the audit log.
+
+**Optional: AI assistant narratives.** These need a local LLM server; without it the assistant uses deterministic
+template answers. To enable it:
+1. Download a llama.cpp release for your OS from https://github.com/ggml-org/llama.cpp/releases.
+2. Download the model from https://huggingface.co/unsloth/Qwen3-1.7B-GGUF (file `Qwen3-1.7B-Q4_K_M.gguf`,
+   SHA-256 `b139949c…1897`).
+3. Start `llama-server -m Qwen3-1.7B-Q4_K_M.gguf -c 4096 --port 8081` before the demo.
 
 ## 2. What to review
 | Where | What |
 |---|---|
 | `code/README.md` | Architecture overview and results |
 | `code/docs/MODEL_CARD.md` | Data, metrics, explanations, intended use, limitations |
-| `code/docs/FINDINGS.md` | All experiments and measurements, including negative results and bugs found |
+| `code/docs/FINDINGS.md` | All experiments and measurements, including negative results and bugs found (§10 = v1) |
 | `code/docs/PI_DEPLOY.md` | Secure server and Raspberry Pi deployment |
-| `code/neuroedge/cam.py` | Exact CAM / Finer-CAM maths |
+| `code/neuroedge/models.py`, `code/neuroedge/cam.py` | Lesion-attention pooling head and exact Grad-CAM maths |
 | `code/neuroedge/uncertainty.py` | Temperature scaling, conformal prediction, Mahalanobis OOD |
-| `code/training/data/` | Leakage audit and patient-grouped split |
+| `code/training/data/`, `code/training/ablation_v1.py`, `code/training/report_v1.py` | Leakage audit and split, ablation, acceptance report |
+| `code/edge/portal/` | Clinic portal: roles, encrypted storage, signed reports, audit |
 | `code/neuroedge/security.py`, `code/server/` | Signing, encryption, registry |
-| `code/tests/` | 75 tests. Running them needs the training dependencies (`code/requirements-train.txt`, PyTorch). |
+| `code/tests/` | 87 tests. Running them needs the training dependencies (`code/requirements-train.txt`, PyTorch). |
 
-## 3. Key results (held-out, leakage-free)
-| Set | Accuracy | Macro-F1 | Macro-AUROC |
-|---|---|---|---|
-| Test (patient-grouped BRISC split, n = 799) | 0.949 | 0.942 | 0.994 |
-| Test, INT8 model as deployed | 0.939 | 0.935 | 0.991 |
-| External BDNeuro (deduplicated, n = 1,674) | 0.864 | 0.843 | 0.968 |
+## 3. Key results (deployed INT8 model, held-out leakage-free test set)
+| | v0 | v1 (3-seed mean ± sd) |
+|---|---|---|
+| Test macro-F1 (n = 799) | 0.935 | **0.944** (0.938 ± 0.007) |
+| External BDNeuro macro-F1 (deduplicated, n = 1,674) | 0.729 | **0.836** (0.827 ± 0.012) |
+| Grad-CAM evidence inside the tumor | 0.15 | **0.73** |
+| Pointing game | 0.53 | **0.99** |
+| 95% prediction-set coverage | 0.87 | **0.91** (target 0.93 not met) |
 
-* Raspberry Pi 5: 178 ms per analysis; 40/40 predictions identical to the PC.
+* Raspberry Pi 5: 238 ms per analysis; 40/40 predictions identical to the PC.
 * The official BRISC test split leaks: 566 of 1,000 test images are copies or mirrors of training images. All
   numbers above use a re-split by patient.
-* Known limitations (sequence shortcut in the "no tumor" class, pituitary context shortcut, conformal
-  under-coverage, single seed) are in the model card.
+* Known limitations are in the model card: the sequence shortcut in the "no tumor" class, coverage below the
+  target, and single 2D slices.
 
 ## 4. Contents and integrity
-`code/` is the committed source (git {commit}), `model/` the trained bundle, and `sample_scans/` 40 held-out
-test slices. `SHA256SUMS.txt` lists a checksum for every file. Datasets, private keys and the LLM weights are
-not included.
+* `code/` is the committed source (git {commit}).
+* `model/` is the trained v1 bundle.
+* `sample_scans/` holds 40 held-out test slices.
+* `SHA256SUMS.txt` lists a checksum for every file.
+* Datasets, private keys, patient data and the LLM weights are not included.
 
 **Data attribution:** the sample scans are from the BRISC 2025 dataset (arXiv:2506.14318),
 licensed CC BY 4.0.
@@ -167,7 +178,6 @@ def sha256(p: Path) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=DATA_ROOT / "export")
-    ap.add_argument("--no-deep-explain", action="store_true", help="omit the 97 MB FP32 weights")
     args = ap.parse_args()
 
     if subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True).stdout.strip():
@@ -175,7 +185,7 @@ def main() -> None:
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     date = time.strftime("%Y-%m-%d")
     name = "NeuroEdge_review"                              # short top folder (Windows path limit)
-    zip_name = f"NeuroEdge_review_{date}_{commit}"
+    zip_name = f"NeuroEdge_review_v1_{date}_{commit}"
     stage = args.out / name
     shutil.rmtree(stage, ignore_errors=True)
     (stage / "code").mkdir(parents=True)
@@ -188,10 +198,9 @@ def main() -> None:
     for nb in (stage / "code" / "reference").glob("*.ipynb"):
         nb.rename(nb.with_name("original_notebook.ipynb"))
 
-    mdir = stage / "model" / "mri_v0_int8"
+    mdir = stage / "model" / MODEL_DIR
     mdir.mkdir(parents=True)
-    for f in ("bundle.json", "model.onnx", "head.npz", "calibration.json", "ood.npz") + \
-             (() if args.no_deep_explain else ("model_fp32.pt",)):
+    for f in ("bundle.json", "model.onnx", "head.npz", "calibration.json", "ood.npz"):
         shutil.copy2(BUNDLE / f, mdir / f)
     shutil.copytree(SAMPLES, stage / "sample_scans")
     # write_bytes, not write_text: on Windows write_text emits CRLF, which breaks SHA256SUMS.txt (sha256sum -c)
@@ -201,7 +210,6 @@ def main() -> None:
        "File names start with the ground-truth class.\n")
 
     lf(stage / "requirements-demo.txt", REQ_DEMO)
-    lf(stage / "requirements-deep.txt", REQ_DEEP)
     (stage / "run_demo.bat").write_bytes(RUN_BAT.replace("\n", "\r\n").encode())
     lf(stage / "run_demo.sh", RUN_SH)
     lf(stage / "README.md", README.replace("{commit}", commit).replace("{date}", date))

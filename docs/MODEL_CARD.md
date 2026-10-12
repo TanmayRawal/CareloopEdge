@@ -1,80 +1,107 @@
-# Model card: NeuroEdge MRI v0 (registry version `mri/0.1.1`)
+# Model card: NeuroEdge MRI v1 (registry version `mri/0.2.0`)
 
-> **Research and education only. Not a medical device.** Outputs must not be used for diagnosis or treatment
-> decisions. Every result requires review by a qualified radiologist.
+> Research prototype on public data, not a medical device. In the portal, every result is reviewed and signed
+> by a doctor before a patient sees anything; patients never see AI output.
 
 ## Model
 | | |
 |---|---|
 | Task | 4-class classification of a single 2D brain MRI slice (glioma, meningioma, no tumor, pituitary tumor) plus a tumor segmentation mask |
-| Architecture | ResNet-50 (timm, ImageNet init), output stride 16 (14×14 feature map), **GAP → Dropout → Linear** head, FPN segmentation head |
-| Training | Multi-task loss: cross-entropy + BCE + Dice, the segmentation terms only where a mask exists. AdamW, cosine schedule, EMA weights, bf16 AMP. Seed 0, best epoch 22 (validation macro-F1). |
-| Deployment | ONNX opset 17 with static INT8 (QDQ) quantization. GAP and classifier kept in FP32 so the exact CAM identity holds on the device. Size 96.6 → 24.7 MB. |
-| Input | 224×224 after a foreground (brain) crop, grayscale ×3, normalized. PNG, JPG or DICOM; DICOM PHI is stripped at decode. |
-| Outputs | Calibrated probabilities, class-conditional 95% conformal prediction set, OOD verdict (warn / reject), exact Grad-CAM, Finer-CAM, LayerCAM (on demand), lesion mask with position and area, review flags |
+| Architecture | ResNet-50 (timm, ImageNet init), output stride 8 (28×28 feature map), **lesion-attention pooling** → Linear head, FPN segmentation head with deep supervision |
+| Lesion-attention pooling | z_c = b_c + Σ_ij a_ij · W_c·A_ij, with a_ij = (p_ij + ε) / Σ(p + ε). p is the **detached** segmentation probability pooled to the grid; ε = 0.005. With no lesion the weights are uniform (plain GAP). Classification cannot reshape the mask. |
+| Training | Cross-entropy + focal BCE + Dice (segmentation terms only where a mask exists; empty masks on no-tumor) + auxiliary deep supervision. AdamW, cosine schedule, EMA weights, bf16 AMP. 3 seeds; deployed seed 0, chosen on validation (best epoch 26). |
+| Configuration choice | Pre-registered ablation on validation only: output stride {16, 8} × ε {0.005, 0.02, 0.05} (FINDINGS §10) |
+| Deployment | ONNX opset 17, static INT8 (QDQ). The attention-pooling path and classifier stay FP32, so the exact CAM identity holds on the device (decomposition error ~1e-7). Size 96.6 → 24.7 MB. |
+| Input | 224×224 after a foreground (brain) crop, grayscale ×3, normalized. PNG, JPG or DICOM; DICOM PHI is stripped at decode; images above 16 MP are refused. |
+| Outputs | Calibrated probabilities, class-conditional 95% conformal set, OOD verdict (warn / reject), exact Grad-CAM, lesion mask with position and area, review flags |
 
 ## Data
-* **Training, validation, test:** BRISC 2025 (T1 contrast-enhanced, expert masks), pooled and **re-split
-  70/15/15 by patient-level groups**. The official split leaks: 566 of 1,000 official test images are copies or
-  mirrors of training images. Groups use flip-aware image similarity plus true patient IDs carried over from
-  figshare (`docs/FINDINGS.md` §1).
-* **External test:** BDNeuro-MRI, deduplicated against BRISC; 1,674 of 5,941 images remain after copy removal.
-  figshare and Nickparvar are almost entirely copies of BRISC, so their small residual sets are not independent
-  evidence.
+* **Splits (v2):** BRISC 2025 (T1 contrast-enhanced, expert masks), pooled and re-split by patient-level groups:
+  * train 3,766, used for training;
+  * val 765, used for model selection;
+  * **cal 670, used only for temperature, conformal, OOD and review thresholds**;
+  * test 799, identical to the v0 test.
+  * No group crosses splits. The official BRISC split leaks: 566 of its 1,000 test images are copies or mirrors
+    of training images (FINDINGS §1).
+* **External test:** BDNeuro-MRI, deduplicated against BRISC: 1,674 of 5,941 images remain after copy removal.
 
-## Performance (FP32 unless noted)
-| Set | n | Accuracy | Macro-F1 | Macro-AUROC |
-|---|---|---|---|---|
-| Test (grouped, held out) | 799 | 0.949 | 0.942 | 0.994 |
-| Test, INT8 as deployed | 799 | 0.939 | 0.935 | 0.991 |
-| **External BDNeuro (deduplicated)** | 1,674 | **0.864** | **0.843** | 0.968 |
+## Performance (INT8 as deployed)
+| Set | n | Accuracy | Macro-F1 [95% CI] | 3-seed macro-F1 | v0 INT8 |
+|---|---|---|---|---|---|
+| Test (grouped, held out) | 799 | 0.949 | **0.944** [0.926, 0.959] | 0.938 ± 0.007 | 0.935 |
+| **External BDNeuro (deduplicated)** | 1,674 | 0.866 | **0.836** [0.815, 0.856] | 0.827 ± 0.012 | 0.729 |
 
-* INT8 vs FP32: McNemar p = 0.38 (no significant difference); prediction agreement 95.7%.
-* **Pi 5 vs PC** on 40 held-out scans: 40/40 identical predictions; max |Δp| = 0.016.
-* Externally, pituitary is the weakest class (sensitivity 0.69).
-* **Calibration:** temperature T = 1.575; test ECE 0.049 → 0.030.
-* **Conformal 95% sets:** they **under-cover on test** (0.87 overall; glioma 0.59–0.73), because validation
-  served both model selection and calibration. Treat them as approximate.
-* **OOD:** multi-layer Mahalanobis with two tiers, fitted on the deployed INT8 graph. 7.4% of in-distribution
-  images are flagged "unusual"; the reject threshold is the 99.5th percentile of validation scores.
+* **Paired test vs v0:** ΔF1 = +0.009 [−0.005, +0.025]; McNemar p = 0.23. v1 is non-inferior to v0, not
+  proven better.
+* **FP32 vs INT8:** external macro-F1 0.842 → 0.836. v0 lost 0.843 → 0.729 here, which its docs had reported as
+  0.843.
+* **Pi 5 vs PC** on 40 scans: 40/40 identical predictions; max |Δp| 0.010; CAM Pearson ≥ 0.997.
+* **Pi 5 speed:** full analysis 238 ms median, 250 ms p95.
+* **Calibration:** temperature T = 2.56, fitted on cal; test ECE 0.042 → 0.024.
+* **Conformal 95% sets** cover **0.911** on test. That is up from 0.867, but **below the 0.93 target**.
+  * Per class: glioma 0.83, meningioma 0.93, no tumor 0.99, pituitary 0.89.
+  * Coverage is 0.96 on cal, so the test release is not exchangeable with the cal images.
+  * Treat the sets as approximate; an empty set is flagged for review.
+* **OOD:** multi-layer Mahalanobis, fitted on the deployed graph. 6.3% of test images are flagged "unusual".
 
 ## Explanations
-* **Exact Grad-CAM.** With a GAP→Linear head, the map is an exact additive decomposition of the logit
-  (decomposition error ≈ 3e-6 on INT8). No post-processing is applied: no thresholding, gamma or blob selection.
-* **Finer-CAM** contrasts the prediction with the runner-up class.
-* **LayerCAM** (layer3+4, FP32) is an optional, sharper detail view.
-* **Measured on 120 test tumors:** 15% of the positive evidence lies inside the tumor (the 14×14 ceiling is
-  55%); pointing game 0.53 (LayerCAM 0.76). Randomization sanity checks pass.
-* **Pituitary shortcut:** pituitary maps highlight surrounding anatomy rather than the tumor. The separate
-  segmentation head localizes tumors far better (84% of its energy inside the mask).
+* **What is shown:** Grad-CAM and the lesion outline, nothing else. The Grad-CAM is the exact additive
+  decomposition of the logit (HiResCAM form), displayed with a monotone colour map.
+* **Measured on 120 correctly classified test tumors:**
 
-## Offline assistant
-* Qwen3-1.7B (Q4_K_M) via llama.cpp, on the device.
-* It writes narratives and answers questions from the model's facts and a cited knowledge base, and every
-  answer passes a deterministic verifier.
-* Questions about the prediction set, "why X", review status, treatment, or rejected inputs get fixed template
-  answers; the LLM is not used for them.
-* Fresh-case audit: 3 of 80 verified answers (3.8%) still contained a clear error. Human sign-off is mandatory.
+  | Measure | v1 | v0 |
+  |---|---|---|
+  | Evidence inside the tumor | **0.73**, 98% of the 28×28 oracle ceiling | 0.15 |
+  | Pointing game | **0.99** | 0.53 |
+  | ROAD | **0.32** | 0.29 |
+
+* **Per class:** glioma 0.64, meningioma 0.84, pituitary 0.70. v0's pituitary maps highlighted the surrounding
+  anatomy instead of the tumor.
+* **Caveat:** the map's spatial envelope comes partly from the segmentation-derived attention.
+  * After the classifier is randomized, the rank correlation is destroyed (Spearman −0.04), but SSIM stays 0.81.
+  * Read the map as **lesion-weighted classifier evidence**.
+
+## Clinical portal (edge/portal)
+* **Roles:** patient, doctor and admin.
+* **Workflow:** the patient uploads; the AI result goes to a prioritized doctor worklist; the doctor signs the
+  report; the patient sees the doctor's report only.
+* **Security:**
+  * argon2 passwords, lockout and rate limits, CSRF, strict CSP;
+  * object-level access checks and an audit log;
+  * scans, overlays and signed reports encrypted at rest (AES-256-GCM);
+  * reports are versioned and never overwritten.
+* **Doctor assistant:** Qwen3-1.7B via llama.cpp, grounded in the case facts and a cited knowledge base. Every
+  answer passes a deterministic verifier, and statistical questions get fixed template answers.
 
 ## Intended use and out-of-scope use
 * **Intended:** research, teaching and demonstrations of explainable, secure edge AI on public data.
-* **Out of scope:** clinical use of any kind; CT; non-T1-weighted sequences; children; post-operative scans;
-  tumor types outside the four classes (e.g. metastases); full 3D studies (a later phase).
+* **Out of scope:**
+  * clinical use;
+  * CT and non-T1-weighted sequences;
+  * children and post-operative scans;
+  * tumor types outside the four classes (e.g. metastases);
+  * full 3D studies.
 
 ## Known limitations and risks
 * **Sequence shortcut:** BRISC's "no tumor" class mixes CT, FLAIR, T2 and non-contrast T1, while all tumor
-  classes are T1 contrast-enhanced. The model can partly separate classes by sequence. A fix is planned with
-  BraTS data.
+  classes are T1 contrast-enhanced. A fix is planned with BraTS data.
+* **Coverage below target** on the test release (see above).
 * **Single 2D slice:** a "no tumor" output cannot exclude a lesion elsewhere in the brain.
 * **Image orientation:** PNG/JPG files carry no orientation, so image left/right is not the patient's left/right.
-* **Distribution shift:** accuracy drops on other hospitals' data (external macro-F1 0.84).
-* **Single seed:** results are from one training seed; 3-seed mean ± sd is pending.
+* **Distribution shift:** accuracy drops on other hospitals' data (external macro-F1 0.84). Pituitary is the
+  weakest external class.
 
 ## Security and privacy
-* **Model distribution:** signed with OpenSSF Model Signing (EC P-256, offline key) and encrypted with
-  AES-256-GCM. The data key is wrapped per device with X25519 and HKDF.
-* **On the device:** decrypted and verified in RAM only; the device stores ciphertext only.
-* **Uploaded images:** processed in memory and expire after one hour; nothing patient-related is written to disk.
-* **Threat model limit:** someone with root access on an enrolled device can extract the model from RAM.
+* **Model distribution:**
+  * signed with OpenSSF Model Signing (EC P-256, offline key);
+  * encrypted with AES-256-GCM;
+  * the data key is wrapped per device with X25519.
+* **On the Pi:**
+  * the model is decrypted and verified in RAM only;
+  * the portal is served over HTTPS only (Caddy, local CA), and the app listens on loopback;
+  * an nftables firewall admits only SSH, HTTP(S) and mDNS;
+  * patient data is encrypted at rest with a separate key.
+* **Threat model limit:** someone with root access on an enrolled device can read the model and the portal key.
+  The Pi 5 has no hardware key store.
 
 Full evidence and methods: [`docs/FINDINGS.md`](FINDINGS.md).

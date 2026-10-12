@@ -27,6 +27,7 @@ Model: ResNet-50, output stride 16, GAP→Linear head plus an FPN segmentation h
 | Test (grouped) | 799 | 0.949 | 0.942 | 0.994 |
 | External BDNeuro (deduplicated) | 1,674 | 0.864 | 0.843 | 0.968 |
 Pituitary is weakest externally: sensitivity 0.69.
+Note: these are FP32 PyTorch numbers. The deployed INT8 v0 scores 0.729 macro-F1 on BDNeuro (see §10).
 
 ## 4. Deployment (INT8, ONNX Runtime QDQ; GAP and classifier kept FP32)
 * 96.6 → 24.7 MB. Test macro-F1 0.939 → 0.935; McNemar p = 0.38.
@@ -156,3 +157,45 @@ signed, encrypted bundle decrypted in RAM. Benchmark: `edge/bench.py`, 40 held-o
   * gunicorn 26's control socket hit `ProtectSystem=strict`. Now `--no-control-socket`.
   * This OS applies SD-card `network-config` only on first boot. Wi-Fi was added through a one-time
     cloud-init `runcmd`.
+
+## 10. v1: lesion-attention pooling (exact Grad-CAM, lesion-focused by construction)
+Implements the §5b future-work head. Logit z_c = b_c + Σ_ij a_ij · W_c·A_ij with a_ij = (p_ij + ε) / Σ(p + ε), where p is
+the **detached** segmentation probability average-pooled to the CAM grid. The exact map S_c(ij) = a_ij · W_c·A_ij still
+sums to z_c − b_c (HiResCAM form; INT8 decomposition error ~1e-7). With no lesion (p ≈ 0) the weights are uniform,
+i.e. plain GAP. Other changes: split v2 with a dedicated grouped **cal** split (train 3766 / val 765 / cal 670 /
+test 799 = the v0 test), focal-Dice segmentation loss with deep supervision, Grad-CAM + lesion outline only in the app.
+
+**Ablation** (validation only, 1 seed; `RUNS/ablation_v1/summary.md`): output stride {16, 8} × ε {0.005, 0.02, 0.05}.
+Pre-registered rule: val macro-F1 within 0.01 of the best, then maximum val energy-in-tumour. Chosen: **output
+stride 8 (28×28 grid), ε = 0.005** (val F1 0.950, energy 0.762 = 97 % of the 28×28 oracle ceiling).
+
+**Acceptance on test** (INT8 deployed graphs, calibration fitted on cal; `training/report_v1.py`). Deployed seed = best
+validation macro-F1 (seed 0), never chosen on test.
+
+| Metric | v0 (INT8) | v1 seed 0 (deployed) | v1 mean ± sd, 3 seeds | Gate |
+|---|---|---|---|---|
+| Test macro-F1 [95 % CI] | 0.935 [0.917, 0.951] | **0.944** [0.926, 0.959] | 0.938 ± 0.007 | pass |
+| External BDNeuro macro-F1 | 0.729 | **0.836** | 0.827 ± 0.012 | pass |
+| Grad-CAM energy in tumour | 0.150 | **0.728** (98 % of ceiling 0.746) | 0.713 ± 0.018 | pass |
+| Pointing game | 0.525 | **0.992** | 0.981 ± 0.019 | pass |
+| ROAD (combined) | 0.288 | **0.324** | 0.328 ± 0.005 | pass |
+| Conformal coverage, α = 0.05 | 0.867 | **0.911** | 0.917 ± 0.006 | **fail (target 0.93)** |
+
+* Paired test comparison, v1 seed 0 vs v0 on the identical 799 images: ΔF1 = +0.009 [−0.005, +0.025]; McNemar
+  21 vs 13 discordant, p = 0.23. Non-inferior; not shown to be better.
+* Per-class Grad-CAM energy in tumour: glioma 0.635, meningioma 0.844, **pituitary 0.704** (v0: anatomy, not tumour).
+* **Correction to §3:** the 0.843 external macro-F1 was the FP32 PyTorch model. The deployed v0 INT8 graph scores
+  **0.729** on BDNeuro (accuracy 0.783), an 11-point quantisation loss on shifted data that the in-distribution INT8
+  check (§4) did not reveal. v1 loses little: FP32 0.842 → INT8 0.836 (seed 0). External INT8 evaluation is now part
+  of acceptance.
+* **Coverage** improved (0.867 → 0.911) but misses the pre-registered 0.93; per class glioma 0.828, meningioma 0.927,
+  no_tumor 0.988, pituitary 0.891. Coverage is 0.960 on cal itself and 0.933 on val, so the BRISC test images are not
+  exchangeable with the cal images (test comes from the dataset's own test release). The threshold was not re-tuned
+  after seeing test; v1 is deployed with this documented limitation. Fix (next data version): calibrate per source /
+  release (Mondrian) or include test-release-like scans in cal.
+* **Sanity check** (cascading randomization): randomizing the classifier gives Spearman −0.04 (destroyed), but SSIM
+  stays 0.81 (v0: 0.39). The spatial envelope of the map comes partly from the segmentation-derived attention, so the
+  map is "lesion-weighted classifier evidence", not classifier evidence alone. The rank order inside it still depends
+  on the classifier. With all layers randomized, correlation returns to 0.57 (v0 0.51): input-intensity structure.
+* **Pi 5** (seed 0 INT8, 60 scans, 4 threads): full analysis median 238 ms / p95 250 ms (v0: 178 ms; target < 400 ms);
+  model 120 ms; peak RSS 261 MB; 43 → 63 °C, no throttling.

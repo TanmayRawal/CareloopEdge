@@ -5,8 +5,9 @@ Production (Pi, systemd + gunicorn): model decrypted in RAM from the enrolled de
   env: NEUROEDGE_PORTAL_DATA (default /var/lib/neuroedge/portal), NEUROEDGE_PORTAL_KEY
        (default /etc/neuroedge/portal.key), NEUROEDGE_SECRET (session signing), NEUROEDGE_MODEL,
        NEUROEDGE_BEHIND_PROXY=1 (trust one reverse proxy: client IP + HTTPS-only cookies)
-Development (PC): plaintext bundle directory, local data dir; --init-dev creates the key + database once
-  python -m edge.serve --bundle-dir <DATA_ROOT>/bundles/mri_v0_int8 --portal-data <DATA_ROOT>/portal_dev --init-dev
+Development (PC): plaintext bundle directory, local data dir; --init-dev creates the key, the database and three
+test accounts (random passwords, written to <portal-data>/DEV_ACCOUNTS.txt) on first start
+  python -m edge.serve --bundle-dir <DATA_ROOT>/bundles/mri_v1_0.2.0_int8 --portal-data <DATA_ROOT>/portal_dev --init-dev
 """
 
 from __future__ import annotations
@@ -44,6 +45,29 @@ def build(bundle_dir: str | None = None, model: str = "mri", threads: int = 4,
                       behind_proxy=os.environ.get("NEUROEDGE_BEHIND_PROXY") == "1")
 
 
+def seed_dev_accounts(app, data_dir: Path) -> None:
+    """First start of a development portal: one admin, doctor and patient with random passwords. Never used on the Pi
+    (there, accounts are created with `neuroedge-portal create-user`, passwords typed by a person)."""
+    import secrets
+
+    from edge.portal.auth import hash_password
+    db = app.extensions["portal"]["db"]
+    if db.conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
+        return
+    rows = []
+    for role, email, name, profile in (("admin", "admin@neuroedge.test", "Clinic Admin", None),
+                                       ("doctor", "doctor@neuroedge.test", "Dr. Asha Rao", None),
+                                       ("patient", "patient@neuroedge.test", "Rahul Verma",
+                                        {"dob": None, "sex": None, "phone": None})):
+        pw = secrets.token_urlsafe(12)
+        db.create_user(email, name, role, hash_password(pw), profile)
+        rows.append(f"{role:<8} {email:<28} {pw}")
+    (data_dir / "DEV_ACCOUNTS.txt").write_text(
+        "# NeuroEdge DEV portal test accounts (local only; delete the folder to regenerate). Not real users.\n\n"
+        + "\n".join(rows) + "\n", encoding="utf-8")
+    print(f"created test accounts: {data_dir / 'DEV_ACCOUNTS.txt'}")
+
+
 def wsgi():
     return build(os.environ.get("NEUROEDGE_BUNDLE_DIR"), os.environ.get("NEUROEDGE_MODEL", "mri"))
 
@@ -65,6 +89,8 @@ def main() -> None:
         if key and not Path(key).exists():
             generate_key(Path(key))
     app = build(args.bundle_dir, args.model, args.threads, args.portal_data, key)
+    if args.init_dev and args.portal_data:
+        seed_dev_accounts(app, Path(args.portal_data))
     print(json.dumps({"serving": f"http://{args.host}:{args.port}", "bundle": args.bundle_dir or args.model}))
     app.run(host=args.host, port=args.port, threaded=True, debug=False)
 
