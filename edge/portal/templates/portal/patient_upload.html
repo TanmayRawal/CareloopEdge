@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% block title %}Upload scan{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Upload a brain MRI scan</h1>
+  <p class="muted">A clinic doctor will review your image and write a report.</p></div></div>
+<section class="card narrow">
+  {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" enctype="multipart/form-data" class="form" id="upload-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label class="dropzone" id="dropzone">
+      <svg viewBox="0 0 48 48" class="dz-icon" aria-hidden="true"><path d="M24 32V12M16 20l8-8 8 8M10 34v4h28v-4"/></svg>
+      <span class="dz-title">Drop the image here, or click to choose</span>
+      <span class="muted small">PNG, JPG or DICOM · max 20 MB · one 2D slice</span>
+      <span class="dz-file mono small" id="dz-file"></span>
+      <input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required>
+    </label>
+    <label>Note for the doctor <span class="muted">(optional)</span>
+      <textarea name="note" rows="3" maxlength="1000" placeholder="e.g. symptoms, reason for the scan"></textarea></label>
+    <label class="check"><input type="checkbox" name="consent" value="yes" required>
+      <span>I consent to this image being stored encrypted on the clinic device and reviewed by clinic doctors with
+      the help of a research AI system.</span></label>
+    <button class="btn primary block" id="submit" type="submit">Submit for review</button>
+  </form>
+</section>
+{% endblock %}

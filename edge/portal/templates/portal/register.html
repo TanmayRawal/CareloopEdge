@@ -1,0 +1,30 @@
+{% extends "portal/base.html" %}
+{% block title %}Create account{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block main_class %}auth-page{% endblock %}
+{% block content %}
+<div class="auth-wrap single">
+  <section class="auth-card card wide">
+    <h2>Create a patient account</h2>
+    <p class="muted">You will be able to upload brain MRI images and read your doctor's report.</p>
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" class="form grid2">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="span2">Full name<input name="name" value="{{ form.name if form else '' }}" required maxlength="120" autocomplete="name"></label>
+      <label class="span2">E-mail<input type="email" name="email" value="{{ form.email if form else '' }}" required maxlength="200" autocomplete="email"></label>
+      <label>Date of birth <span class="muted">(optional)</span><input type="date" name="dob" value="{{ form.dob if form else '' }}"></label>
+      <label>Sex <span class="muted">(optional)</span>
+        <select name="sex"><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></label>
+      <label class="span2">Phone <span class="muted">(optional)</span><input name="phone" value="{{ form.phone if form else '' }}" maxlength="30" autocomplete="tel"></label>
+      <label>Password<input type="password" name="password" required minlength="10" autocomplete="new-password"></label>
+      <label>Repeat password<input type="password" name="password2" required minlength="10" autocomplete="new-password"></label>
+      <p class="span2 small muted">At least 10 characters.</p>
+      <label class="check span2"><input type="checkbox" name="consent" value="yes" required>
+        <span>I understand this is a research and education system, not a medical device. My images and reports are
+        stored encrypted on this clinic device and are seen only by clinic doctors.</span></label>
+      <button class="btn primary span2" type="submit">Create account</button>
+    </form>
+    <p class="small muted center">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+  </section>
+</div>
+{% endblock %}

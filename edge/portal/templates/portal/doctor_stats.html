@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% block title %}Statistics{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Statistics</h1>
+  <p class="muted">How the AI's suggestions compare with doctors' signed diagnoses (latest report version per case).</p></div></div>
+<div class="kpis">
+  <div class="kpi"><b>{{ n_reports }}</b><span>Signed reports</span></div>
+  <div class="kpi"><b>{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</b><span>AI–doctor agreement ({{ n_pairs }} cases)</span></div>
+  <div class="kpi"><b>{{ '%.1f h'|format(median_turnaround_h) if median_turnaround_h is not none else '—' }}</b><span>Median upload → signed</span></div>
+  <div class="kpi"><b>{{ counts.awaiting_review + counts.in_review }}</b><span>Open cases</span></div>
+</div>
+<section class="card flush">
+  <h2 class="pad">AI suggestion (rows) vs doctor's diagnosis (columns)</h2>
+  <table class="table confusion">
+    <thead><tr><th>AI \ Doctor</th>{% for d in classes + ['other', 'inconclusive'] %}<th>{{ class_text[d] }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for a in classes %}
+      <tr><th>{{ class_text[a] }}</th>
+        {% for d in classes + ['other', 'inconclusive'] %}<td class="{{ 'diag' if a == d }}">{{ confusion[a][d] or '' }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="small muted pad">Excludes images the AI rejected. Agreement is descriptive for this clinic's cases, not a validated accuracy figure.</p>
+</section>
+{% endblock %}

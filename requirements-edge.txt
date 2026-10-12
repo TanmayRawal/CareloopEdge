@@ -8,6 +8,7 @@ scipy
 cryptography
 model-signing        # OpenSSF Model Signing: verifies the publisher signature of every bundle
 flask
+argon2-cffi          # portal password hashing (argon2id)
 gunicorn
 # Deep Explain mode only (FP32 LayerCAM, implemented in edge/deep_explain.py without pytorch-grad-cam):
 #   torch + torchvision (CPU aarch64 wheels from download.pytorch.org/whl/cpu) and timm

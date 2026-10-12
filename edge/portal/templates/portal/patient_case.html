@@ -1,0 +1,56 @@
+{% extends "portal/base.html" %}
+{% block title %}Scan {{ case.id[:6] }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{{ url_for('patient.dashboard') }}">← My scans</a>
+    <h1>Scan submitted {{ fmt_time(case.created) }}</h1>
+  </div>
+  <span class="status big s-{{ case.status }}">{{ status_text[case.status] }}</span>
+</div>
+
+<ol class="timeline" aria-label="Progress">
+  {% set order = ['awaiting_review', 'in_review', 'finalized'] %}
+  {% set idx = order.index(case.status) if case.status in order else 0 %}
+  <li class="done">Uploaded</li>
+  <li class="{{ 'done' if idx >= 1 else ('current' if idx == 0) }}">Doctor review</li>
+  <li class="{{ 'done' if idx >= 2 }}">Report ready</li>
+</ol>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Your image</h2>
+    <img class="scan" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ attempt) }}" alt="Your uploaded MRI image">
+    <p class="small muted mono">{{ case.scan_filename }}</p>
+    {% if case.patient_note %}<p class="small"><b>Your note:</b> {{ case.patient_note }}</p>{% endif %}
+  </section>
+
+  <section class="card">
+    {% if case.status == 'reupload_requested' %}
+      <h2>The doctor asked for a new image</h2>
+      <div class="alert">{{ case.doctor_message }}</div>
+      <form method="post" enctype="multipart/form-data" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label>New image<input type="file" name="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required></label>
+        <button class="btn primary" type="submit">Send new image</button>
+      </form>
+    {% elif report %}
+      <div class="report-head">
+        <h2>Doctor's report</h2>
+        <a class="btn small" href="{{ url_for('case.report_snapshot', cid=case.id, version=report.version) }}" target="_blank" rel="noopener">Printable version</a>
+      </div>
+      <dl class="report">
+        <dt>Diagnosis</dt><dd class="dx">{{ class_text.get(report.final_diagnosis, report.final_diagnosis) }}</dd>
+        <dt>Findings</dt><dd class="pre">{{ report.findings }}</dd>
+        {% if report.recommendation %}<dt>Recommendation</dt><dd class="pre">{{ report.recommendation }}</dd>{% endif %}
+        <dt>Signed</dt><dd>{{ report.doctor_name }} · {{ fmt_time(report.signed_at) }}{% if report.version > 1 %} · amended (version {{ report.version }}){% endif %}</dd>
+      </dl>
+      <p class="small muted">Please discuss this report with your doctor. Do not make treatment decisions from this page alone.</p>
+    {% else %}
+      <h2>Waiting for your doctor</h2>
+      <p>Your image has been received and is in the clinic's review queue. You will see the report here once a doctor has signed it.</p>
+      <p class="small muted">Results are only released after review by a qualified doctor.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
