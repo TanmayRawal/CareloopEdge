@@ -1,8 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Statistics{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Statistics</h1>
-  <p class="muted">How the AI's suggestions compare with doctors' signed diagnoses (latest report version per case).</p></div></div>
+<div class="page-head"><div><h1>Statistics</h1></div></div>
 <div class="kpis">
   <div class="kpi"><b>{{ n_reports }}</b><span>Signed reports</span></div>
   <div class="kpi"><b>{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</b><span>AI–doctor agreement ({{ n_pairs }} cases)</span></div>
@@ -20,6 +19,5 @@
     {% endfor %}
     </tbody>
   </table>
-  <p class="small muted pad">Excludes images the AI rejected. Agreement is descriptive for this clinic's cases, not a validated accuracy figure.</p>
 </section>
 {% endblock %}

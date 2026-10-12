@@ -1,9 +1,10 @@
 """Start the NeuroEdge clinical portal.
 
 Production (Pi, systemd + gunicorn): model decrypted in RAM from the enrolled device's verified bundle
-  gunicorn -w 1 --threads 4 -b 0.0.0.0:8080 "edge.serve:wsgi()"
+  gunicorn -w 1 --threads 4 -b 127.0.0.1:8080 "edge.serve:wsgi()"      (Caddy serves HTTPS on :443 in front)
   env: NEUROEDGE_PORTAL_DATA (default /var/lib/neuroedge/portal), NEUROEDGE_PORTAL_KEY
-       (default /etc/neuroedge/portal.key), NEUROEDGE_SECRET (session signing), NEUROEDGE_MODEL
+       (default /etc/neuroedge/portal.key), NEUROEDGE_SECRET (session signing), NEUROEDGE_MODEL,
+       NEUROEDGE_BEHIND_PROXY=1 (trust one reverse proxy: client IP + HTTPS-only cookies)
 Development (PC): plaintext bundle directory, local data dir; --init-dev creates the key + database once
   python -m edge.serve --bundle-dir <DATA_ROOT>/bundles/mri_v0_int8 --portal-data <DATA_ROOT>/portal_dev --init-dev
 """
@@ -15,8 +16,11 @@ import json
 import os
 from pathlib import Path
 
-from edge.engine import Engine
-from edge.portal.app import create_app
+# Must be set before OpenCV is imported: caps any image the decoder will allocate (decompression bombs).
+os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", str(4096 * 4096))
+
+from edge.engine import Engine  # noqa: E402
+from edge.portal.app import create_app  # noqa: E402
 
 PI_DATA, PI_KEY = "/var/lib/neuroedge/portal", "/etc/neuroedge/portal.key"
 
@@ -36,7 +40,8 @@ def build(bundle_dir: str | None = None, model: str = "mri", threads: int = 4,
             "metrics": meta.get("metrics", {})}
     data_dir = data_dir or os.environ.get("NEUROEDGE_PORTAL_DATA", PI_DATA)
     key_file = key_file or os.environ.get("NEUROEDGE_PORTAL_KEY", PI_KEY)
-    return create_app(engine, info, data_dir, key_file, secret_key=os.environ.get("NEUROEDGE_SECRET"))
+    return create_app(engine, info, data_dir, key_file, secret_key=os.environ.get("NEUROEDGE_SECRET"),
+                      behind_proxy=os.environ.get("NEUROEDGE_BEHIND_PROXY") == "1")
 
 
 def wsgi():

@@ -1,4 +1,4 @@
-/* NeuroEdge clinical portal — design tokens, light + dark, no external resources (offline Pi). */
+/* NeuroEdge clinical portal — design tokens (light theme; dark only if <html data-theme="dark">), no external resources (offline Pi). */
 :root {
   --bg: #f4f6fa; --surface: #ffffff; --surface-2: #f8fafc; --text: #111827; --muted: #5b6475; --border: #e2e7ef;
   --primary: #1d4ed8; --primary-2: #1e40af; --primary-soft: #e8efff; --on-primary: #ffffff;
@@ -7,14 +7,14 @@
   --radius: 12px; --radius-sm: 8px; --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117; --surface: #151b24; --surface-2: #1b2230; --text: #e6eaf2; --muted: #98a2b3; --border: #283142;
-    --primary: #5b8cff; --primary-2: #7aa2ff; --primary-soft: #1a2747; --on-primary: #0b1020;
-    --ok: #34d399; --ok-soft: #0f2a22; --warn: #f5b454; --warn-soft: #2e2412; --err: #f87171; --err-soft: #331618;
-    --info-soft: #172238; --green: #34d399; --shadow: none; --input-bg: #0b0f15; --input-border: #3b4659;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1117; --surface: #151b24; --surface-2: #1b2230; --text: #e6eaf2; --muted: #98a2b3; --border: #283142;
+  --primary: #5b8cff; --primary-2: #7aa2ff; --primary-soft: #1a2747; --on-primary: #0b1020;
+  --ok: #34d399; --ok-soft: #0f2a22; --warn: #f5b454; --warn-soft: #2e2412; --err: #f87171; --err-soft: #331618;
+  --info-soft: #172238; --green: #34d399; --shadow: none; --input-bg: #0b0f15; --input-border: #3b4659;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -74,7 +74,7 @@ h2 { font-size: 16px; margin: 0 0 12px; }
 .tag { display: inline-block; font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; margin: 1px 2px 1px 0; }
 .chip { display: inline-block; background: var(--primary-soft); color: var(--primary); border-radius: 999px; padding: 1px 10px; margin-right: 4px; font-weight: 600; }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
-.pri { font-size: 12px; font-weight: 700; } .pri.p3 { color: var(--err); } .pri.p2 { color: var(--warn); } .pri.p1 { color: var(--muted); font-weight: 500; }
+.pri { font-size: 12px; font-weight: 700; white-space: nowrap; } .pri.p3 { color: var(--err); } .pri.p2 { color: var(--warn); } .pri.p1 { color: var(--muted); font-weight: 500; }
 
 /* ------------------------------------------------------------------ tables & kpis */
 .table { width: 100%; border-collapse: collapse; }
@@ -168,3 +168,8 @@ details.reupload { margin-top: 16px; } details.reupload summary { cursor: pointe
   .bar-row { grid-template-columns: 100px 1fr 50px; }
 }
 @media print { .topbar, .footer, .btn, form { display: none !important; } body { background: #fff; } .card { border: 0; box-shadow: none; } }
+
+/* Grad-CAM colour scale (matches the turbo colormap of neuroedge.cam.overlay) */
+.cbar-wrap { display: inline-flex; align-items: center; gap: 6px; margin: 0 6px; white-space: nowrap; }
+.cbar { display: inline-block; width: 96px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, #30123b, #4662d7, #36aaf9, #1ae4b6, #72fe5e, #c8ef34, #faba39, #f66b19, #ca2a04, #7a0403); }

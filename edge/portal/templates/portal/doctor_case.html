@@ -32,21 +32,21 @@
     </div>
     <label class="slider">Overlay opacity <input id="opacity" type="range" min="0" max="100" value="100"></label>
     <p class="legend small muted">
-      <b>Grad-CAM</b> (exact form): bright regions increased the score of
-      <b>{{ class_text.get(r.explanation.explained_class, '—') if r else '—' }}</b>; the values add up exactly to the model's score.
-      <b class="green">Green outline</b>: lesion found by the separate segmentation network (localisation, not an explanation).
+      <b>Grad-CAM</b>: evidence for <b>{{ class_text.get(r.explanation.explained_class, '—') if r else '—' }}</b>
+      <span class="cbar-wrap">low <span class="cbar" aria-hidden="true"></span> high</span> ·
+      <b class="green">Green outline</b>: detected lesion
     </p>
   </section>
 
   <!-- ============================== AI panel -->
   <section class="card">
-    <div class="card-head"><h2>AI decision support</h2><span class="muted small">model {{ ai.model_version if ai else '—' }}</span></div>
+    <div class="card-head"><h2>AI analysis</h2><span class="muted small">model {{ ai.model_version if ai else '—' }}</span></div>
     {% if not r %}
       <p class="muted">No AI result.</p>
     {% elif r.status != 'ok' %}
-      <div class="alert error"><b>The AI could not analyse this image.</b>
+      <div class="alert error"><b>This image could not be analysed automatically.</b>
         <ul>{% for f in r.reject_reasons %}<li>{{ flag_text.get(f, f) }}</li>{% endfor %}</ul>
-        Review the image yourself or request a new one from the patient.</div>
+        Review it directly or request a new upload from the patient.</div>
     {% else %}
       <div class="ai-pred"><span class="muted small">AI suggestion</span><b>{{ class_text[r.prediction] }}</b></div>
       <div class="bars">
@@ -60,7 +60,7 @@
       </div>
       <p class="small"><b>95% prediction set:</b>
         {% for c in r.prediction_set %}<span class="chip">{{ class_text.get(c, c) }}</span>{% else %}<span class="chip warn">empty</span>{% endfor %}
-        <span class="muted">(class-conditional conformal; one class = only that class plausible at the 95% level)</span></p>
+        </p>
       {% if r.flags %}
         <div class="alert"><b>Review flags</b><ul>{% for f in r.flags if f in flag_text %}<li>{{ flag_text[f] }}</li>{% endfor %}</ul></div>
       {% endif %}
@@ -72,15 +72,14 @@
         {% else %}
           <tr><th>Lesion</th><td>None detected by the segmentation network</td></tr>
         {% endif %}
-        <tr><th>OOD score</th><td>{{ '%.2f'|format(r.ood.mahalanobis_score) }} (warn &gt; {{ '%.2f'|format(r.ood.threshold) }})</td></tr>
+        <tr><th>Image typicality</th><td>{{ 'Typical' if r.ood.mahalanobis_score <= r.ood.threshold else 'Atypical' }} <span class="muted small">(score {{ '%.2f'|format(r.ood.mahalanobis_score) }}, limit {{ '%.2f'|format(r.ood.threshold) }})</span></td></tr>
       </table>
-      <p class="small muted">Image left/right is not patient left/right (PNG/JPG carry no orientation).</p>
     {% endif %}
   </section>
 
   <!-- ============================== assistant -->
   <section class="card">
-    <div class="card-head"><h2>Assistant</h2><span class="muted small">{{ 'local LLM online' if llm_ready else 'LLM offline — standard answers only' }}</span></div>
+    <div class="card-head"><h2>Assistant</h2><span class="muted small">{{ 'Local assistant online' if llm_ready else 'Standard answers' }}</span></div>
     <button class="btn small" type="button" id="narrative-btn" {% if not r or r.status != 'ok' %}disabled{% endif %}>Draft narrative</button>
     <div id="narrative" class="assistant-out"></div>
     <form id="ask-form" class="ask">
@@ -88,7 +87,6 @@
       <button class="btn small" type="submit">Ask</button>
     </form>
     <div id="ask-log" class="assistant-out"></div>
-    <p class="small muted">Answers are checked against the model output and cited sources; the assistant never makes the diagnosis.</p>
   </section>
 
   <!-- ============================== decision -->

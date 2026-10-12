@@ -44,7 +44,7 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<footer class="footer">{{ disclaimer }}{% if model_info.version %} · Model {{ model_info.version }}{% endif %} · Runs offline on this device.</footer>
+<footer class="footer">{{ disclaimer }}{% if model_info.version %} · Model {{ model_info.version }}{% endif %} · Runs fully offline on this device</footer>
 <script src="{{ url_for('static', filename='portal.js') }}"></script>
 </body>
 </html>

@@ -10,6 +10,8 @@
 #
 # Layout: code /opt/neuroedge/src, venv /opt/neuroedge/venv, llama.cpp /opt/neuroedge/bin, LLM /opt/neuroedge/llm,
 # device state (keys, encrypted bundles) /var/lib/neuroedge, config /etc/neuroedge. Services run as user "neuroedge".
+# Network exposure: Caddy serves the portal over HTTPS (:443, local CA) and redirects :80; the Flask app and the
+# LLM listen on loopback only; an nftables table admits only SSH, HTTP(S) and mDNS.
 # Re-running the script is safe (idempotent); it upgrades the code in place.
 set -euo pipefail
 
@@ -40,7 +42,8 @@ SRC_DIR="$(pwd)"
 
 say "System packages"
 apt-get update -qq
-apt-get install -y -qq python3-venv python3-dev git cmake build-essential curl ca-certificates rsync openssl
+apt-get install -y -qq python3-venv python3-dev git cmake build-essential curl ca-certificates rsync openssl \
+  caddy nftables avahi-daemon
 
 say "Service user and directories"
 id neuroedge &>/dev/null || useradd --system --home-dir "$STATE" --shell /usr/sbin/nologin neuroedge
@@ -101,9 +104,11 @@ NEUROEDGE_MODEL=mri
 NEUROEDGE_LLM_URL=http://127.0.0.1:8081
 NEUROEDGE_PORTAL_DATA=$STATE/portal
 NEUROEDGE_PORTAL_KEY=$ETC/portal.key
+NEUROEDGE_BEHIND_PROXY=1
 EOF
   chgrp neuroedge "$ETC/web.env"
 fi
+grep -q '^NEUROEDGE_BEHIND_PROXY=' "$ETC/web.env" || echo "NEUROEDGE_BEHIND_PROXY=1" >> "$ETC/web.env"
 grep -q '^NEUROEDGE_PORTAL_DATA=' "$ETC/web.env" || printf 'NEUROEDGE_PORTAL_DATA=%s/portal
 NEUROEDGE_PORTAL_KEY=%s/portal.key
 ' "$STATE" "$ETC" >> "$ETC/web.env"
@@ -147,12 +152,37 @@ systemctl enable --now neuroedge-llm.service neuroedge-sync.timer neuroedge-web-
 systemctl enable neuroedge-web.service
 systemctl restart neuroedge-web.service || true    # skipped (condition) until a model is installed
 
+say "Firewall (nftables table inet neuroedge: SSH, HTTP, HTTPS, mDNS in; everything else dropped)"
+systemctl enable neuroedge-firewall.service
+systemctl restart neuroedge-firewall.service
+
+say "HTTPS: Caddy with its local CA in front of the portal"
+install -m 644 "$APP/src/edge/caddy/Caddyfile" /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+systemctl enable caddy
+systemctl restart caddy                       # (restart, not reload: the admin API is off)
+CA_ROOT=/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+for _ in $(seq 30); do
+  [[ -f "$CA_ROOT" ]] && break
+  curl -sk -o /dev/null https://127.0.0.1/ || true   # first handshake makes Caddy create its CA
+  sleep 1
+done
+install -d -m 755 /srv/neuroedge-public       # world-readable: Caddy (user caddy) serves the CA cert from here
+if [[ -f "$CA_ROOT" ]]; then install -m 644 "$CA_ROOT" /srv/neuroedge-public/neuroedge-ca.crt; fi
+cat > /usr/local/bin/neuroedge-ca <<EOF
+#!/bin/sh
+# Show the portal CA certificate's fingerprint (compare it on each device that installs neuroedge-ca.crt).
+exec openssl x509 -in /srv/neuroedge-public/neuroedge-ca.crt -noout -subject -fingerprint -sha256
+EOF
+chmod 755 /usr/local/bin/neuroedge-ca
+
 IP="$(hostname -I | awk '{print $1}')"
 cat <<EOF
 
 NeuroEdge installed.
   LLM:  systemctl status neuroedge-llm      (loopback :8081)
-  Web:  http://$IP:8080                       (starts once a model is installed)
+  Web:  https://$IP/  or  https://$(hostname).local/      (starts once a model is installed)
+  CA:   install http://$IP/neuroedge-ca.crt on each laptop/phone; check its fingerprint with: sudo neuroedge-ca
 
 Create the first portal administrator (then add doctors from the Users page):
   sudo neuroedge-portal create-user --role admin --email you@clinic.org --name "Your Name"

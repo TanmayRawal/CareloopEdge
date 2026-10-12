@@ -13,11 +13,14 @@ WorkingDirectory=/opt/neuroedge/src
 # NEUROEDGE_SECRET, NEUROEDGE_HOME, NEUROEDGE_MODEL, NEUROEDGE_LLM_URL (and NEUROEDGE_BUNDLE_DIR in dev mode)
 EnvironmentFile=/etc/neuroedge/web.env
 Environment=XDG_CACHE_HOME=/tmp/cache
+# Decoder cap against decompression bombs (also enforced from file headers in neuroedge/preprocess.py)
+Environment=OPENCV_IO_MAX_IMAGE_PIXELS=16777216
+# Loopback only: browsers reach the portal through Caddy (HTTPS :443, edge/caddy/Caddyfile).
 # Exactly ONE worker: one model in RAM (~1 GB), and the login rate limiter lives in process memory.
 # Threads give concurrency; the SQLite database (WAL) serialises writes.
 # Long timeout: an LLM narrative on the Pi can take ~30 s.
 ExecStart=/opt/neuroedge/venv/bin/gunicorn --workers 1 --threads 4 --timeout 180 --worker-tmp-dir /dev/shm --no-control-socket \
-          --bind 0.0.0.0:8080 "edge.serve:wsgi()"
+          --bind 127.0.0.1:8080 "edge.serve:wsgi()"
 Restart=on-failure
 RestartSec=5
 MemoryMax=3G

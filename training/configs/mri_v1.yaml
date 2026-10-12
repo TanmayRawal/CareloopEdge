@@ -14,13 +14,13 @@ preprocess:                             # unchanged from v0 (same fingerprint, s
 
 model:
   backbone: resnet50
-  output_stride: 16                     # ablation: 8 (28x28 CAM grid)
+  output_stride: 8                      # chosen by ablation_v1 (28x28 CAM grid; 16 = 14x14)
   pretrained: true
   dropout: 0.3
   segmentation: true
   fpn_channels: 128
   pooling: lesion                       # a_ij = (p_ij + eps) / sum(p + eps), p = detached seg probability
-  attn_eps: 0.02                        # ablation: 0.005, 0.05
+  attn_eps: 0.005                       # chosen by ablation_v1 (swept 0.005, 0.02, 0.05)
   seg_aux_weight: 0.4                   # deep supervision on the coarsest FPN level
 
 train:

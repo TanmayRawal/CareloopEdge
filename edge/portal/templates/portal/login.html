@@ -7,7 +7,7 @@
   <section class="auth-hero" aria-hidden="true">
     <svg class="hero-logo" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" class="logo-ring"/><path d="M9 17c2-6 5-8 7-8s5 2 7 8M11 21c2 2 3 3 5 3s3-1 5-3" class="logo-mark"/></svg>
     <h1>NeuroEdge</h1>
-    <p>Brain MRI review with explainable AI decision support — every result is reviewed and signed by a doctor.</p>
+    <p>Brain MRI analysis with explainable AI, reviewed and reported by your doctor.</p>
     <ul class="hero-points">
       <li>Patients upload scans securely and receive their doctor's report</li>
       <li>Doctors see calibrated AI results, Grad-CAM and the lesion outline</li>
@@ -16,7 +16,6 @@
   </section>
   <section class="auth-card card">
     <h2>Sign in</h2>
-    <p class="muted">Patients, doctors and administrators use the same sign-in.</p>
     {% if expired %}<div class="alert">Your session expired. Please sign in again.</div>{% endif %}
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
     <form method="post" class="form" autocomplete="on">
@@ -26,7 +25,6 @@
       <button class="btn primary block" type="submit">Sign in</button>
     </form>
     <p class="small muted center">New patient? <a href="{{ url_for('auth.register') }}">Create an account</a></p>
-    <p class="small muted center">Doctor accounts are created by the clinic administrator.</p>
   </section>
 </div>
 {% endblock %}

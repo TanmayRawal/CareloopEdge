@@ -1,0 +1,13 @@
+[Unit]
+Description=NeuroEdge inbound firewall (nftables table inet neuroedge)
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /opt/neuroedge/src/edge/firewall.nft
+ExecStop=/usr/sbin/nft delete table inet neuroedge
+
+[Install]
+WantedBy=multi-user.target

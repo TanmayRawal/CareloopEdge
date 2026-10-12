@@ -7,12 +7,16 @@ Roles
   admin    manages doctor accounts, views the audit log
 Security: argon2 passwords, lockout + rate limits, CSRF on every POST, strict CSP (no inline script, no
 external resources), object-level access checks, every scan / overlay / report encrypted at rest, audit log.
+On the Pi the app listens on loopback only; Caddy terminates HTTPS in front of it (behind_proxy=True: client IPs
+from X-Forwarded-For for rate limits / audit, Secure __Host- session cookie).
 """
 
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import secrets
+import socket
 import time
 from pathlib import Path
 
@@ -22,14 +26,13 @@ from edge.portal import auth, services
 from edge.portal.db import DB, DIAGNOSES, STATUSES
 from edge.portal.storage import BlobStore
 
-DISCLAIMER = ("Research and education system. Not a medical device. AI outputs are decision support for qualified "
-              "clinicians only; every report is written and signed by a doctor.")
+DISCLAIMER = "NeuroEdge research prototype"
 CLASS_TEXT = {"glioma": "Glioma", "meningioma": "Meningioma", "pituitary": "Pituitary tumor", "no_tumor": "No tumor",
               "other": "Other finding", "inconclusive": "Inconclusive — further imaging needed"}
 STATUS_TEXT = {"awaiting_review": "Awaiting doctor review", "in_review": "In review",
                "reupload_requested": "New image requested", "finalized": "Report ready"}
 FLAG_TEXT = {
-    "out_of_distribution": "Image is unlike the scans the model was validated on (rejected by the AI).",
+    "out_of_distribution": "Image differs from the scans the model was trained on.",
     "unusual_image": "Image is less typical than 95% of calibration scans.",
     "color_image": "Looks like a colour photo, not a grayscale scan.",
     "mostly_empty": "Image is almost empty.",
@@ -40,13 +43,47 @@ FLAG_TEXT = {
     "explanation_outside_lesion": "The model's evidence lies almost entirely outside the detected lesion.",
     "classifier_segmenter_disagree": "Classifier and lesion detector disagree on whether a tumor is present.",
 }
+FLAG_SHORT = {"out_of_distribution": "Atypical image", "unusual_image": "Less typical", "color_image": "Colour image",
+              "mostly_empty": "Mostly empty", "low_resolution": "Low resolution", "blurry_or_flat": "Low detail",
+              "uncertain_prediction_set": "Two+ classes plausible", "empty_prediction_set": "Low confidence",
+              "explanation_outside_lesion": "Evidence off lesion", "classifier_segmenter_disagree": "Detector disagrees"}
+
+
+def tls_name_allowed(name: str) -> bool:
+    """Names Caddy may issue an on-demand certificate for: this device's mDNS name, localhost, or a private /
+    link-local / loopback IP (how browsers on the clinic LAN reach the Pi). Anything else is refused, so a
+    stranger cannot make the Pi mint certificates for arbitrary names."""
+    name = name.strip().lower().rstrip(".")
+    if name in {"localhost", f"{socket.gethostname().lower()}.local"}:
+        return True
+    try:
+        ip = ipaddress.ip_address(name)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_link_local or ip.is_loopback
+
+
+def safe_next(nxt: str) -> str | None:
+    """Only same-site paths: '/x' yes; '//evil', '/\\evil' (browsers read '\\' as '/'), 'https://evil' and
+    control characters no."""
+    if not nxt.startswith("/") or nxt.startswith(("//", "/\\")) or "\\" in nxt:
+        return None
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in nxt):
+        return None
+    return nxt
 
 
 def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | Path,
-               secret_key: str | None = None, assistant=None) -> Flask:
+               secret_key: str | None = None, assistant=None, behind_proxy: bool = False) -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="/static")
     app.config.update(SECRET_KEY=secret_key or secrets.token_hex(32), MAX_CONTENT_LENGTH=21 * 1024 * 1024,
-                      SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict", SESSION_COOKIE_NAME="ne_session")
+                      SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
+                      # __Host- prefix: the browser only accepts it over HTTPS, host-only, path /
+                      SESSION_COOKIE_SECURE=behind_proxy,
+                      SESSION_COOKIE_NAME="__Host-ne_session" if behind_proxy else "ne_session")
+    if behind_proxy:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)   # exactly one trusted proxy (Caddy)
     db = DB(Path(data_dir) / "portal.db")
     store = BlobStore.from_key_file(Path(data_dir), Path(key_file))
     ctx = services.Ctx(db=db, store=store, engine=engine, model_version=str(model_info.get("version", "unknown")))
@@ -85,11 +122,19 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     @app.context_processor
     def inject():
         return {"csrf_token": csrf_token, "disclaimer": DISCLAIMER, "model_info": model_info, "me": g.get("user"),
-                "class_text": CLASS_TEXT, "status_text": STATUS_TEXT, "flag_text": FLAG_TEXT,
+                "class_text": CLASS_TEXT, "status_text": STATUS_TEXT, "flag_text": FLAG_TEXT, "flag_short": FLAG_SHORT,
                 "fmt_time": lambda t: time.strftime("%d %b %Y, %H:%M", time.localtime(t)) if t else "—"}
 
     def ip():
         return request.remote_addr
+
+    @app.get("/_tls_ask")
+    def tls_ask():
+        # Called by Caddy (on_demand_tls ask) directly on loopback. Requests relayed through the proxy carry
+        # X-Forwarded-For, so their remote_addr is the real client and they are refused.
+        if request.remote_addr != "127.0.0.1" or request.headers.get("X-Forwarded-For"):
+            abort(404)
+        return ("ok", 200) if tls_name_allowed(request.args.get("domain", "")) else ("refused", 403)
 
     def get_case_or_404(cid: str):
         case = db.case(cid)
@@ -118,8 +163,7 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
             return render_template("portal/login.html", error=err, email=request.form.get("email", "")), 401
         auth.start_session(user)
         db.audit(user["id"], "login", ip=ip())
-        nxt = request.args.get("next", "")
-        return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("auth.home"))
+        return redirect(safe_next(request.args.get("next", "")) or url_for("auth.home"))
 
     @bp_auth.post("/logout")
     def logout():

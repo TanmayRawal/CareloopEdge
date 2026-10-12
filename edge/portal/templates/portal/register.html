@@ -6,7 +6,6 @@
 <div class="auth-wrap single">
   <section class="auth-card card wide">
     <h2>Create a patient account</h2>
-    <p class="muted">You will be able to upload brain MRI images and read your doctor's report.</p>
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
     <form method="post" class="form grid2">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -20,8 +19,7 @@
       <label>Repeat password<input type="password" name="password2" required minlength="10" autocomplete="new-password"></label>
       <p class="span2 small muted">At least 10 characters.</p>
       <label class="check span2"><input type="checkbox" name="consent" value="yes" required>
-        <span>I understand this is a research and education system, not a medical device. My images and reports are
-        stored encrypted on this clinic device and are seen only by clinic doctors.</span></label>
+        <span>I agree that my scans and reports are stored encrypted on this clinic device and are seen only by clinic doctors.</span></label>
       <button class="btn primary span2" type="submit">Create account</button>
     </form>
     <p class="small muted center">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
