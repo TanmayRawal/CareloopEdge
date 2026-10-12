@@ -132,10 +132,12 @@ class Engine:
         is_ood = bool(ood_score > self.ood_reject)
         ood_warning = bool(not is_ood and ood_score > self.ood.threshold)
 
-        cam = necam.exact_cam(feats, self.W, pred)
+        # v1 bundles export the classifier's pooling weights; v0 (GAP) bundles do not -> uniform
+        att = out["attention"][0] if "attention" in out else None
+        cam = necam.exact_cam(feats, self.W, pred, att)
         runner_up = necam.most_similar_class(logits, pred)
-        finer = necam.finer_cam(feats, self.W, pred, runner_up, finer_gamma)
-        decomp = necam.decomposition_error(feats, self.W, self.b, logits)
+        finer = necam.finer_cam(feats, self.W, pred, runner_up, finer_gamma, attention=att)
+        decomp = necam.decomposition_error(feats, self.W, self.b, logits, att)
         size = self.pcfg.image_size
         cam_up = necam.upsample(cam, size)
         finer_up = necam.upsample(finer, size)
@@ -191,13 +193,14 @@ class Engine:
             result["overlays"] = self._overlays(pre, cam_up, finer_up, lesion)     # PNG encoding at full resolution
             result["timings_ms"]["render_ms"] = round((time.perf_counter() - t0) * 1000, 1)
         # internal state (not JSON): lets the UI re-render Finer-CAM for another gamma without re-inference
-        result["_state"] = {"pre": pre, "features": feats, "pred": pred, "runner_up": runner_up}
+        result["_state"] = {"pre": pre, "features": feats, "pred": pred, "runner_up": runner_up, "attention": att}
         return result
 
     def finer_png(self, state: dict, gamma: float) -> bytes:
         """Finer-CAM overlay for a new comparison strength gamma in [0, 1] (exact, no model call)."""
         gamma = float(min(max(gamma, 0.0), 1.0))
-        m = necam.finer_cam(state["features"], self.W, state["pred"], state["runner_up"], gamma)
+        m = necam.finer_cam(state["features"], self.W, state["pred"], state["runner_up"], gamma,
+                            attention=state.get("attention"))
         pre = state["pre"]
         up = necam.upsample(m, self.pcfg.image_size)
         rgb = necam.diverging_overlay(pre.original, inverse_map(necam.scale_for_display(up, signed=True), pre.geometry))

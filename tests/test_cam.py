@@ -105,3 +105,72 @@ def test_finer_cam_equals_autograd_of_logit_difference(net):
     _, hires = cam.autograd_cams(net, x, lambda y: y[:, t] - gamma * y[:, r])
     exact = cam.finer_cam(feats, w, t, r, gamma)
     np.testing.assert_allclose(hires[0], exact, atol=1e-5 * np.abs(exact).max())
+
+
+# ------------------------------------------------------------------ v1 lesion-attention pooling
+def test_weighted_pooling_decomposition_numpy():
+    rng = np.random.default_rng(3)
+    feats = np.maximum(rng.normal(size=(16, 14, 14)), 0)
+    w, b = rng.normal(size=(4, 16)), rng.normal(size=4)
+    att = rng.random((14, 14))
+    att /= att.sum()
+    logits = w @ np.einsum("khw,hw->k", feats, att) + b
+    assert cam.decomposition_error(feats, w, b, logits, att) < 1e-9
+    assert cam.decomposition_error(feats, w, b, logits) > 1e-3          # GAP formula is wrong for this head
+
+
+@pytest.fixture(scope="module")
+def lesion_net():
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("timm")
+    from neuroedge.config import ModelConfig
+    from neuroedge.models import MultiTaskNet
+
+    torch.manual_seed(1)
+    return MultiTaskNet(4, ModelConfig(pretrained=False, pooling="lesion", attn_eps=0.02, seg_aux_weight=0.4)).eval()
+
+
+def test_lesion_head_exact_cam_and_hirescam(lesion_net):
+    import torch
+
+    x = torch.randn(1, 3, 224, 224)
+    with torch.no_grad():
+        out = lesion_net(x)
+    att = out["attention"][0].double().numpy()
+    assert att.shape == (14, 14) and abs(att.sum() - 1) < 1e-5
+    feats, (w, b) = out["features"][0].double().numpy(), lesion_net.head_weights()
+    logits = out["logits"][0].double().numpy()
+    assert cam.decomposition_error(feats, w, b, logits, att) < 1e-4
+    c = int(np.argmax(logits))
+    _, hires = cam.autograd_cams(lesion_net, x, lambda y: y[:, c])
+    exact = cam.exact_cam(feats, w, c, att)
+    np.testing.assert_allclose(hires[0], exact, atol=1e-5 * np.abs(exact).max())
+    assert "seg_aux_logits" in out and out["seg_aux_logits"].shape == (1, 1, 224, 224)
+
+
+def test_lesion_attention_uniform_without_lesion_and_focused_with_lesion():
+    import torch
+
+    from neuroedge.models import lesion_attention
+
+    none = lesion_attention(torch.full((1, 1, 224, 224), -30.0), 16, 0.02)
+    np.testing.assert_allclose(none.numpy(), 1 / 196, rtol=1e-4)        # no lesion -> exactly GAP
+    seg = torch.full((1, 1, 224, 224), -30.0)
+    seg[..., :32, :32] = 30.0                                          # tumour = 2 x 2 cells of 196
+    a = lesion_attention(seg, 16, 0.02)[0]
+    # exact: tumour cells weigh (1 + eps) each, the other 192 cells eps each
+    assert float(a[:2, :2].sum()) == pytest.approx(4 * 1.02 / (4 * 1.02 + 192 * 0.02), rel=1e-4)
+    assert abs(float(a.sum()) - 1) < 1e-6
+
+
+def test_classification_loss_does_not_reach_segmentation_head(lesion_net):
+    import torch
+
+    lesion_net.train()
+    lesion_net.zero_grad()
+    out = lesion_net(torch.randn(2, 3, 224, 224))
+    torch.nn.functional.cross_entropy(out["logits"], torch.tensor([0, 1])).backward()
+    seg_grads = [p.grad for p in lesion_net.seg_head.parameters()]
+    assert all(g is None or float(g.abs().max()) == 0.0 for g in seg_grads)
+    assert float(lesion_net.classifier.weight.grad.abs().max()) > 0
+    lesion_net.eval()

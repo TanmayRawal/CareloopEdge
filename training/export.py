@@ -24,8 +24,9 @@ import torch
 from neuroedge.cam import decomposition_error
 from neuroedge.config import ModelConfig, PreprocessConfig
 from neuroedge.models import ExportWrapper, MultiTaskNet
+from training.data.paths import manifest_path
 
-OUTPUTS = ["logits", "features", "seg_logits", "emb1", "emb2", "emb3", "emb4"]
+OUTPUTS = ["logits", "features", "seg_logits", "emb1", "emb2", "emb3", "emb4", "attention"]
 
 
 def load_run(run: Path) -> tuple[MultiTaskNet, dict]:
@@ -86,7 +87,8 @@ def main() -> None:
         o_torch = dict(zip(OUTPUTS, [t.numpy() for t in wrapper(torch.from_numpy(x))]))
     logit_diff = float(np.abs(o_onnx["logits"] - o_torch["logits"]).max())
     feat_diff = float(np.abs(o_onnx["features"] - o_torch["features"]).max())
-    decomp = max(decomposition_error(o_onnx["features"][i], w, b, o_onnx["logits"][i]) for i in range(len(x)))
+    decomp = max(decomposition_error(o_onnx["features"][i], w, b, o_onnx["logits"][i], o_onnx["attention"][i])
+                 for i in range(len(x)))
     agree = float((o_onnx["logits"].argmax(1) == o_torch["logits"].argmax(1)).mean())
     print(f"parity: max|Δlogit|={logit_diff:.2e}  max|Δfeature|={feat_diff:.2e}  "
           f"CAM decomposition error={decomp:.2e}  argmax agreement={agree:.3f}")
@@ -95,6 +97,7 @@ def main() -> None:
     metrics = json.loads((args.run / "metrics.json").read_text()) if (args.run / "metrics.json").exists() else {}
     bundle = {
         "task": ckpt["config"]["name"], "class_names": list(ckpt["class_names"]),
+        "manifest": manifest_path(ckpt["config"]).name,
         "image_size": size, "preprocess": ckpt["config"]["preprocess"],
         "preprocess_fingerprint": ckpt["preprocess_fingerprint"], "model": ckpt["config"]["model"],
         "inputs": ["image"], "outputs": OUTPUTS, "cam_layer_output": "features",

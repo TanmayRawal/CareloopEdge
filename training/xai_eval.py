@@ -41,7 +41,7 @@ from neuroedge import cam as necam
 from neuroedge.config import PreprocessConfig
 from neuroedge.metrics import bootstrap_ci, energy_pointing, map_similarity, pointing_game, topk_overlap
 from neuroedge.preprocess import normalize
-from training.data.paths import DATA_ROOT, MANIFESTS
+from training.data.paths import DATA_ROOT, MANIFESTS, manifest_path
 from training.export import load_run
 
 
@@ -56,7 +56,7 @@ class LogitsOnly(nn.Module):
 
 def load_split(bundle_cfg: dict, class_names, split: str, n_per_class: int, seed: int):
     pcfg = PreprocessConfig(**{k: tuple(v) if isinstance(v, list) else v for k, v in bundle_cfg["preprocess"].items()})
-    df = pd.read_csv(MANIFESTS / f"{bundle_cfg['name']}.csv", keep_default_na=False)
+    df = pd.read_csv(manifest_path(bundle_cfg), keep_default_na=False)
     df = df[(df["split"] == split) & (df["mask_path"] != "") & (df["label"] != "no_tumor")]
     for cache in sorted((DATA_ROOT / "cache").glob(f"*_{pcfg.fingerprint()}")):
         ids = (cache / "ids.txt").read_text(encoding="utf-8").splitlines()
@@ -74,12 +74,13 @@ def load_split(bundle_cfg: dict, class_names, split: str, n_per_class: int, seed
 
 @torch.no_grad()
 def forward_all(net, x, device, bs=32):
-    outs = {"logits": [], "features": [], "seg": []}
+    outs = {"logits": [], "features": [], "seg": [], "attention": []}
     for s in range(0, len(x), bs):
         o = net(torch.from_numpy(x[s:s + bs]).to(device))
         outs["logits"].append(o["logits"].float().cpu())
         outs["features"].append(o["features"].float().cpu())
         outs["seg"].append(torch.sigmoid(o["seg_logits"].float()).cpu())
+        outs["attention"].append(o["attention"].float().cpu())
     return {k: torch.cat(v).numpy() for k, v in outs.items()}
 
 
@@ -93,12 +94,23 @@ def lib_cams(method_cls, wrapper, layers, x, targets, device, bs=16, **attrs):
     return np.concatenate(out)
 
 
-def exact_maps(feats, w, cls, size, finer_ref=None):
+def exact_maps(feats, w, cls, size, finer_ref=None, att=None):
     maps = []
     for i in range(len(feats)):
-        m = necam.finer_cam(feats[i], w, cls[i], finer_ref[i]) if finer_ref is not None else necam.exact_cam(feats[i], w, cls[i])
+        a = att[i] if att is not None else None
+        m = (necam.finer_cam(feats[i], w, cls[i], finer_ref[i], attention=a) if finer_ref is not None
+             else necam.exact_cam(feats[i], w, cls[i], a))
         maps.append(necam.scale_for_display(necam.upsample(m, size)))
     return np.stack(maps)
+
+
+def oracle_energy(mask: np.ndarray, grid: int) -> float:
+    """Best energy-in-mask any map on a grid x grid CAM can reach: the mask itself, area-downsampled to the
+    grid and bilinearly upsampled like every CAM (FINDINGS §5b). Reported so energy is read vs its ceiling."""
+    import cv2
+
+    small = cv2.resize(mask.astype(np.float32), (grid, grid), interpolation=cv2.INTER_AREA)
+    return necam.evidence_inside_fraction(necam.upsample(small, mask.shape), mask)
 
 
 def randomize(module: nn.Module, seed: int) -> None:
@@ -132,6 +144,9 @@ def main() -> None:
     ap.add_argument("--road-percentiles", default="20,40,60,80")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--with-scorecam", action="store_true", help="also evaluate Score-CAM (slow)")
+    ap.add_argument("--all-methods", action="store_true",
+                    help="also evaluate Finer-CAM, Grad-CAM++, LayerCAM, ShapleyCAM (v0 comparison; the v1 app "
+                         "shows only Grad-CAM + lesion)")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -151,7 +166,7 @@ def main() -> None:
         keep += sorted(rng.choice(idx, min(args.n_per_class, len(idx)), replace=False).tolist())
     keep = np.array(keep)
     x, gt, raw, y, pred = x[keep], gt[keep], raw[keep], y[keep], pred[keep]
-    feats, seg, logits = o["features"][keep], o["seg"][keep][:, 0], o["logits"][keep]
+    feats, seg, logits, att = o["features"][keep], o["seg"][keep][:, 0], o["logits"][keep], o["attention"][keep]
     size = x.shape[-1]
     ref = np.array([necam.most_similar_class(l, p) for l, p in zip(logits, pred)])
     print(f"{len(keep)} correctly classified tumor images with masks ({args.split})", flush=True)
@@ -159,13 +174,14 @@ def main() -> None:
     wrapper = LogitsOnly(net).eval()
     L3, L4 = net.encoder.layer3, net.encoder.layer4
     t_logit = [ClassifierOutputTarget(int(c)) for c in pred]
-    maps = {
-        "CAM (exact) / Grad-CAM": exact_maps(feats, w, pred, size),
-        "Finer-CAM": exact_maps(feats, w, pred, size, finer_ref=ref),
-        "Grad-CAM++": lib_cams(GradCAMPlusPlus, wrapper, [L4], x, t_logit, device),
-        "LayerCAM (L3+L4)": lib_cams(LayerCAM, wrapper, [L3, L4], x, t_logit, device),
-        "ShapleyCAM (ReST)": lib_cams(ShapleyCAM, wrapper, [L4], x, [ClassifierOutputReST(int(c)) for c in pred], device, bs=8),
-    }
+    maps = {"Grad-CAM (exact, HiResCAM form)": exact_maps(feats, w, pred, size, att=att)}
+    if args.all_methods:
+        maps.update({
+            "Finer-CAM": exact_maps(feats, w, pred, size, finer_ref=ref, att=att),
+            "Grad-CAM++": lib_cams(GradCAMPlusPlus, wrapper, [L4], x, t_logit, device),
+            "LayerCAM (L3+L4)": lib_cams(LayerCAM, wrapper, [L3, L4], x, t_logit, device),
+            "ShapleyCAM (ReST)": lib_cams(ShapleyCAM, wrapper, [L4], x, [ClassifierOutputReST(int(c)) for c in pred], device, bs=8),
+        })
     if args.with_scorecam:   # opt-in: 2048 forward passes per image, unusable on the Pi
         # bs=1: Score-CAM materialises 2048 masked copies of each input (~1.2 GB per image)
         maps["Score-CAM"] = lib_cams(ScoreCAM, wrapper, [L4], x, t_logit, device, bs=1, batch_size=64)
@@ -180,6 +196,8 @@ def main() -> None:
              "energy_pointing": ci([energy_pointing(m[i], gt[i]) for i in range(len(m))]),
              "top15_iou": ci([topk_overlap(m[i], gt[i], 0.15)["iou"] for i in range(len(m))]),
              "top15_dice": ci([topk_overlap(m[i], gt[i], 0.15)["dice"] for i in range(len(m))])}
+        r["energy_per_class"] = {class_names[c]: ci([energy_pointing(m[i], gt[i]) for i in np.flatnonzero(y == c)])
+                                 for c in np.unique(y)}
         if not name.startswith("Seg head"):
             scores = []
             for s in range(0, len(x), 16):
@@ -194,12 +212,12 @@ def main() -> None:
     # ---- cascading randomization sanity check (exact CAM; classifier first, then deeper)
     sanity = []
     rnd = copy.deepcopy(net)
-    base = exact_maps(feats, w, pred, size)
+    base = exact_maps(feats, w, pred, size, att=att)
     for k, stage in enumerate(["classifier", "layer4", "layer3", "layer2", "layer1"]):
         randomize(rnd.classifier if stage == "classifier" else getattr(rnd.encoder, stage), seed=100 + k)
         of = forward_all(rnd, x, device)
         wr, _ = rnd.head_weights()
-        mr = exact_maps(of["features"], wr, pred, size)
+        mr = exact_maps(of["features"], wr, pred, size, att=of["attention"])
         sims = [map_similarity(base[i], mr[i]) for i in range(len(base))]
         sanity.append({"randomized_up_to": stage,
                        "spearman": ci([s["spearman"] for s in sims]), "ssim": ci([s["ssim"] for s in sims])})
@@ -208,7 +226,12 @@ def main() -> None:
 
     out = args.run / "xai"
     out.mkdir(exist_ok=True)
+    grid = feats.shape[-1]
+    oracle = [oracle_energy(gt[i], grid) for i in range(len(gt))]
+    cam_e = results["Grad-CAM (exact, HiResCAM form)"]["energy_pointing"]["mean"]
     report = {"split": args.split, "n_images": int(len(keep)), "per_class": {class_names[c]: int((y == c).sum()) for c in np.unique(y)},
+              "cam_grid": int(grid), "pooling": ckpt["config"]["model"].get("pooling", "gap"),
+              "oracle_energy_ceiling": ci(oracle), "gradcam_fraction_of_ceiling": cam_e / float(np.nanmean(oracle)),
               "methods": results, "sanity_cascading_randomization": sanity}
     (out / "xai_report.json").write_text(json.dumps(report, indent=2))
 
@@ -220,6 +243,11 @@ def main() -> None:
     for name, r in results.items():
         lines.append(f"| {name} | {fmt(r['energy_pointing'])} | {fmt(r['pointing_game'])} | {fmt(r['top15_iou'])} | "
                      f"{fmt(r['road_combined']) if 'road_combined' in r else '—'} |")
+    lines += ["", f"CAM grid {report['cam_grid']}x{report['cam_grid']}, pooling '{report['pooling']}'. "
+              f"Oracle energy ceiling {fmt(report['oracle_energy_ceiling'])}; Grad-CAM reaches "
+              f"{report['gradcam_fraction_of_ceiling']:.0%} of it.", "",
+              "Energy in mask per class (Grad-CAM): " + ", ".join(
+                  f"{k} {fmt(v)}" for k, v in results["Grad-CAM (exact, HiResCAM form)"]["energy_per_class"].items())]
     lines += ["", "## Sanity check — cascading randomization (exact CAM)", "",
               "| Randomized up to | Spearman ↓ | SSIM ↓ |", "|---|---|---|"]
     lines += [f"| {s['randomized_up_to']} | {fmt(s['spearman'])} | {fmt(s['ssim'])} |" for s in sanity]
