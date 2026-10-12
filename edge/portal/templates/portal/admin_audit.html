@@ -1,0 +1,19 @@
+{% extends "portal/base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Audit log</h1><p class="muted">Latest 500 events: sign-ins, uploads, views, signatures, account changes.</p></div></div>
+<section class="card flush">
+  <table class="table small">
+    <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Case</th><th>Detail</th><th>IP</th></tr></thead>
+    <tbody>
+    {% for a in rows %}
+      <tr><td class="nowrap">{{ fmt_time(a.ts) }}</td>
+        <td>{{ a.user_name or '—' }}{% if a.user_role %} <span class="role role-{{ a.user_role }}">{{ a.user_role }}</span>{% endif %}</td>
+        <td><span class="tag">{{ a.action|replace('_', ' ') }}</span></td>
+        <td class="mono">{{ a.case_id[:8] if a.case_id else '' }}</td>
+        <td class="mono small">{{ a.detail if a.detail != '{}' else '' }}</td><td class="mono">{{ a.ip or '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

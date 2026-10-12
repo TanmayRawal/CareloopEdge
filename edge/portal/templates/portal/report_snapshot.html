@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Radiology report · {{ patient.name }}</title>
+<style>
+  body { font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1a1f2b; max-width: 760px; margin: 32px auto; padding: 0 24px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1d4ed8; padding-bottom: 10px; }
+  h1 { font-size: 20px; margin: 0; } .org { color: #1d4ed8; font-weight: 700; letter-spacing: .02em; }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; } th { text-align: left; color: #5b6475; width: 34%; font-weight: 500; padding: 5px 0; vertical-align: top; }
+  td { padding: 5px 0; } .dx { font-size: 18px; font-weight: 700; } .pre { white-space: pre-wrap; }
+  .sig { margin-top: 28px; border-top: 1px solid #d6dbe4; padding-top: 10px; } .note { color: #5b6475; font-size: 12px; margin-top: 24px; }
+  .amend { background: #fff7e6; border: 1px solid #f3c66b; padding: 8px 12px; border-radius: 6px; }
+  @media print { body { margin: 0; } }
+</style></head>
+<body>
+<header><div><div class="org">NeuroEdge clinic</div><h1>Brain MRI report</h1></div><div>Report v{{ version }} · {{ signed }}</div></header>
+{% if amendment_reason %}<p class="amend"><b>Amended report.</b> Reason: {{ amendment_reason }}</p>{% endif %}
+<table>
+  <tr><th>Patient</th><td>{{ patient.name }}</td></tr>
+  <tr><th>Case reference</th><td>{{ case.id[:12] }}</td></tr>
+  <tr><th>Image</th><td>{{ case.scan_filename }} (SHA-256 {{ case.scan_sha256[:16] }}…)</td></tr>
+  <tr><th>Diagnosis</th><td class="dx">{{ {'glioma': 'Glioma', 'meningioma': 'Meningioma', 'pituitary': 'Pituitary tumor', 'no_tumor': 'No tumor', 'other': 'Other finding', 'inconclusive': 'Inconclusive — further imaging needed'}[diagnosis] }}</td></tr>
+  <tr><th>Findings</th><td class="pre">{{ findings }}</td></tr>
+  {% if recommendation %}<tr><th>Recommendation</th><td class="pre">{{ recommendation }}</td></tr>{% endif %}
+</table>
+<div class="sig">Electronically signed by <b>{{ doctor.name }}</b> on {{ signed }}.</div>
+<p class="note">Produced with the NeuroEdge research system: the diagnosis above is the reviewing doctor's. AI decision
+support was available to the doctor but is not part of this report. Research and education use; not a medical device.</p>
+</body></html>

@@ -8,7 +8,8 @@ Pipeline per image
   calibrated probabilities   softmax(logits / T)                       (temperature scaling)
   prediction set             class-conditional conformal (1 - alpha per class)
   OOD                        multi-layer Mahalanobis on embeddings (+ energy, secondary)
-  explanation                exact CAM S_c (sums to the logit), Finer-CAM S_c - S_runner-up
+  explanation                Grad-CAM in its exact (HiResCAM) form: S_c = a_ij W_c.A_ij sums to the logit; with the
+                             v1 lesion-attention head a_ij comes from the segmentation (exported as "attention")
   localisation               segmentation head -> lesion area / centroid / extent
   consistency                share of positive CAM evidence inside the predicted lesion
   triage flags               ood, uncertain (set size != 1), low consistency, input quality
@@ -75,8 +76,6 @@ class Engine:
         self.ood_reject = float(cal.get("ood_reject_threshold", self.ood.threshold))
         self.th = thresholds or Thresholds(**cal.get("review_thresholds", {}))
         self.outputs = self.meta["outputs"]
-        self._fp32_weights = files.get("model_fp32.pt")      # optional: enables deep_explain()
-        self._deep = None
 
     @classmethod
     def from_dir(cls, path: str | Path, **kw) -> "Engine":
@@ -85,33 +84,8 @@ class Engine:
         files |= {f: (p / f).read_bytes() for f in OPTIONAL_FILES if (p / f).exists()}
         return cls(files, **kw)
 
-    @property
-    def has_deep_explain(self) -> bool:
-        """FP32 weights in the bundle AND PyTorch installed (optional on the Pi: install_pi.sh --with-deep-explain)."""
-        if self._fp32_weights is None:
-            return False
-        import importlib.util
-        return all(importlib.util.find_spec(m) is not None for m in ("torch", "timm"))
-
-    def deep_explain(self, source: bytes | str | Path, filename: str | None = None) -> dict:
-        """On-demand LayerCAM (layer3 + layer4) with the FP32 PyTorch model — the configuration evaluated
-        in training/xai_eval.py. Needs torch + timm + grad-cam on the device (lazy-loaded)."""
-        if not self.has_deep_explain:
-            raise RuntimeError("bundle has no FP32 weights (model_fp32.pt); deep explain unavailable")
-        from edge.deep_explain import DeepExplainer
-
-        if self._deep is None:
-            self._deep = DeepExplainer(self._fp32_weights, self.meta)
-        pre = preprocess(source, self.pcfg, filename=filename)
-        res = self._deep.explain(pre.tensor)
-        cam_o = inverse_map(res.pop("map"), pre.geometry)
-        ok, buf = cv2.imencode(".png", cv2.cvtColor(necam.overlay(pre.original, cam_o), cv2.COLOR_RGB2BGR))
-        res["overlay"] = buf.tobytes()
-        return res
-
     # ------------------------------------------------------------------------------ analysis
-    def analyze(self, source: bytes | str | Path, filename: str | None = None, finer_gamma: float = 1.0,
-                with_overlays: bool = True) -> dict:
+    def analyze(self, source: bytes | str | Path, filename: str | None = None, with_overlays: bool = True) -> dict:
         t = {}
         t0 = time.perf_counter()
         pre = preprocess(source, self.pcfg, filename=filename)
@@ -136,11 +110,9 @@ class Engine:
         att = out["attention"][0] if "attention" in out else None
         cam = necam.exact_cam(feats, self.W, pred, att)
         runner_up = necam.most_similar_class(logits, pred)
-        finer = necam.finer_cam(feats, self.W, pred, runner_up, finer_gamma, attention=att)
         decomp = necam.decomposition_error(feats, self.W, self.b, logits, att)
         size = self.pcfg.image_size
         cam_up = necam.upsample(cam, size)
-        finer_up = necam.upsample(finer, size)
 
         seg_prob = 1.0 / (1.0 + np.exp(-out["seg_logits"][0, 0].astype(np.float64)))
         lesion = (seg_prob >= self.th.seg_probability).astype(np.uint8)
@@ -176,8 +148,9 @@ class Engine:
             "ood": {"mahalanobis_score": ood_score, "threshold": float(self.ood.threshold),
                     "reject_threshold": self.ood_reject, "is_ood": is_ood, "warning": ood_warning,
                     "energy": float(energy_score(logits[None], self.temperature)[0])},
-            "explanation": {"method": "exact CAM (= HiResCAM; ReLU = Grad-CAM)", "explained_class": self.class_names[pred],
-                            "finer_cam_reference": self.class_names[runner_up], "finer_gamma": finer_gamma,
+            "explanation": {"method": "Grad-CAM (exact, HiResCAM form)", "explained_class": self.class_names[pred],
+                            "runner_up": self.class_names[runner_up],
+                            "lesion_attention_pooling": att is not None,
                             "logit_decomposition_error": decomp,
                             "evidence_inside_lesion": None if not np.isfinite(consistency) else float(consistency)},
             "lesion": lesion_stats,
@@ -190,22 +163,11 @@ class Engine:
         }
         if with_overlays:
             t0 = time.perf_counter()
-            result["overlays"] = self._overlays(pre, cam_up, finer_up, lesion)     # PNG encoding at full resolution
+            result["overlays"] = self._overlays(pre, cam_up, lesion)     # PNG encoding at full resolution
             result["timings_ms"]["render_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-        # internal state (not JSON): lets the UI re-render Finer-CAM for another gamma without re-inference
+        # internal state (not JSON; research/parity tools only)
         result["_state"] = {"pre": pre, "features": feats, "pred": pred, "runner_up": runner_up, "attention": att}
         return result
-
-    def finer_png(self, state: dict, gamma: float) -> bytes:
-        """Finer-CAM overlay for a new comparison strength gamma in [0, 1] (exact, no model call)."""
-        gamma = float(min(max(gamma, 0.0), 1.0))
-        m = necam.finer_cam(state["features"], self.W, state["pred"], state["runner_up"], gamma,
-                            attention=state.get("attention"))
-        pre = state["pre"]
-        up = necam.upsample(m, self.pcfg.image_size)
-        rgb = necam.diverging_overlay(pre.original, inverse_map(necam.scale_for_display(up, signed=True), pre.geometry))
-        ok, buf = cv2.imencode(".png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-        return buf.tobytes()
 
     # ------------------------------------------------------------------------------- helpers
     def _lesion_stats(self, lesion: np.ndarray, mm_per_px: float | None) -> dict:
@@ -225,22 +187,23 @@ class Engine:
             stats["max_extent_mm"] = round(max(xs.max() - xs.min(), ys.max() - ys.min()) * mm_per_px, 1)
         return stats
 
-    def _overlays(self, pre, cam_up, finer_up, lesion) -> dict[str, bytes]:
+    def _overlays(self, pre, cam_up, lesion) -> dict[str, bytes]:
+        """The only two explanations shown (v1): Grad-CAM, and the lesion outline from the segmentation head;
+        plus their combination and the original image. All at the upload's resolution."""
         g = pre.geometry
         orig = pre.original
         cam_o = inverse_map(necam.scale_for_display(cam_up), g)
-        finer_o = inverse_map(necam.scale_for_display(finer_up, signed=True), g)
         lesion_o = (inverse_map(lesion.astype(np.float32), g) >= 0.5).astype(np.uint8)
         cam_rgb = necam.overlay(orig, cam_o)
-        finer_rgb = necam.diverging_overlay(orig, finer_o)
         seg_rgb = np.repeat(orig[..., None], 3, -1).copy()
+        both_rgb = cam_rgb.copy()
         cnts, _ = cv2.findContours(lesion_o, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         thick = max(1, round(max(orig.shape) / 300))
         cv2.drawContours(seg_rgb, cnts, -1, (0, 230, 0), thick)
-        cv2.drawContours(cam_rgb, cnts, -1, (0, 230, 0), thick)
+        cv2.drawContours(both_rgb, cnts, -1, (0, 230, 0), thick)
 
         def png(rgb):
             ok, buf = cv2.imencode(".png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
             return buf.tobytes()
-        return {"cam": png(cam_rgb), "finer_cam": png(finer_rgb), "lesion": png(seg_rgb),
-                "original": png(np.repeat(orig[..., None], 3, -1))}
+        return {"original": png(np.repeat(orig[..., None], 3, -1)), "cam": png(cam_rgb),
+                "lesion": png(seg_rgb), "cam_lesion": png(both_rgb)}

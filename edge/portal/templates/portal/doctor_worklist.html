@@ -1,0 +1,39 @@
+{% extends "portal/base.html" %}
+{% block title %}Worklist{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Worklist</h1>
+  <p class="muted">Ordered by AI triage: images the AI could not analyse first, then cases the AI flags for attention, then routine — oldest first within each group.</p></div>
+</div>
+<div class="kpis">
+  <a class="kpi {{ 'on' if status == 'open' }}" href="{{ url_for('doctor.worklist', status='open') }}"><b>{{ counts.awaiting_review + counts.in_review }}</b><span>Open</span></a>
+  <a class="kpi {{ 'on' if status == 'awaiting_review' }}" href="{{ url_for('doctor.worklist', status='awaiting_review') }}"><b>{{ counts.awaiting_review }}</b><span>New</span></a>
+  <a class="kpi {{ 'on' if status == 'in_review' }}" href="{{ url_for('doctor.worklist', status='in_review') }}"><b>{{ counts.in_review }}</b><span>In review</span></a>
+  <a class="kpi {{ 'on' if status == 'reupload_requested' }}" href="{{ url_for('doctor.worklist', status='reupload_requested') }}"><b>{{ counts.reupload_requested }}</b><span>Waiting for image</span></a>
+  <a class="kpi {{ 'on' if status == 'finalized' }}" href="{{ url_for('doctor.worklist', status='finalized') }}"><b>{{ counts.finalized }}</b><span>Signed</span></a>
+</div>
+<section class="card flush">
+  {% if not items %}
+    <p class="empty-row muted">No cases in this view.</p>
+  {% else %}
+  <table class="table">
+    <thead><tr><th>Priority</th><th>Patient</th><th>Submitted</th><th>AI result</th><th>Flags</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for it in items %}{% set c = it.case %}{% set r = it.ai %}
+      <tr>
+        <td>{% if c.priority >= 3 %}<span class="pri p3">AI could not analyse</span>
+            {% elif c.priority == 2 %}<span class="pri p2">Attention</span>{% else %}<span class="pri p1">Routine</span>{% endif %}</td>
+        <td><b>{{ c.patient_name }}</b><br><span class="small muted mono">#{{ c.id[:8] }}</span></td>
+        <td>{{ fmt_time(c.created) }}</td>
+        <td>{% if r and r.status == 'ok' %}{{ class_text[r.prediction] }} <span class="muted small">{{ '%.0f'|format(100 * r.probabilities[r.prediction]) }}%</span>
+            {% elif r %}<span class="muted">Rejected input</span>{% else %}—{% endif %}</td>
+        <td>{% if r %}{% for f in r.flags if f in flag_text %}<span class="tag" title="{{ flag_text[f] }}">{{ f|replace('_', ' ') }}</span>{% endfor %}{% endif %}</td>
+        <td><span class="status s-{{ c.status }}">{{ status_text[c.status] }}</span>{% if c.doctor_name %}<br><span class="small muted">{{ c.doctor_name }}</span>{% endif %}</td>
+        <td class="right"><a class="btn small {{ 'primary' if c.status in ('awaiting_review', 'in_review') }}" href="{{ url_for('doctor.case_review', cid=c.id) }}">{{ 'Review' if c.status in ('awaiting_review', 'in_review') else 'Open' }}</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

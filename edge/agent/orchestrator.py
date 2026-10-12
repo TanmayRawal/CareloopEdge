@@ -58,7 +58,8 @@ def explain_why(f: dict) -> str:
     probs = f["probabilities_percent"]
     parts = ["The model does not give reasons in words; it is a pattern classifier trained on labelled MRI slices.",
              f"Its calibrated probabilities are {pr} {probs.get(pr, 0.0):.1f}% and {ru} {probs.get(ru, 0.0):.1f}% (runner-up).",
-             f"The Finer-CAM tab shows which image regions push the decision towards {pr} (red) rather than {ru} (blue)."]
+             f"The Grad-CAM view shows which image regions increased the score for {pr}; the green outline is the "
+             "lesion found by the separate segmentation network."]
     ev = f.get("model_evidence_inside_lesion_percent")
     if ev is not None:
         parts.append(f"{ev:.1f}% of the positive Grad-CAM evidence lies inside the outlined lesion.")

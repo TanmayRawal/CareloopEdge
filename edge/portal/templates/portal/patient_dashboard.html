@@ -1,0 +1,35 @@
+{% extends "portal/base.html" %}
+{% block title %}My scans{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>My scans</h1>
+    <p class="muted">Each scan is reviewed by a doctor. You will see the doctor's report here when it is ready.</p>
+  </div>
+  <a class="btn primary" href="{{ url_for('patient.upload') }}">+ Upload a new scan</a>
+</div>
+{% if not cases %}
+  <section class="card empty-state">
+    <svg viewBox="0 0 48 48" class="empty-icon" aria-hidden="true"><rect x="8" y="6" width="32" height="36" rx="4"/><path d="M16 18h16M16 26h16M16 34h10"/></svg>
+    <h2>No scans yet</h2>
+    <p class="muted">Upload a brain MRI image (PNG, JPG or DICOM) to start.</p>
+    <a class="btn primary" href="{{ url_for('patient.upload') }}">Upload a scan</a>
+  </section>
+{% else %}
+  <section class="card flush">
+    <table class="table">
+      <thead><tr><th>Submitted</th><th>File</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ fmt_time(c.created) }}</td>
+          <td class="mono small">{{ c.scan_filename }}</td>
+          <td><span class="status s-{{ c.status }}">{{ status_text[c.status] }}</span></td>
+          <td class="right"><a class="btn small" href="{{ url_for('patient.case', cid=c.id) }}">{{ 'View report' if c.status == 'finalized' else 'Open' }}</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endif %}
+{% endblock %}

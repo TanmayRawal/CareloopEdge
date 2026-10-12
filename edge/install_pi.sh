@@ -3,7 +3,7 @@
 #
 #   sudo bash edge/install_pi.sh [--with-deep-explain] [--gguf FILE] [--ca-cert FILE] [--dev-bundle DIR]
 #
-#   --with-deep-explain  also install CPU PyTorch + timm (enables the FP32 LayerCAM "Deep Explain" view)
+#   --with-deep-explain  also install CPU PyTorch + timm (research tools only; the v1 portal shows Grad-CAM + lesion)
 #   --gguf FILE          use a local copy of Qwen3-1.7B-Q4_K_M.gguf instead of downloading it (fully offline install)
 #   --ca-cert FILE       trust this CA for the model registry (e.g. Caddy's internal root for a LAN server)
 #   --dev-bundle DIR     DEVELOPMENT ONLY: serve a plaintext bundle directory (no server, no encryption at rest)
@@ -99,9 +99,23 @@ NEUROEDGE_SECRET=$(openssl rand -hex 32)
 NEUROEDGE_HOME=$STATE
 NEUROEDGE_MODEL=mri
 NEUROEDGE_LLM_URL=http://127.0.0.1:8081
+NEUROEDGE_PORTAL_DATA=$STATE/portal
+NEUROEDGE_PORTAL_KEY=$ETC/portal.key
 EOF
   chgrp neuroedge "$ETC/web.env"
 fi
+grep -q '^NEUROEDGE_PORTAL_DATA=' "$ETC/web.env" || printf 'NEUROEDGE_PORTAL_DATA=%s/portal
+NEUROEDGE_PORTAL_KEY=%s/portal.key
+' "$STATE" "$ETC" >> "$ETC/web.env"
+
+say "Clinical portal: encryption key + database"
+# The key encrypts every stored scan / overlay / report. Created once, never overwritten; back it up separately.
+if [[ ! -f "$ETC/portal.key" ]]; then
+  "$APP/venv/bin/python" -c "import os,sys; open(sys.argv[1],'wb').write(os.urandom(32))" "$ETC/portal.key"
+fi
+chown root:neuroedge "$ETC/portal.key"; chmod 640 "$ETC/portal.key"
+install -d -m 750 -o neuroedge -g neuroedge "$STATE/portal"
+(cd "$APP/src" && runuser -u neuroedge -- "$APP/venv/bin/python" -m edge.portal.manage init --data "$STATE/portal" --key "$ETC/portal.key")
 if [[ -n "$DEV_BUNDLE" ]]; then
   echo "WARNING: dev bundle = plaintext model on disk; use enrollment + sync for real deployments." >&2
   rsync -a --delete "$DEV_BUNDLE/" "$STATE/dev_bundle/"
@@ -109,7 +123,16 @@ if [[ -n "$DEV_BUNDLE" ]]; then
   grep -q '^NEUROEDGE_BUNDLE_DIR=' "$ETC/web.env" || echo "NEUROEDGE_BUNDLE_DIR=$STATE/dev_bundle" >> "$ETC/web.env"
 fi
 
-say "Helper command /usr/local/bin/neuroedge-sync"
+say "Helper commands /usr/local/bin/neuroedge-sync, neuroedge-portal"
+cat > /usr/local/bin/neuroedge-portal <<EOF
+#!/bin/sh
+# Portal administration as the service user, e.g.
+#   sudo neuroedge-portal create-user --role admin --email you@clinic.org --name "Your Name"
+#   sudo neuroedge-portal backup --dest /media/usb/neuroedge-backups
+cmd="\$1"; shift
+cd $APP/src && exec runuser -u neuroedge -- $APP/venv/bin/python -m edge.portal.manage "\$cmd" --data $STATE/portal "\$@"
+EOF
+chmod 755 /usr/local/bin/neuroedge-portal
 cat > /usr/local/bin/neuroedge-sync <<EOF
 #!/bin/sh
 # Run edge.sync as the service user, e.g.  sudo neuroedge-sync status
@@ -130,6 +153,9 @@ cat <<EOF
 NeuroEdge installed.
   LLM:  systemctl status neuroedge-llm      (loopback :8081)
   Web:  http://$IP:8080                       (starts once a model is installed)
+
+Create the first portal administrator (then add doctors from the Users page):
+  sudo neuroedge-portal create-user --role admin --email you@clinic.org --name "Your Name"
 
 Next, enroll this Pi with the model registry. On the server machine, create a one-time token:
   curl -X POST -H "Authorization: Bearer \$NE_ADMIN_TOKEN" https://<registry>/v1/admin/enrollment-tokens

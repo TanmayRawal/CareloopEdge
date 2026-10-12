@@ -1,0 +1,39 @@
+{% extends "portal/base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Users</h1><p class="muted">Patients register themselves; doctor and admin accounts are created here.</p></div></div>
+<div class="grid-2 admin">
+  <section class="card flush">
+    <table class="table">
+      <thead><tr><th>Name</th><th>E-mail</th><th>Role</th><th>Cases</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr class="{{ 'muted' if not u.active }}">
+          <td><b>{{ u.name }}</b></td><td class="small">{{ u.email }}</td>
+          <td><span class="role role-{{ u.role }}">{{ u.role|title }}</span></td>
+          <td>{{ u.n_cases if u.role == 'patient' else '' }}</td>
+          <td>{{ 'Active' if u.active else 'Disabled' }}{% if u.locked_until and u.locked_until > 0 %} · locked{% endif %}</td>
+          <td class="right">{% if u.id != me.id %}
+            <form method="post" action="{{ url_for('admin.toggle', uid=u.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <button class="btn small {{ 'danger' if u.active }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button>
+            </form>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Add a doctor or admin</h2>
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" class="form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label>Full name<input name="name" required maxlength="120"></label>
+      <label>E-mail<input type="email" name="email" required maxlength="200"></label>
+      <label>Role<select name="role"><option value="doctor">Doctor</option><option value="admin">Admin</option></select></label>
+      <label>Initial password<input type="password" name="password" required minlength="10" autocomplete="new-password"></label>
+      <button class="btn primary block" type="submit">Create account</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

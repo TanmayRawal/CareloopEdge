@@ -25,6 +25,11 @@ FLAG_TEXT = {
 }
 
 
+def _runner_up(result: dict) -> str:
+    e = result["explanation"]
+    return e.get("runner_up") or e.get("finer_cam_reference")      # v0 results used the Finer-CAM field name
+
+
 def case_facts(result: dict) -> dict:
     """Verified, JSON-safe facts. Percentages are rounded to 1 decimal exactly as displayed."""
     pct = lambda v: round(100.0 * float(v), 1)  # noqa: E731
@@ -37,7 +42,7 @@ def case_facts(result: dict) -> dict:
         "prediction_set_95": [CLASS_TEXT.get(c, c) for c in result.get("prediction_set", [])],
         "needs_expert_review": bool(result.get("needs_expert_review")),
         "review_reasons": [FLAG_TEXT[f] for f in result.get("flags", []) if f in FLAG_TEXT],
-        "runner_up": CLASS_TEXT.get(result["explanation"]["finer_cam_reference"], result["explanation"]["finer_cam_reference"]),
+        "runner_up": CLASS_TEXT.get(_runner_up(result), _runner_up(result)),
         "lesion_detected": bool(lesion.get("present")),
     }
     if lesion.get("present"):
@@ -74,7 +79,7 @@ def fact_sheet(f: dict) -> str:
              "- Calibrated probabilities: " + ", ".join(f"{k} {v:.1f}%" for k, v in f["probabilities_percent"].items()) + ".",
              "- 95% prediction set: " + (", ".join(f["prediction_set_95"]) or "empty") + ". " + _set_meaning(f),
              f"- Runner-up class: {f['runner_up']} ({f['probabilities_percent'].get(f['runner_up'], 0.0):.1f}%). "
-             f"The Finer-CAM view shows which image regions favour {f['prediction']} over {f['runner_up']}; "
+             "The Grad-CAM view shows which image regions increased the score of the predicted class; "
              "the model itself gives no reasons in words."]
     if f["lesion_detected"]:
         size = (f"{f['lesion_area_mm2']} mm²" if "lesion_area_mm2" in f
