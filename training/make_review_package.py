@@ -174,7 +174,8 @@ def main() -> None:
         print("WARNING: uncommitted changes are NOT in the package (it uses the last commit).")
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     date = time.strftime("%Y-%m-%d")
-    name = f"NeuroEdge_review_{date}_{commit}"
+    name = "NeuroEdge_review"                              # short top folder (Windows path limit)
+    zip_name = f"NeuroEdge_review_{date}_{commit}"
     stage = args.out / name
     shutil.rmtree(stage, ignore_errors=True)
     (stage / "code").mkdir(parents=True)
@@ -183,6 +184,9 @@ def main() -> None:
     subprocess.run(["git", "archive", "--format=tar", "-o", str(tar), "HEAD"], cwd=ROOT, check=True)
     shutil.unpack_archive(tar, stage / "code")
     tar.unlink()
+    # Windows' 260-character path limit: the original notebook's long name broke "Extract All" in testing
+    for nb in (stage / "code" / "reference").glob("*.ipynb"):
+        nb.rename(nb.with_name("original_notebook.ipynb"))
 
     mdir = stage / "model" / "mri_v0_int8"
     mdir.mkdir(parents=True)
@@ -203,7 +207,7 @@ def main() -> None:
     files = sorted(p for p in stage.rglob("*") if p.is_file())
     (stage / "SHA256SUMS.txt").write_text("".join(f"{sha256(p)}  {p.relative_to(stage).as_posix()}\n" for p in files))
 
-    zpath = args.out / f"{name}.zip"
+    zpath = args.out / f"{zip_name}.zip"
     zpath.unlink(missing_ok=True)
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         for p in sorted(stage.rglob("*")):
