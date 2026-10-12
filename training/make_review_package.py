@@ -194,18 +194,20 @@ def main() -> None:
              (() if args.no_deep_explain else ("model_fp32.pt",)):
         shutil.copy2(BUNDLE / f, mdir / f)
     shutil.copytree(SAMPLES, stage / "sample_scans")
-    (stage / "sample_scans" / "ATTRIBUTION.txt").write_text(
-        "Held-out test slices from BRISC 2025 (arXiv:2506.14318), CC BY 4.0.\n"
-        "File names start with the ground-truth class.\n")
+    # write_bytes, not write_text: on Windows write_text emits CRLF, which breaks SHA256SUMS.txt (sha256sum -c)
+    lf = lambda path, text: path.write_bytes(text.encode("utf-8"))  # noqa: E731
+    lf(stage / "sample_scans" / "ATTRIBUTION.txt",
+       "Held-out test slices from BRISC 2025 (arXiv:2506.14318), CC BY 4.0.\n"
+       "File names start with the ground-truth class.\n")
 
-    (stage / "requirements-demo.txt").write_text(REQ_DEMO)
-    (stage / "requirements-deep.txt").write_text(REQ_DEEP)
+    lf(stage / "requirements-demo.txt", REQ_DEMO)
+    lf(stage / "requirements-deep.txt", REQ_DEEP)
     (stage / "run_demo.bat").write_bytes(RUN_BAT.replace("\n", "\r\n").encode())
-    (stage / "run_demo.sh").write_bytes(RUN_SH.encode())
-    (stage / "README.md").write_text(README.replace("{commit}", commit).replace("{date}", date), encoding="utf-8")
+    lf(stage / "run_demo.sh", RUN_SH)
+    lf(stage / "README.md", README.replace("{commit}", commit).replace("{date}", date))
 
     files = sorted(p for p in stage.rglob("*") if p.is_file())
-    (stage / "SHA256SUMS.txt").write_text("".join(f"{sha256(p)}  {p.relative_to(stage).as_posix()}\n" for p in files))
+    lf(stage / "SHA256SUMS.txt", "".join(f"{sha256(p)}  {p.relative_to(stage).as_posix()}\n" for p in files))
 
     zpath = args.out / f"{zip_name}.zip"
     zpath.unlink(missing_ok=True)
