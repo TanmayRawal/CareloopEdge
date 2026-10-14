@@ -68,6 +68,26 @@ def seed_dev_accounts(app, data_dir: Path) -> None:
     print(f"created test accounts: {data_dir / 'DEV_ACCOUNTS.txt'}")
 
 
+def start_dev_reminders(app, every_s: int = 60) -> None:
+    """Development only: run the reminder rules + e-mail flush in a background thread (on the Pi this is
+    neuroedge-reminders.timer, a separate process)."""
+    import threading
+    import time
+
+    from edge.portal import mailer, reminders
+    db = app.extensions["portal"]["db"]
+
+    def loop():
+        while True:
+            try:
+                reminders.run_once(db)
+                mailer.flush(db)
+            except Exception as e:                       # keep the demo server alive
+                print(f"reminders: {e}")
+            time.sleep(every_s)
+    threading.Thread(target=loop, name="dev-reminders", daemon=True).start()
+
+
 def wsgi():
     return build(os.environ.get("NEUROEDGE_BUNDLE_DIR"), os.environ.get("NEUROEDGE_MODEL", "mri"))
 
@@ -85,12 +105,20 @@ def main() -> None:
     args = ap.parse_args()
     key = args.portal_key or (str(Path(args.portal_data) / "portal.key") if args.init_dev and args.portal_data else None)
     if args.init_dev:
+        import hashlib
+
         from edge.portal.storage import generate_key
         if key and not Path(key).exists():
             generate_key(Path(key))
+        if args.portal_data:
+            # Development / demo conveniences: e-mails become .eml files, sessions survive restarts.
+            os.environ.setdefault("NEUROEDGE_SMTP", f"file:{Path(args.portal_data) / 'mail'}")
+            os.environ.setdefault("NEUROEDGE_SMTP_ENV", str(Path(args.portal_data) / "smtp.env"))
+            os.environ.setdefault("NEUROEDGE_SECRET", hashlib.sha256(Path(key).read_bytes() + b"session").hexdigest())
     app = build(args.bundle_dir, args.model, args.threads, args.portal_data, key)
     if args.init_dev and args.portal_data:
         seed_dev_accounts(app, Path(args.portal_data))
+        start_dev_reminders(app)
     print(json.dumps({"serving": f"http://{args.host}:{args.port}", "bundle": args.bundle_dir or args.model}))
     app.run(host=args.host, port=args.port, threaded=True, debug=False)
 

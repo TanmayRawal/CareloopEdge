@@ -4,10 +4,12 @@
 <div class="page-head"><div><h1>System</h1><p>{{ info.host }} · running for {{ info.uptime }}</p></div></div>
 <div class="kpis">
   <div class="kpi"><span class="k-label">AI model</span><span class="k-val">{{ info.model_version }}</span><span class="k-sub">{{ info.precision|upper }} · signed and verified</span></div>
-  <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ info.cases }}</span><span class="k-sub">{{ info.reports }} report versions</span></div>
+  <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ info.cases }}</span><span class="k-sub">{{ info.reports }} report versions · {{ info.appointments }} consultations</span></div>
   <div class="kpi"><span class="k-label">Users</span><span class="k-val">{{ info.roles.values()|sum }}</span>
     <span class="k-sub">{{ info.roles.get('doctor', 0) }} radiologists · {{ info.roles.get('patient', 0) }} patients</span></div>
   <div class="kpi"><span class="k-label">Assistant</span><span class="k-val">{{ info.llm }}</span><span class="k-sub">local language model</span></div>
+  <a class="kpi" href="{{ url_for('admin.outbox') }}"><span class="k-label">E-mail</span><span class="k-val sm-val">{{ 'Connected' if info.mail.configured else 'Not configured' }}</span>
+    <span class="k-sub">{{ info.outbox.get('queued', 0) }} queued · {{ info.outbox.get('failed', 0) }} failed</span></a>
 </div>
 <div class="grid g2">
   <section class="card">

@@ -1,7 +1,8 @@
 {% extends "portal/base.html" %}
 {% block title %}Users{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Users</h1><p>{{ users|length }} accounts · patients register themselves</p></div></div>
+<div class="page-head"><div><h1>Users</h1><p>{{ users|length }} accounts · patients register themselves</p></div>
+  <div class="seg nav-seg">{% for r, label in (('', 'All'), ('doctor', 'Radiologists'), ('patient', 'Patients'), ('admin', 'Admins')) %}<a class="{{ 'on' if role == r }}" href="?role={{ r }}">{{ label }}</a>{% endfor %}</div></div>
 <div class="grid g-side">
   <section class="card">
     <table class="table responsive">

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 from flask import render_template
 
+from edge.portal import notify
+
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".dcm", ".dicom"}
 MAX_UPLOAD = 20 * 1024 * 1024
 REVIEW_FLAGS = {"unusual_image", "uncertain_prediction_set", "empty_prediction_set",
@@ -111,6 +113,8 @@ def request_reupload(ctx: Ctx, case, doctor, message: str, ip: str | None) -> No
         raise ValueError("finalized cases cannot be sent back")
     ctx.db.set_case(case["id"], status="reupload_requested", doctor_id=doctor["id"], doctor_message=message[:1000])
     ctx.db.audit(doctor["id"], "reupload_requested", case["id"], ip=ip)
+    notify.notify(ctx.db, ctx.db.user(case["patient_id"]), "reupload", {"message": message[:300]},
+                  f"/patient/case/{case['id']}", dedupe=f"reupload:{case['id']}:{int(time.time())}")
 
 
 def sign_report(ctx: Ctx, case, doctor, diagnosis: str, agrees: bool | None, findings: str, recommendation: str,
@@ -132,4 +136,6 @@ def sign_report(ctx: Ctx, case, doctor, diagnosis: str, agrees: bool | None, fin
                           ai["id"] if ai else None, sha, amendment_reason)
     ctx.db.audit(doctor["id"], "report_signed" if v == 1 else "report_amended", case["id"],
                  {"version": v, "diagnosis": diagnosis, "agrees_with_ai": agrees}, ip)
+    if v == 1:                                          # amendments are visible in the portal; no repeat e-mail
+        notify.notify(ctx.db, patient, "report_ready", {}, f"/patient/case/{case['id']}", dedupe=f"report:{case['id']}")
     return v

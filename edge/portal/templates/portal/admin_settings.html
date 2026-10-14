@@ -1,0 +1,40 @@
+{% extends "portal/base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Department settings</h1><p>Reporting targets, reminders and booking rules</p></div></div>
+{% if errors %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>Please correct the highlighted fields.</span></div>{% endif %}
+<form method="post" class="grid g-side">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div>
+    {% for title, keys in (('Department', ('clinic_name', 'base_url', 'timezone')),
+                           ('Reporting targets', ('unread_hours', 'unread_hours_urgent', 'unsigned_hours', 'escalate_hours')),
+                           ('Reminders', ('remind_before_hours', 'unmarked_after_min', 'agenda_hour')),
+                           ('Booking rules', ('booking_lead_hours', 'booking_horizon_days', 'cancel_cutoff_hours'))) %}
+    <section class="card">
+      <div class="card-h"><h2>{{ title }}</h2></div>
+      <div class="card-b settings-grid">
+        {% for k, label, hint, kind in fields if k in keys %}
+          <label class="field {{ 'invalid' if errors.get(k) }}">{{ label }}
+            <input name="{{ k }}" value="{{ current[k] }}" {{ 'inputmode=decimal' if kind == 'number' }} required maxlength="120">
+            <span class="hint">{{ errors[k] if errors.get(k) else hint }}{% if current[k] != defaults[k] and not errors.get(k) %} · default {{ defaults[k] }}{% endif %}</span></label>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+    <div class="row-actions sticky-save"><button class="btn primary lg" type="submit">Save settings</button></div>
+  </div>
+  <aside class="card">
+    <div class="card-h"><h2>How reminders work</h2></div>
+    <div class="card-b small">
+      <ul class="hist">
+        <li><span><b>Radiologists</b> get one digest when studies wait longer than the target, repeated daily; administrators are added after the escalation time.</span></li>
+        <li><span><b>Patients</b> get a booking confirmation with a calendar file, reminders before the appointment, and a rebooking invitation after a missed one.</span></li>
+        <li><span><b>Doctors</b> get a daily agenda and a prompt to record attendance.</span></li>
+      </ul>
+      <div class="section-label">E-mail</div>
+      <p>{{ 'Mail server: ' ~ mail.detail if mail.configured else 'Mail server not configured — messages appear in the portal and wait in the outbox.' }}</p>
+      <p class="muted">E-mails never contain diagnoses or findings.</p>
+    </div>
+  </aside>
+</form>
+{% endblock %}

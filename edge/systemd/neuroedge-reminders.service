@@ -1,0 +1,27 @@
+[Unit]
+Description=NeuroEdge reminders and e-mail delivery (one run)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/neuroedge/portal/portal.db
+
+[Service]
+Type=oneshot
+User=neuroedge
+Group=neuroedge
+WorkingDirectory=/opt/neuroedge/src
+# SMTP credentials (optional): written by `sudo neuroedge-portal smtp-config`
+EnvironmentFile=-/etc/neuroedge/smtp.env
+ExecStart=/opt/neuroedge/venv/bin/python -m edge.portal.manage run-reminders --data /var/lib/neuroedge/portal
+TimeoutStartSec=120
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/neuroedge/portal
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=

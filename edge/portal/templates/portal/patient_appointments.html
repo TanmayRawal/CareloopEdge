@@ -1,0 +1,46 @@
+{% extends "portal/base.html" %}
+{% block title %}Appointments{% endblock %}
+{% block pcontent %}
+<div class="page-head"><div><h1>Appointments</h1><p>Consultations with your radiologist</p></div>
+  {% if bookable %}<a class="btn primary" href="{{ url_for('patient.book', cid=bookable[0].id) }}"><svg class="ic sm"><use href="#i-plus"/></svg>Book a consultation</a>{% endif %}</div>
+
+<section class="card">
+  <div class="card-h"><h2>Upcoming</h2></div>
+  {% for a in upcoming %}
+    <div class="appt-row">
+      <div class="at-date sm"><span>{{ fmt_day(a.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(a.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(a.start_ts).split(' ')[2] }}</span></div>
+      <div class="grow"><b>{{ fmt_clock(a.start_ts) }} · {{ a.doctor_name }}</b>
+        <div class="small muted">{{ a.room or clinic }}{% if a.reason %} · {{ a.reason }}{% endif %}</div></div>
+      <span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span>
+      <div class="row-actions">
+        <a class="btn sm" href="{{ url_for('patient.ics', aid=a.id) }}" title="Add to calendar"><svg class="ic sm"><use href="#i-download"/></svg><span class="hide-sm">Calendar</span></a>
+        {% if a.status == 'booked' and a.start_ts - now > cutoff %}
+          <a class="btn sm" href="{{ url_for('patient.reschedule', aid=a.id) }}">Reschedule</a>
+          <form method="post" action="{{ url_for('patient.cancel', aid=a.id) }}" data-confirm="Cancel this appointment?">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm danger" type="submit">Cancel</button></form>
+        {% elif a.status == 'booked' %}<span class="small muted">Contact the department to change</span>{% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="empty"><svg class="ic"><use href="#i-calendar"/></svg><h2>No upcoming appointments</h2>
+      <p>{{ 'Book a consultation to discuss your report with your radiologist.' if bookable else 'You can book a consultation once a report is ready.' }}</p>
+      {% if bookable %}<a class="btn primary" href="{{ url_for('patient.book', cid=bookable[0].id) }}">Book a consultation</a>{% endif %}</div>
+  {% endfor %}
+</section>
+
+{% if past %}
+<section class="card">
+  <div class="card-h"><h2>Past and cancelled</h2></div>
+  <table class="table responsive">
+    <thead><tr><th>Date</th><th>Radiologist</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for a in past %}
+      <tr><td class="num nowrap">{{ fmt_time(a.start_ts) }}</td><td>{{ a.doctor_name }}</td>
+        <td><span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span></td>
+        <td class="right">{% if a.status == 'no_show' %}<a class="btn sm" href="{{ url_for('patient.book', cid=a.case_id) }}">Book again</a>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

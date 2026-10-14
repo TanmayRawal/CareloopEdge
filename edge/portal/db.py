@@ -6,6 +6,11 @@ Case lifecycle
   in_review          a doctor opened the case
   reupload_requested doctor asked the patient for a better image (patient can upload to the same case)
   finalized          doctor signed a report (amendments add report versions; nothing is overwritten)
+
+Appointment lifecycle (consultation with the reporting radiologist, booked by the patient after the report)
+  booked -> arrived -> completed       marked by the doctor
+  booked | arrived -> no_show          marked by the doctor (patient gets a "we missed you" message)
+  booked -> cancelled                  by the patient (before the cutoff) or the doctor
 """
 
 from __future__ import annotations
@@ -19,6 +24,25 @@ from pathlib import Path
 
 STATUSES = ("awaiting_review", "in_review", "reupload_requested", "finalized")
 ROLES = ("patient", "doctor", "admin")
+APPT_STATUSES = ("booked", "arrived", "completed", "no_show", "cancelled")
+APPT_ACTIVE = ("booked", "arrived")
+
+# Department policy; editable by the admin (Settings page) and stored in the `settings` table.
+DEFAULT_SETTINGS = {
+    "clinic_name": "NeuroEdge Imaging",
+    "base_url": "https://rpi.local",            # used in e-mail links
+    "timezone": "Asia/Kolkata",
+    "unread_hours": "4",                        # study not opened -> remind doctors
+    "unread_hours_urgent": "1",                 # same, for urgent / attention studies
+    "unsigned_hours": "24",                     # opened but not signed -> remind that doctor
+    "escalate_hours": "48",                     # still unread -> also e-mail administrators
+    "remind_before_hours": "24,2",              # appointment reminders to the patient
+    "unmarked_after_min": "60",                 # attendance not marked -> remind the doctor
+    "agenda_hour": "7:30",                      # daily agenda e-mail to doctors (local time)
+    "booking_lead_hours": "2",
+    "booking_horizon_days": "21",
+    "cancel_cutoff_hours": "2",
+}
 DIAGNOSES = ("glioma", "meningioma", "pituitary", "no_tumor", "other", "inconclusive")
 
 MIGRATIONS = [
@@ -82,6 +106,60 @@ MIGRATIONS = [
         ts REAL NOT NULL, user_id INTEGER, action TEXT NOT NULL, case_id TEXT, detail TEXT, ip TEXT
     );
     CREATE INDEX audit_ts ON audit(ts);
+    """,
+    # v2: appointments, doctor availability, notifications, e-mail outbox, settings
+    """
+    ALTER TABLE users ADD COLUMN notify_email INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE doctor_hours (
+        id INTEGER PRIMARY KEY,
+        doctor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+        start_min INTEGER NOT NULL CHECK (start_min BETWEEN 0 AND 1439),
+        end_min INTEGER NOT NULL CHECK (end_min BETWEEN 1 AND 1440),
+        slot_min INTEGER NOT NULL DEFAULT 20 CHECK (slot_min BETWEEN 5 AND 120),
+        room TEXT,
+        CHECK (end_min > start_min)
+    );
+    CREATE INDEX hours_doctor ON doctor_hours(doctor_id, weekday);
+    CREATE TABLE doctor_days_off (
+        doctor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        day TEXT NOT NULL, note TEXT,
+        PRIMARY KEY (doctor_id, day)
+    );
+    CREATE TABLE appointments (
+        id INTEGER PRIMARY KEY,
+        case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        patient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        doctor_id INTEGER NOT NULL REFERENCES users(id),
+        start_ts REAL NOT NULL, end_ts REAL NOT NULL,
+        room TEXT, reason TEXT,
+        status TEXT NOT NULL CHECK (status IN ('booked','arrived','completed','no_show','cancelled')),
+        created REAL NOT NULL, updated REAL NOT NULL,
+        cancelled_by INTEGER REFERENCES users(id), marked_by INTEGER REFERENCES users(id), marked_at REAL
+    );
+    CREATE UNIQUE INDEX appt_slot ON appointments(doctor_id, start_ts) WHERE status IN ('booked','arrived');
+    CREATE INDEX appt_patient ON appointments(patient_id, start_ts);
+    CREATE INDEX appt_doctor ON appointments(doctor_id, start_ts);
+    CREATE TABLE notifications (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT, link TEXT,
+        created REAL NOT NULL, read_at REAL
+    );
+    CREATE INDEX notif_user ON notifications(user_id, read_at, created);
+    CREATE TABLE outbox (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        to_email TEXT NOT NULL, subject TEXT NOT NULL, text TEXT NOT NULL, html TEXT, ics TEXT,
+        status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed','disabled')),
+        created REAL NOT NULL, next_try REAL NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT, sent_at REAL,
+        dedupe_key TEXT UNIQUE
+    );
+    CREATE INDEX outbox_due ON outbox(status, next_try);
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE reminder_log (dedupe_key TEXT PRIMARY KEY, created REAL NOT NULL);
+    CREATE INDEX cases_doctor ON cases(doctor_id, status)
     """,
 ]
 
@@ -155,6 +233,30 @@ class DB:
         with self._lock:
             self.conn.backup(out)
         out.close()
+
+    # --------------------------------------------------------------------------- settings
+    def settings(self) -> dict:
+        out = dict(DEFAULT_SETTINGS)
+        out.update({r["key"]: r["value"] for r in self.q("SELECT key, value FROM settings")})
+        return out
+
+    def setting(self, key: str) -> str:
+        r = self.one("SELECT value FROM settings WHERE key = ?", (key,))
+        return r["value"] if r else DEFAULT_SETTINGS[key]
+
+    def set_setting(self, key: str, value: str) -> None:
+        if key not in DEFAULT_SETTINGS:
+            raise ValueError(f"unknown setting {key}")
+        with self.tx() as c:
+            c.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                      (key, str(value)))
+
+    def once(self, dedupe_key: str, now: float | None = None) -> bool:
+        """True the first time a key is seen (reminder rules fire exactly once per key)."""
+        with self.tx() as c:
+            cur = c.execute("INSERT OR IGNORE INTO reminder_log (dedupe_key, created) VALUES (?, ?)",
+                            (dedupe_key, now or time.time()))
+            return cur.rowcount == 1
 
     # ------------------------------------------------------------------------------ users
     def create_user(self, email: str, name: str, role: str, pw_hash: str, profile: dict | None = None) -> int:

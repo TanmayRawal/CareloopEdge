@@ -1,0 +1,8 @@
+{% if page > 1 or more %}
+<div class="pager">
+  {% set args = request.args.to_dict() %}
+  {% if page > 1 %}{% set _ = args.update({'page': page - 1}) %}<a class="btn sm" href="?{{ args|urlencode }}">← Newer</a>{% endif %}
+  <span class="small muted">Page {{ page }}</span>
+  {% if more %}{% set _ = args.update({'page': page + 1}) %}<a class="btn sm" href="?{{ args|urlencode }}">Older →</a>{% endif %}
+</div>
+{% endif %}

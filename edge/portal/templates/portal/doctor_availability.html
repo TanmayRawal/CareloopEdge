@@ -1,0 +1,56 @@
+{% extends "portal/base.html" %}
+{% block title %}Availability{% endblock %}
+{% block content %}
+{% macro tm(m) %}{{ '%02d:%02d'|format(m // 60, m % 60) }}{% endmacro %}
+{% macro tsel(name, value, label) %}<select name="{{ name }}" aria-label="{{ label }}"><option value="">—</option>{% for q in range(24, 89) %}{% set v = '%02d:%02d'|format(q // 4, (q % 4) * 15) %}<option {{ 'selected' if v == value }}>{{ v }}</option>{% endfor %}</select>{% endmacro %}
+<div class="page-head"><div><h1>Consultation availability</h1>
+  <p>{{ upcoming }} free slots in the next 14 days · patients book follow-ups on reports you signed</p></div></div>
+{% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+<div class="grid g-side">
+  <section class="card">
+    <div class="card-h"><h2>Weekly hours</h2><span class="small muted">Up to two blocks per day, e.g. a lunch break</span></div>
+    <form method="post" class="card-b form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="hours">
+      <table class="hours">
+        <thead><tr><th>Day</th><th>First block</th><th>Second block</th></tr></thead>
+        <tbody>
+        {% for wd in range(7) %}{% set blocks = by_wd.get(wd, []) %}
+          <tr>
+            <td><label class="check"><input type="checkbox" name="on_{{ wd }}" value="1" {{ 'checked' if blocks }}><b>{{ weekdays[wd] }}</b></label></td>
+            <td class="nowrap">{{ tsel("start_" ~ wd ~ "_a", tm(blocks[0].start_min) if blocks else ('09:00' if wd < 5 else ''), "" ~ weekdays[wd] ~ " start") }}
+              – {{ tsel("end_" ~ wd ~ "_a", tm(blocks[0].end_min) if blocks else ('13:00' if wd < 5 else ''), "" ~ weekdays[wd] ~ " end") }}</td>
+            <td class="nowrap">{{ tsel("start_" ~ wd ~ "_b", tm(blocks[1].start_min) if blocks|length > 1 else '', "" ~ weekdays[wd] ~ " second start") }}
+              – {{ tsel("end_" ~ wd ~ "_b", tm(blocks[1].end_min) if blocks|length > 1 else '', "" ~ weekdays[wd] ~ " second end") }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="row2">
+        <label class="field">Slot length
+          <select name="slot_min">{% for m in (10, 15, 20, 30, 45, 60) %}<option value="{{ m }}" {{ 'selected' if m == slot_min }}>{{ m }} minutes</option>{% endfor %}</select></label>
+        <label class="field">Room / location<input name="room" value="{{ room }}" maxlength="60" placeholder="e.g. Radiology OPD, Room 3"></label>
+      </div>
+      <div><button class="btn primary" type="submit">Save hours</button></div>
+    </form>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Days off</h2></div>
+    <div class="card-b">
+      <form method="post" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="off_add">
+        <label class="field">Date<input type="date" name="day" required></label>
+        <label class="field">Note <span class="hint">Optional, only you see it</span><input name="note" maxlength="100" placeholder="e.g. Conference"></label>
+        <div><button class="btn" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Add day off</button></div>
+      </form>
+      <div class="section-label">Upcoming</div>
+      <ul class="hist">
+        {% for o in days_off %}
+          <li><span><b>{{ o.day }}</b>{% if o.note %} · {{ o.note }}{% endif %}</span>
+            <form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="off_del">
+              <input type="hidden" name="day" value="{{ o.day }}"><button class="linkbtn" type="submit">Remove</button></form></li>
+        {% else %}<li class="muted">None planned.</li>{% endfor %}
+      </ul>
+    </div>
+  </section>
+</div>
+{% endblock %}
