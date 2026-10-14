@@ -1,27 +1,33 @@
 {% extends "portal/base.html" %}
 {% block title %}Audit log{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Audit log</h1><p>Every sign-in, upload, view, signature, booking and account change</p></div></div>
-<section class="card">
-  <form class="toolbar" method="get">
-    <label class="search"><svg class="ic"><use href="#i-search"/></svg><input type="search" name="user" value="{{ who }}" placeholder="Filter by user name" aria-label="User"></label>
-    <select name="action" aria-label="Event" class="w-auto"><option value="">All events</option>{% for a in actions %}<option value="{{ a }}" {{ 'selected' if a == action }}>{{ a|replace('_', ' ')|capitalize }}</option>{% endfor %}</select>
-    <button class="btn sm" type="submit">Filter</button>{% if who or action %}<a class="btn sm ghost" href="{{ url_for('admin.audit') }}">Clear</a>{% endif %}
+<div class="page-head"><div><h1>Audit log</h1></div>
+  <form class="row-actions" method="get">
+    {% if cat %}<input type="hidden" name="cat" value="{{ cat }}">{% endif %}
+    <label class="search"><svg class="ic"><use href="#i-search"/></svg><input type="search" name="user" value="{{ who }}" placeholder="Search user" aria-label="Search user"></label>
   </form>
-  <table class="table responsive">
-    <thead><tr><th>Time</th><th>User</th><th>Event</th><th>Case</th><th>Details</th><th>IP address</th></tr></thead>
-    <tbody>
-    {% for a in rows %}
-      <tr><td class="nowrap num">{{ fmt_time(a.ts) }}</td>
-        <td><div class="cell-main">{{ a.user_name or 'System' }}</div>{% if a.user_role %}<div class="cell-sub">{{ {'doctor': 'Radiologist', 'admin': 'Administrator', 'patient': 'Patient'}[a.user_role] }}</div>{% endif %}</td>
-        <td><span class="tag {{ 'err' if 'fail' in a.action or 'reject' in a.action else ('brand' if a.action in ('report_signed', 'login') else '') }}">{{ a.action|replace('_', ' ')|capitalize }}</span></td>
-        <td class="mono">{{ a.case_id[:8]|upper if a.case_id else '' }}</td>
-        <td class="mono xs">{{ a.detail if a.detail != '{}' else '' }}</td><td class="mono">{{ a.ip or '' }}</td></tr>
-    {% else %}
-      <tr><td colspan="6"><div class="empty">No events yet.</div></td></tr>
+</div>
+<div class="chips">
+  <a class="chip-f {{ 'on' if not cat }}" href="?{{ {'user': who}|urlencode if who }}">All activity</a>
+  {% for k, v in categories.items() %}<a class="chip-f {{ 'on' if cat == k }}" href="?{{ {'cat': k, 'user': who}|urlencode if who else {'cat': k}|urlencode }}">{{ v }}</a>{% endfor %}
+</div>
+<section class="card">
+  {% for day, items in days %}
+    <div class="day-h">{{ day }}</div>
+    {% for it in items %}{% set r = it.r %}
+      <div class="ev">
+        <span class="ev-time num">{{ fmt_clock(r.ts) }}</span>
+        <span class="ev-dot c-{{ it.cat }}"></span>
+        <div class="ev-main">
+          <div><b>{{ it.label }}</b>{% if r.case_id %} <span class="muted">· {{ r.patient_name or 'Study' }} <span class="mono xs">{{ r.case_id[:8]|upper }}</span></span>{% endif %}</div>
+          {% if it.text %}<div class="ev-sub">{{ it.text }}</div>{% endif %}
+        </div>
+        <div class="ev-who"><b>{{ r.user_name or 'System' }}</b><span>{{ role_text.get(r.user_role, '') }}{% if r.ip %} · {{ r.ip }}{% endif %}</span></div>
+      </div>
     {% endfor %}
-    </tbody>
-  </table>
+  {% else %}
+    <div class="empty slim">No activity matches.</div>
+  {% endfor %}
 </section>
 {% include "portal/_pager.html" %}
 {% endblock %}

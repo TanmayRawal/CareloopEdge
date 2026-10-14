@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
-from edge.portal import auth, mailer
+from edge.portal import audit_text, auth, mailer, scheduling
 from edge.portal.common import CLASS_TEXT, PAGE_SIZE, ago, human_bytes, page_args
 from edge.portal.db import DEFAULT_SETTINGS
 
@@ -108,20 +108,33 @@ def blueprint(d) -> Blueprint:
     @auth.require("admin")
     def audit():
         page, offset = page_args(request)
-        action, who = request.args.get("action", "").strip(), request.args.get("user", "").strip()
+        cat, who = request.args.get("cat", "").strip(), request.args.get("user", "").strip()
         cond, args = [], []
-        if action:
-            cond.append("a.action = ?")
-            args.append(action)
+        if cat in audit_text.CATEGORIES:
+            acts = [a for a in audit_text.EVENTS if audit_text.category(a) == cat]
+            cond.append(f"a.action IN ({','.join('?' * len(acts))})")
+            args += acts
+        else:                                            # default: everything except routine image/report views
+            cond.append("a.action NOT IN ('image_viewed', 'report_viewed')")
         if who:
             cond.append("u.name LIKE ?")
             args.append(f"%{who}%")
-        where = ("WHERE " + " AND ".join(cond)) if cond else ""
-        rows = db.q(f"SELECT a.*, u.name AS user_name, u.role AS user_role FROM audit a LEFT JOIN users u ON u.id = a.user_id "
-                    f"{where} ORDER BY a.ts DESC LIMIT ? OFFSET ?", tuple(args) + (PAGE_SIZE + 1, offset))
-        actions = [r["action"] for r in db.q("SELECT DISTINCT action FROM audit ORDER BY action")]
-        return render_template("portal/admin_audit.html", rows=rows[:PAGE_SIZE], more=len(rows) > PAGE_SIZE, page=page,
-                               actions=actions, action=action, who=who)
+        rows = db.q(f"SELECT a.*, u.name AS user_name, u.role AS user_role, pu.name AS patient_name FROM audit a "
+                    f"LEFT JOIN users u ON u.id = a.user_id LEFT JOIN cases c ON c.id = a.case_id "
+                    f"LEFT JOIN users pu ON pu.id = c.patient_id WHERE {' AND '.join(cond)} "
+                    f"ORDER BY a.ts DESC LIMIT ? OFFSET ?", tuple(args) + (PAGE_SIZE + 1, offset))
+        zone = scheduling.tz(db)
+        today = scheduling.local(time.time(), zone).date()
+        days: list[tuple[str, list]] = []
+        for r in rows[:PAGE_SIZE]:
+            dday = scheduling.local(r["ts"], zone).date()
+            name = "Today" if dday == today else "Yesterday" if (today - dday).days == 1 else dday.strftime("%A %d %B %Y")
+            if not days or days[-1][0] != name:
+                days.append((name, []))
+            days[-1][1].append({"r": r, "label": audit_text.label(r["action"]), "cat": audit_text.category(r["action"]),
+                                "text": audit_text.describe(r["action"], r["detail"])})
+        return render_template("portal/admin_audit.html", days=days, more=len(rows) > PAGE_SIZE, page=page,
+                               categories=audit_text.CATEGORIES, cat=cat, who=who)
 
     @bp.get("/system")
     @auth.require("admin")
