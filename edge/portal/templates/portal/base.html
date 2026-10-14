@@ -34,7 +34,7 @@
     </details>
     <a class="who-link" href="{{ url_for('auth.account') }}" title="Account and preferences">
       <span class="avatar" aria-hidden="true">{{ me.name.replace('Dr. ', '').replace('Dr ', '')[:1]|upper }}</span>
-      <span class="who"><b>{{ me.name }}</b><small>{{ subtitle }}</small></span></a>
+      <span class="who"><b>{{ me.name }}</b>{% if subtitle %}<small>{{ subtitle }}</small>{% endif %}</span></a>
     <form method="post" action="{{ url_for('auth.logout') }}">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <button class="icon-btn" type="submit" title="Sign out" aria-label="Sign out"><svg class="ic sm"><use href="#i-logout"/></svg></button>
@@ -104,15 +104,13 @@
         <a href="{{ url_for('patient.appointments') }}" class="{{ 'active' if ep in ('patient.appointments', 'patient.book', 'patient.reschedule', 'patient.appointment_done') }}">Appointments</a>
         <a href="{{ url_for('patient.upload') }}" class="{{ 'active' if ep == 'patient.upload' }}">New scan</a>
       </nav>
-      {{ user_menu('Patient ID ' ~ mrn(me.id)) }}
+      {{ user_menu('') }}
     </div>
   </header>
   <main class="pcontent">
     {{ flashes() }}
     {% block pcontent %}{% endblock %}
   </main>
-  <footer class="pfoot"><div class="pfoot-in"><span>© {{ clinic }}</span><span>Your records are stored securely at the clinic.</span>
-    <span class="grow"></span><a href="{{ url_for('auth.account') }}">Account &amp; preferences</a></div></footer>
 </div>
 
 {% else %}

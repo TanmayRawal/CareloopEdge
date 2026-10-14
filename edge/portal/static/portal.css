@@ -454,3 +454,5 @@ details.panel .panel-b { padding: 0 18px 16px; }
   .next-appt { flex-wrap: wrap; } .hide-sm { display: none; }
   .hours th:first-child, .hours td:first-child { width: 96px; }
 }
+
+.narrow-card { max-width: 640px; margin-left: auto; margin-right: auto; } .narrow-card.wide { max-width: 860px; }

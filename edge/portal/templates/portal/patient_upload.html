@@ -1,10 +1,9 @@
 {% extends "portal/base.html" %}
 {% block title %}Upload a scan{% endblock %}
 {% block pcontent %}
-<div class="page-head"><div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a><h1>Upload a scan</h1>
+<div class="page-head narrow-card"><div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a><h1>Upload a scan</h1>
   <p>A radiologist will review it and release a signed report to this portal.</p></div></div>
-<div class="grid g-side">
-  <section class="card">
+<section class="card narrow-card">
     <div class="card-b">
       <div class="steps" aria-hidden="true"><span class="on" id="st1"><b>1</b>Choose image</span><span id="st2"><b>2</b>Add details</span><span id="st3"><b>3</b>Submit</span></div>
       {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
@@ -25,17 +24,5 @@
       </form>
     </div>
   </section>
-  <aside class="card">
-    <div class="card-h"><h2>What happens next</h2></div>
-    <div class="card-b">
-      <ul class="hist">
-        <li><span><b>1.</b> Your scan is received and stored securely.</span></li>
-        <li><span><b>2.</b> A radiologist reviews it.</span></li>
-        <li><span><b>3.</b> The signed report appears under My reports.</span></li>
-      </ul>
-      <div class="section-label">Tips</div>
-      <p class="small muted">Upload the original file from the imaging centre if you have it (DICOM is best). Photos of a screen are not accepted.</p>
-    </div>
-  </aside>
-</div>
+
 {% endblock %}
