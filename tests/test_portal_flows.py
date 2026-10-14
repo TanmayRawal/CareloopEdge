@@ -36,7 +36,7 @@ def test_every_page_renders_for_its_role(env):
                                "/patient/upload", "/account", "/notifications/"]),
                           (d, ["/doctor/", "/doctor/?status=finalized", "/doctor/schedule", "/doctor/schedule?view=week",
                                "/doctor/availability", "/doctor/stats", "/account", "/notifications/", f"/doctor/case/{cid}"]),
-                          (a, ["/admin/users", "/admin/users?role=patient", "/admin/audit", "/admin/audit?action=login",
+                          (a, ["/admin/users", "/admin/users?role=patient", "/admin/audit", "/admin/audit?cat=view", "/admin/audit?cat=clinical&user=Pat",
                                "/admin/system", "/admin/outbox", "/admin/settings", "/doctor/stats", "/account"])):
         for path in paths:
             r = client.get(path)
