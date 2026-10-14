@@ -1,131 +1,161 @@
 {% extends "portal/base.html" %}
-{% block title %}Review {{ patient.name }}{% endblock %}
-{% block main_class %}page wide{% endblock %}
+{% block title %}{{ patient.name }}{% endblock %}
+{% block crumbs %}<a href="{{ url_for('doctor.worklist') }}">Worklist</a><svg class="ic"><use href="#i-chevron"/></svg><b>{{ patient.name }} · {{ mrn(patient.id) }}</b>{% endblock %}
+{% block content_class %}full{% endblock %}
 {% block content %}
 {% set att = r.attempt if r else 1 %}
-<div class="page-head">
-  <div>
-    <a class="back" href="{{ url_for('doctor.worklist') }}">← Worklist</a>
-    <h1>{{ patient.name }} <span class="muted thin">· case #{{ case.id[:8] }}</span></h1>
-    <p class="muted small">
-      {% if profile and profile.dob %}Born {{ profile.dob }} · {% endif %}{% if profile and profile.sex %}{{ profile.sex }} · {% endif %}
-      Submitted {{ fmt_time(case.created) }} · <span class="mono">{{ case.scan_filename }}</span>{% if att > 1 %} · image attempt {{ att }}{% endif %}
-    </p>
+{% set age = age_from_dob(profile.dob if profile else None) %}
+{% set latest = reports[0] if reports else None %}
+<div class="case-head">
+  <div class="pt"><span class="avatar">{{ patient.name[:1]|upper }}</span>
+    <div><h1>{{ patient.name }}</h1><div class="cell-sub">{{ mrn(patient.id) }}{% if age is not none %} · {{ age }} y{% endif %}{% if profile and profile.sex %} · {{ profile.sex }}{% endif %}</div></div></div>
+  <div class="meta">
+    <div><span>Study</span><b>MRI Brain · 2D slice</b></div>
+    <div><span>Received</span><b>{{ fmt_time(case.created) }}</b></div>
+    <div><span>Case</span><b class="mono">{{ case.id[:8]|upper }}</b></div>
+    {% if att > 1 %}<div><span>Image</span><b>Upload {{ att }}</b></div>{% endif %}
   </div>
-  <span class="status big s-{{ case.status }}">{{ status_text[case.status] }}</span>
+  <div class="actions">
+    {% if case.priority >= 3 %}<span class="pri p3"><span class="bar"></span>Urgent</span>{% elif case.priority == 2 %}<span class="pri p2"><span class="bar"></span>Attention</span>{% endif %}
+    <span class="pill s-{{ case.status }}">{{ status_text[case.status] }}</span>
+  </div>
 </div>
-{% if case.patient_note %}<div class="alert"><b>Patient's note:</b> {{ case.patient_note }}</div>{% endif %}
 
-<div class="review-grid" id="review" data-cid="{{ case.id }}">
-  <!-- ============================== viewer -->
-  <section class="card viewer-card">
-    <div class="tabs" role="tablist">
-      <button class="tab active" type="button" data-kind="cam_{{ att }}">Grad-CAM</button>
-      <button class="tab" type="button" data-kind="lesion_{{ att }}">Lesion outline</button>
-      <button class="tab" type="button" data-kind="cam_lesion_{{ att }}">Grad-CAM + lesion</button>
-      <button class="tab" type="button" data-kind="original_{{ att }}">Original</button>
-    </div>
-    <div class="stack">
-      <img class="viewer-img base" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ att) }}" alt="Original scan">
-      <img class="viewer-img top" id="overlay" src="{{ url_for('case.image', cid=case.id, kind='cam_' ~ att) }}"
-           data-base="{{ url_for('case.image', cid=case.id, kind='X') }}" alt="Explanation overlay">
-    </div>
-    <label class="slider">Overlay opacity <input id="opacity" type="range" min="0" max="100" value="100"></label>
-    <p class="legend small muted">
-      <b>Grad-CAM</b>: evidence for <b>{{ class_text.get(r.explanation.explained_class, '—') if r else '—' }}</b>
-      <span class="cbar-wrap">low <span class="cbar" aria-hidden="true"></span> high</span> ·
-      <b class="green">Green outline</b>: detected lesion
-    </p>
-  </section>
-
-  <!-- ============================== AI panel -->
-  <section class="card">
-    <div class="card-head"><h2>AI analysis</h2><span class="muted small">model {{ ai.model_version if ai else '—' }}</span></div>
-    {% if not r %}
-      <p class="muted">No AI result.</p>
-    {% elif r.status != 'ok' %}
-      <div class="alert error"><b>This image could not be analysed automatically.</b>
-        <ul>{% for f in r.reject_reasons %}<li>{{ flag_text.get(f, f) }}</li>{% endfor %}</ul>
-        Review it directly or request a new upload from the patient.</div>
-    {% else %}
-      <div class="ai-pred"><span class="muted small">AI suggestion</span><b>{{ class_text[r.prediction] }}</b></div>
-      <div class="bars">
-        {% for c, p in r.probabilities.items()|sort(attribute='1', reverse=True) %}
-        <div class="bar-row{% if c == r.prediction %} top{% endif %}">
-          <span>{{ class_text.get(c, c) }}</span>
-          <meter class="bar" min="0" max="1" value="{{ '%.4f'|format(p) }}"></meter>
-          <span class="right mono">{{ '%.1f'|format(100 * p) }}%</span>
-        </div>
-        {% endfor %}
+<div class="review" id="review" data-cid="{{ case.id }}">
+  <!-- ====================================================== viewer -->
+  <section class="viewer" aria-label="Image viewer">
+    <div class="v-bar">
+      <div class="v-modes" role="tablist" aria-label="Display">
+        <button type="button" class="on" data-kind="cam_{{ att }}" title="Grad-CAM (1)">Grad-CAM</button>
+        <button type="button" data-kind="lesion_{{ att }}" title="Lesion outline (2)">Lesion</button>
+        <button type="button" data-kind="cam_lesion_{{ att }}" title="Grad-CAM + lesion (3)">Combined</button>
+        <button type="button" data-kind="original_{{ att }}" title="Original (4)">Original</button>
       </div>
-      <p class="small"><b>95% prediction set:</b>
-        {% for c in r.prediction_set %}<span class="chip">{{ class_text.get(c, c) }}</span>{% else %}<span class="chip warn">empty</span>{% endfor %}
-        </p>
-      {% if r.flags %}
-        <div class="alert"><b>Review flags</b><ul>{% for f in r.flags if f in flag_text %}<li>{{ flag_text[f] }}</li>{% endfor %}</ul></div>
-      {% endif %}
-      <table class="kv small">
-        {% if r.lesion.present %}
-          <tr><th>Lesion position (image)</th><td>{{ r.lesion.image_vertical }} {{ r.lesion.image_side }}</td></tr>
-          <tr><th>Lesion area</th><td>{% if r.lesion.area_mm2 %}{{ r.lesion.area_mm2 }} mm²{% else %}{{ '%.1f'|format(100 * r.lesion.area_fraction_of_image) }}% of image{% endif %}</td></tr>
-          <tr><th>Grad-CAM evidence inside lesion</th><td>{% if r.explanation.evidence_inside_lesion is not none %}{{ '%.1f'|format(100 * r.explanation.evidence_inside_lesion) }}%{% else %}—{% endif %}</td></tr>
-        {% else %}
-          <tr><th>Lesion</th><td>None detected by the segmentation network</td></tr>
+      <span class="v-sep"></span>
+      <button class="v-tool" type="button" data-act="in" title="Zoom in (+)" aria-label="Zoom in"><svg class="ic sm"><use href="#i-zoom-in"/></svg></button>
+      <button class="v-tool" type="button" data-act="out" title="Zoom out (−)" aria-label="Zoom out"><svg class="ic sm"><use href="#i-zoom-out"/></svg></button>
+      <button class="v-tool" type="button" data-act="reset" title="Fit (0)" aria-label="Fit to window"><svg class="ic sm"><use href="#i-reset"/></svg></button>
+      <button class="v-tool" type="button" data-act="expand" title="Expand viewer (F)" aria-label="Expand viewer"><svg class="ic sm"><use href="#i-expand"/></svg></button>
+      <label class="v-opacity">Overlay <input id="opacity" type="range" min="0" max="100" value="100" aria-label="Overlay opacity"></label>
+    </div>
+    <div class="v-stage" id="stage">
+      <div class="v-canvas" id="canvas">
+        <img class="base" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ att) }}" alt="Original scan" draggable="false">
+        <img id="overlay" src="{{ url_for('case.image', cid=case.id, kind='cam_' ~ att) }}" data-base="{{ url_for('case.image', cid=case.id, kind='X') }}" alt="Overlay" draggable="false">
+      </div>
+    </div>
+    <div class="v-foot">
+      <span>Grad-CAM evidence for <b>{{ class_text.get(r.explanation.explained_class, '—') if r and r.explanation else '—' }}</b> low<span class="cbar" aria-hidden="true"></span>high</span>
+      <span><span class="swatch-green"></span>Detected lesion</span>
+      <span class="v-zoom" id="zoom-label">100%</span>
+    </div>
+  </section>
+
+  <!-- ====================================================== side panel -->
+  <div class="side">
+    <section class="card">
+      <div class="card-h"><h2>AI findings</h2><span class="tag brand">Model {{ ai.model_version if ai else '—' }}</span></div>
+      <div class="card-b">
+      {% if not r %}
+        <p class="muted">No AI result for this study.</p>
+      {% elif r.status != 'ok' %}
+        <div class="alert error"><svg class="ic sm"><use href="#i-alert"/></svg><div><b>Not analysed automatically</b>
+          <ul>{% for f in r.reject_reasons %}<li>{{ flag_text.get(f, f) }}</li>{% endfor %}</ul></div></div>
+        <p class="small muted">Report from the image directly, or request a new upload.</p>
+      {% else %}
+        <div class="finding"><span class="dx">{{ class_text[r.prediction] }}</span><span class="conf num">{{ '%.1f'|format(100 * r.probabilities[r.prediction]) }}%</span></div>
+        <div class="probs">
+          {% for c, p in r.probabilities.items()|sort(attribute='1', reverse=True) %}
+          <div class="prob{% if c == r.prediction %} top{% endif %}"><span>{{ class_text.get(c, c) }}</span>
+            <meter min="0" max="1" value="{{ '%.4f'|format(p) }}"></meter><span class="right num">{{ '%.1f'|format(100 * p) }}%</span></div>
+          {% endfor %}
+        </div>
+        <div class="section-label">95% confidence set</div>
+        <div>{% for c in r.prediction_set %}<span class="tag brand">{{ class_text.get(c, c) }}</span>{% else %}<span class="tag warn">No class reached 95%</span>{% endfor %}</div>
+        {% if r.flags %}
+        <ul class="flags">{% for f in r.flags if f in flag_text %}<li><svg class="ic"><use href="#i-alert"/></svg>{{ flag_text[f] }}</li>{% endfor %}</ul>
         {% endif %}
-        <tr><th>Image typicality</th><td>{{ 'Typical' if r.ood.mahalanobis_score <= r.ood.threshold else 'Atypical' }} <span class="muted small">(score {{ '%.2f'|format(r.ood.mahalanobis_score) }}, limit {{ '%.2f'|format(r.ood.threshold) }})</span></td></tr>
-      </table>
-    {% endif %}
-  </section>
+        <div class="section-label">Lesion</div>
+        <table class="kv">
+          {% if r.lesion.present %}
+            <tr><th>Location (image)</th><td>{{ r.lesion.image_vertical|capitalize }} {{ r.lesion.image_side }}</td></tr>
+            <tr><th>Size</th><td class="num">{% if r.lesion.area_mm2 %}{{ r.lesion.area_mm2 }} mm²{% else %}{{ '%.1f'|format(100 * r.lesion.area_fraction_of_image) }}% of slice{% endif %}</td></tr>
+            <tr><th>Evidence on lesion</th><td class="num">{% if r.explanation.evidence_inside_lesion is not none %}{{ '%.0f'|format(100 * r.explanation.evidence_inside_lesion) }}%{% else %}—{% endif %}</td></tr>
+          {% else %}
+            <tr><th>Lesion</th><td>None detected</td></tr>
+          {% endif %}
+          <tr><th>Image quality</th><td>{{ 'Within expected range' if r.ood.mahalanobis_score <= r.ood.threshold else 'Atypical for this model' }}</td></tr>
+        </table>
+      {% endif %}
+      </div>
+      <details class="panel" id="assistant">
+        <summary><svg class="ic sm"><use href="#i-chat"/></svg>Assistant <span class="tag">{{ 'Online' if llm_ready else 'Standard answers' }}</span></summary>
+        <div class="panel-b">
+          <button class="btn sm" type="button" id="narrative-btn" {% if not r or r.status != 'ok' %}disabled{% endif %}>Draft summary</button>
+          <div id="narrative" class="assistant-out"></div>
+          <form id="ask-form" class="ask">
+            <input id="ask-q" maxlength="500" placeholder="Ask about this result" autocomplete="off" {% if not r %}disabled{% endif %}>
+            <button class="btn sm" type="submit" aria-label="Ask"><svg class="ic sm"><use href="#i-send"/></svg></button>
+          </form>
+          <div id="ask-log" class="assistant-out"></div>
+        </div>
+      </details>
+    </section>
 
-  <!-- ============================== assistant -->
-  <section class="card">
-    <div class="card-head"><h2>Assistant</h2><span class="muted small">{{ 'Local assistant online' if llm_ready else 'Standard answers' }}</span></div>
-    <button class="btn small" type="button" id="narrative-btn" {% if not r or r.status != 'ok' %}disabled{% endif %}>Draft narrative</button>
-    <div id="narrative" class="assistant-out"></div>
-    <form id="ask-form" class="ask">
-      <input id="ask-q" maxlength="500" placeholder="Ask about this result, e.g. what does the prediction set mean?" autocomplete="off" {% if not r %}disabled{% endif %}>
-      <button class="btn small" type="submit">Ask</button>
-    </form>
-    <div id="ask-log" class="assistant-out"></div>
-  </section>
+    <section class="card">
+      <div class="card-h"><h2>{{ 'Amend report' if latest else 'Report' }}</h2>{% if latest %}<span class="tag">v{{ latest.version }} signed</span>{% endif %}</div>
+      <div class="card-b">
+        {% if case.patient_note %}<div class="note-box"><b>Patient's note.</b> {{ case.patient_note }}</div><div class="section-label"></div>{% endif %}
+        {% if latest %}
+          <div class="signed-box"><svg class="ic sm"><use href="#i-check"/></svg><span>Signed by {{ latest.doctor_name }} · {{ fmt_time(latest.signed_at) }} ·
+            <a href="{{ url_for('case.report_snapshot', cid=case.id, version=latest.version) }}" target="_blank" rel="noopener">View report</a></span></div>
+        {% endif %}
+        <form method="post" action="{{ url_for('doctor.sign', cid=case.id) }}" class="form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field">Impression / final diagnosis
+            <select name="diagnosis" required>
+              {% for d in diagnoses %}<option value="{{ d }}" {% if (latest and latest.final_diagnosis == d) or (not latest and r and r.status == 'ok' and r.prediction == d) %}selected{% endif %}>{{ class_text[d] }}</option>{% endfor %}
+            </select></label>
+          <div class="field">AI suggestion
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="agrees" value="yes" required>Agree</label>
+              <label><input type="radio" name="agrees" value="no">Disagree</label>
+              <label><input type="radio" name="agrees" value="na">Not used</label>
+            </div></div>
+          <label class="field">Findings <span class="hint">Shown to the patient</span>
+            <textarea name="findings" rows="5" required maxlength="5000" placeholder="Describe location, size, signal and mass effect.">{{ latest.findings if latest else '' }}</textarea></label>
+          <label class="field">Recommendation <span class="hint">Optional</span>
+            <textarea name="recommendation" rows="2" maxlength="2000" placeholder="e.g. Neurosurgical referral; contrast-enhanced MRI follow-up.">{{ latest.recommendation if latest else '' }}</textarea></label>
+          {% if latest %}<label class="field">Reason for amendment<input name="amendment_reason" required maxlength="500"></label>{% endif %}
+          <label class="field">Password <span class="hint">Confirms your electronic signature</span><input type="password" name="password" required autocomplete="current-password"></label>
+          <button class="btn primary lg block" type="submit"><svg class="ic sm"><use href="#i-check"/></svg>{{ 'Sign amendment' if latest else 'Sign and release report' }}</button>
+        </form>
+      </div>
+      {% if case.status != 'finalized' %}
+      <details class="panel">
+        <summary><svg class="ic sm"><use href="#i-refresh"/></svg>Request a new image</summary>
+        <div class="panel-b">
+          <form method="post" action="{{ url_for('doctor.reupload', cid=case.id) }}" class="form">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <label class="field">Message to the patient<input name="message" maxlength="1000" placeholder="e.g. Please upload an axial T1 post-contrast slice."></label>
+            <button class="btn" type="submit">Send request</button>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+    </section>
 
-  <!-- ============================== decision -->
-  <section class="card decision">
-    {% set latest = reports[0] if reports else None %}
-    <h2>{{ 'Amend report' if latest else 'Your report' }}</h2>
-    {% if latest %}
-      <div class="signed">Signed v{{ latest.version }} by {{ latest.doctor_name }} · {{ fmt_time(latest.signed_at) }} ·
-        <b>{{ class_text[latest.final_diagnosis] }}</b> ·
-        <a href="{{ url_for('case.report_snapshot', cid=case.id, version=latest.version) }}" target="_blank" rel="noopener">view</a></div>
+    {% if history or reports|length > 1 %}
+    <section class="card">
+      <div class="card-h"><h2>History</h2></div>
+      <div class="card-b tight">
+        <ul class="hist">
+          {% for rep in reports %}<li><span>Report v{{ rep.version }} · {{ rep.doctor_name }}</span><a href="{{ url_for('case.report_snapshot', cid=case.id, version=rep.version) }}" target="_blank" rel="noopener">{{ fmt_date(rep.signed_at) }}</a></li>{% endfor %}
+          {% for h in history %}<li><span>Earlier study · {{ status_text[h.status] }}</span><a href="{{ url_for('doctor.case_review', cid=h.id) }}">{{ fmt_date(h.created) }}</a></li>{% endfor %}
+        </ul>
+      </div>
+    </section>
     {% endif %}
-    <form method="post" action="{{ url_for('doctor.sign', cid=case.id) }}" class="form">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-      <label>Final diagnosis
-        <select name="diagnosis" required>
-          {% for d in diagnoses %}<option value="{{ d }}" {% if (latest and latest.final_diagnosis == d) or (not latest and r and r.status == 'ok' and r.prediction == d) %}selected{% endif %}>{{ class_text[d] }}</option>{% endfor %}
-        </select></label>
-      <fieldset class="inline"><legend>Do you agree with the AI suggestion?</legend>
-        <label class="check"><input type="radio" name="agrees" value="yes" required> Agree</label>
-        <label class="check"><input type="radio" name="agrees" value="no"> Disagree</label>
-        <label class="check"><input type="radio" name="agrees" value="na"> Not applicable</label>
-      </fieldset>
-      <label>Findings (shown to the patient)
-        <textarea name="findings" rows="5" required maxlength="5000">{{ latest.findings if latest else '' }}</textarea></label>
-      <label>Recommendation <span class="muted">(optional)</span>
-        <textarea name="recommendation" rows="2" maxlength="2000">{{ latest.recommendation if latest else '' }}</textarea></label>
-      {% if latest %}<label>Reason for amendment<input name="amendment_reason" required maxlength="500"></label>{% endif %}
-      <label>Confirm with your password to sign<input type="password" name="password" required autocomplete="current-password"></label>
-      <button class="btn primary block" type="submit">{{ 'Sign amended report' if latest else 'Sign and release report' }}</button>
-    </form>
-    {% if case.status != 'finalized' %}
-    <details class="reupload"><summary>Request a new image instead</summary>
-      <form method="post" action="{{ url_for('doctor.reupload', cid=case.id) }}" class="form">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <label>Message to the patient<input name="message" maxlength="1000" placeholder="e.g. please upload an axial T1 post-contrast slice"></label>
-        <button class="btn" type="submit">Request new image</button>
-      </form>
-    </details>
-    {% endif %}
-  </section>
+  </div>
 </div>
 {% endblock %}

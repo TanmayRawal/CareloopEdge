@@ -1,21 +1,55 @@
 {% extends "portal/base.html" %}
-{% block title %}Statistics{% endblock %}
+{% block title %}Analytics{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Statistics</h1></div></div>
+<div class="page-head"><div><h1>Analytics</h1><p>Department activity and AI concordance</p></div></div>
 <div class="kpis">
-  <div class="kpi"><b>{{ n_reports }}</b><span>Signed reports</span></div>
-  <div class="kpi"><b>{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</b><span>AI–doctor agreement ({{ n_pairs }} cases)</span></div>
-  <div class="kpi"><b>{{ '%.1f h'|format(median_turnaround_h) if median_turnaround_h is not none else '—' }}</b><span>Median upload → signed</span></div>
-  <div class="kpi"><b>{{ counts.awaiting_review + counts.in_review }}</b><span>Open cases</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-image"/></svg>Studies received</span><span class="k-val">{{ n_cases }}</span><span class="k-sub">all time</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-file"/></svg>Reports signed</span><span class="k-val">{{ n_reports }}</span><span class="k-sub">{{ counts.awaiting_review + counts.in_review }} open</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Median turnaround</span>
+    <span class="k-val">{{ '%.1f'|format(median_turnaround_h) if median_turnaround_h is not none else '—' }}<small class="muted"> h</small></span><span class="k-sub">upload → signed</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>AI concordance</span>
+    <span class="k-val">{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</span><span class="k-sub">{{ n_pairs }} analysed studies</span></div>
 </div>
-<section class="card flush">
-  <h2 class="pad">AI suggestion (rows) vs doctor's diagnosis (columns)</h2>
+
+<div class="grid g-side">
+  <section class="card">
+    <div class="card-h"><h2>Daily volume · last 14 days</h2>
+      <div class="legend"><span><i class="l1"></i>Received</span><span><i class="l2"></i>Signed</span></div></div>
+    <div class="card-b">
+      {% set W, H, pad = 700, 200, 28 %}{% set bw = (W - pad) / daily|length %}
+      <svg class="chart" viewBox="0 0 {{ W }} {{ H + 24 }}" role="img" aria-label="Studies received and reports signed per day">
+        {% for k in range(5) %}{% set y = 10 + (H - 10) * k / 4 %}
+          <line class="gl" x1="{{ pad }}" x2="{{ W }}" y1="{{ y }}" y2="{{ y }}"/>
+          <text x="{{ pad - 6 }}" y="{{ y + 4 }}" text-anchor="end">{{ ((daily_max * (4 - k) / 4)|round(0, 'ceil'))|int if k < 4 else 0 }}</text>
+        {% endfor %}
+        {% for d in daily %}{% set x = pad + loop.index0 * bw %}
+          {% set h1 = (H - 10) * d.received / daily_max %}{% set h2 = (H - 10) * d.signed / daily_max %}
+          <rect class="b1" x="{{ x + bw * 0.18 }}" y="{{ H - h1 }}" width="{{ bw * 0.3 }}" height="{{ h1 }}" rx="2"><title>{{ d.label }}: {{ d.received }} received</title></rect>
+          <rect class="b2" x="{{ x + bw * 0.52 }}" y="{{ H - h2 }}" width="{{ bw * 0.3 }}" height="{{ h2 }}" rx="2"><title>{{ d.label }}: {{ d.signed }} signed</title></rect>
+          {% if loop.index0 % 2 == 1 or loop.last %}<text x="{{ x + bw / 2 }}" y="{{ H + 18 }}" text-anchor="middle">{{ d.label }}</text>{% endif %}
+        {% endfor %}
+      </svg>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Signed diagnoses</h2></div>
+    <div class="card-b">
+      {% for d, n in mix.items() %}
+      <div class="hbar"><span>{{ class_text[d].split(' — ')[0] }}</span>
+        <svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="10" rx="5"/>{% if n %}<rect class="fill" width="{{ 100 * n / mix_max }}" height="10" rx="5"/>{% endif %}</svg>
+        <span class="right num">{{ n }}</span></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-h"><h2>AI suggestion vs radiologist diagnosis</h2><span class="small muted">Rows: AI · columns: radiologist</span></div>
   <table class="table confusion">
-    <thead><tr><th>AI \ Doctor</th>{% for d in classes + ['other', 'inconclusive'] %}<th>{{ class_text[d] }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th></th>{% for d in classes + ['other', 'inconclusive'] %}<th>{{ class_text[d].split(' — ')[0] }}</th>{% endfor %}</tr></thead>
     <tbody>
     {% for a in classes %}
-      <tr><th>{{ class_text[a] }}</th>
-        {% for d in classes + ['other', 'inconclusive'] %}<td class="{{ 'diag' if a == d }}">{{ confusion[a][d] or '' }}</td>{% endfor %}</tr>
+      <tr><th>{{ class_text[a] }}</th>{% for d in classes + ['other', 'inconclusive'] %}<td class="num {{ 'diag' if a == d }}">{{ confusion[a][d] or '·' }}</td>{% endfor %}</tr>
     {% endfor %}
     </tbody>
   </table>

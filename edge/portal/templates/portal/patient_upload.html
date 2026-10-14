@@ -1,23 +1,41 @@
 {% extends "portal/base.html" %}
-{% block title %}Upload scan{% endblock %}
-{% block content %}
-<div class="page-head"><div><h1>Upload a brain MRI scan</h1></div></div>
-<section class="card narrow">
-  {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
-  <form method="post" enctype="multipart/form-data" class="form" id="upload-form">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <label class="dropzone" id="dropzone">
-      <svg viewBox="0 0 48 48" class="dz-icon" aria-hidden="true"><path d="M24 32V12M16 20l8-8 8 8M10 34v4h28v-4"/></svg>
-      <span class="dz-title">Drop the image here, or click to choose</span>
-      <span class="muted small">PNG, JPG or DICOM · max 20 MB · one 2D slice</span>
-      <span class="dz-file mono small" id="dz-file"></span>
-      <input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required>
-    </label>
-    <label>Note for the doctor <span class="muted">(optional)</span>
-      <textarea name="note" rows="3" maxlength="1000" placeholder="e.g. symptoms, reason for the scan"></textarea></label>
-    <label class="check"><input type="checkbox" name="consent" value="yes" required>
-      <span>I consent to this image being stored securely on the clinic device and reviewed by clinic doctors.</span></label>
-    <button class="btn primary block" id="submit" type="submit">Submit for review</button>
-  </form>
-</section>
+{% block title %}Upload a scan{% endblock %}
+{% block pcontent %}
+<div class="page-head"><div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a><h1>Upload a scan</h1>
+  <p>A radiologist will review it and release a signed report to this portal.</p></div></div>
+<div class="grid g-side">
+  <section class="card">
+    <div class="card-b">
+      <div class="steps" aria-hidden="true"><span class="on" id="st1"><b>1</b>Choose image</span><span id="st2"><b>2</b>Add details</span><span id="st3"><b>3</b>Submit</span></div>
+      {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+      <form method="post" enctype="multipart/form-data" class="form" id="upload-form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="dropzone" id="dropzone">
+          <svg class="ic"><use href="#i-upload"/></svg>
+          <span class="dz-title">Drag your scan here or browse</span>
+          <span class="muted small">PNG, JPG or DICOM · up to 20 MB · one image</span>
+          <span class="dz-file" id="dz-file"></span>
+          <input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required>
+        </label>
+        <label class="field">Note for the radiologist <span class="hint">Optional — symptoms or reason for the scan</span>
+          <textarea name="note" rows="3" maxlength="1000"></textarea></label>
+        <label class="check"><input type="checkbox" name="consent" value="yes" required>
+          <span>I consent to this image being stored securely at the clinic and reviewed by clinic doctors.</span></label>
+        <button class="btn primary lg block" id="submit" type="submit">Submit for review</button>
+      </form>
+    </div>
+  </section>
+  <aside class="card">
+    <div class="card-h"><h2>What happens next</h2></div>
+    <div class="card-b">
+      <ul class="hist">
+        <li><span><b>1.</b> Your scan is received and stored securely.</span></li>
+        <li><span><b>2.</b> A radiologist reviews it.</span></li>
+        <li><span><b>3.</b> The signed report appears under My reports.</span></li>
+      </ul>
+      <div class="section-label">Tips</div>
+      <p class="small muted">Upload the original file from the imaging centre if you have it (DICOM is best). Photos of a screen are not accepted.</p>
+    </div>
+  </aside>
+</div>
 {% endblock %}

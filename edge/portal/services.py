@@ -122,7 +122,9 @@ def sign_report(ctx: Ctx, case, doctor, diagnosis: str, agrees: bool | None, fin
     patient = ctx.db.user(case["patient_id"])
     ai = ctx.db.latest_ai(case["id"])
     version = ctx.db.next_report_version(case["id"])
+    profile = ctx.db.one("SELECT * FROM patient_profiles WHERE user_id = ?", (case["patient_id"],))
     html = render_template("portal/report_snapshot.html", case=case, patient=patient, doctor=doctor, version=version,
+                           profile=profile,
                            diagnosis=diagnosis, findings=findings, recommendation=recommendation,
                            amendment_reason=amendment_reason, signed=time.strftime("%Y-%m-%d %H:%M"))
     sha = ctx.store.put(case["id"], f"report_v{version}", html.encode("utf-8"))

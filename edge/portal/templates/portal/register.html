@@ -1,28 +1,45 @@
 {% extends "portal/base.html" %}
 {% block title %}Create account{% endblock %}
-{% block body_class %}auth-body{% endblock %}
-{% block main_class %}auth-page{% endblock %}
-{% block content %}
-<div class="auth-wrap single">
-  <section class="auth-card card wide">
-    <h2>Create a patient account</h2>
-    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
-    <form method="post" class="form grid2">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-      <label class="span2">Full name<input name="name" value="{{ form.name if form else '' }}" required maxlength="120" autocomplete="name"></label>
-      <label class="span2">E-mail<input type="email" name="email" value="{{ form.email if form else '' }}" required maxlength="200" autocomplete="email"></label>
-      <label>Date of birth <span class="muted">(optional)</span><input type="date" name="dob" value="{{ form.dob if form else '' }}"></label>
-      <label>Sex <span class="muted">(optional)</span>
-        <select name="sex"><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></label>
-      <label class="span2">Phone <span class="muted">(optional)</span><input name="phone" value="{{ form.phone if form else '' }}" maxlength="30" autocomplete="tel"></label>
-      <label>Password<input type="password" name="password" required minlength="10" autocomplete="new-password"></label>
-      <label>Repeat password<input type="password" name="password2" required minlength="10" autocomplete="new-password"></label>
-      <p class="span2 small muted">At least 10 characters.</p>
-      <label class="check span2"><input type="checkbox" name="consent" value="yes" required>
-        <span>I agree that my scans and reports are stored encrypted on this clinic device and are seen only by clinic doctors.</span></label>
-      <button class="btn primary span2" type="submit">Create account</button>
-    </form>
-    <p class="small muted center">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+{% block bare %}
+<div class="auth">
+  <section class="auth-side">
+    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ clinic }}</span><br><span class="sub">Patient portal</span></span></span>
+    <div class="tagline">
+      <h1>Your brain MRI reports, in one place.</h1>
+      <p>Upload a scan, follow its review, and read your radiologist's signed report.</p>
+      <ul class="auth-feats">
+        <li><svg class="ic"><use href="#i-upload"/></svg>Upload scans from home</li>
+        <li><svg class="ic"><use href="#i-clock"/></svg>Track the review status</li>
+        <li><svg class="ic"><use href="#i-print"/></svg>Download and print your report</li>
+      </ul>
+    </div>
+    <div class="legal">© {{ clinic }} · Authorised use only</div>
+  </section>
+  <section class="auth-main">
+    <div class="auth-box wide">
+      <h2>Create your patient account</h2>
+      <p class="lead">It takes about a minute.</p>
+      {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+      <form method="post" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field">Full name<input name="name" value="{{ form.name if form else '' }}" required maxlength="120" autocomplete="name"></label>
+        <label class="field">E-mail address<input type="email" name="email" value="{{ form.email if form else '' }}" required maxlength="200" autocomplete="email"></label>
+        <div class="row2">
+          <label class="field">Date of birth<input type="date" name="dob" value="{{ form.dob if form else '' }}"></label>
+          <label class="field">Sex
+            <select name="sex"><option value="">Select</option>{% for s in ('Female', 'Male', 'Other') %}<option {% if form and form.sex == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+        </div>
+        <label class="field">Mobile number<input name="phone" value="{{ form.phone if form else '' }}" maxlength="30" autocomplete="tel"></label>
+        <div class="row2">
+          <label class="field">Password<input type="password" name="password" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters</span></label>
+          <label class="field">Confirm password<input type="password" name="password2" required minlength="10" autocomplete="new-password"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="consent" value="yes" required>
+          <span>I agree that my scans and reports are stored encrypted at the clinic and are seen only by clinic doctors.</span></label>
+        <button class="btn primary lg block" type="submit">Create account</button>
+      </form>
+      <div class="auth-alt">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></div>
+    </div>
   </section>
 </div>
 {% endblock %}

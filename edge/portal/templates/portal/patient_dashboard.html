@@ -1,34 +1,32 @@
 {% extends "portal/base.html" %}
-{% block title %}My scans{% endblock %}
-{% block content %}
-<div class="page-head">
-  <div>
-    <h1>My scans</h1>
-  </div>
-  <a class="btn primary" href="{{ url_for('patient.upload') }}">+ Upload a new scan</a>
+{% block title %}My reports{% endblock %}
+{% block pcontent %}
+<div class="welcome">
+  <div><span class="eyebrow">Patient ID {{ mrn(me.id) }}</span><h1>Hello, {{ me.name.split(' ')[0] }}</h1>
+    <p class="muted">Your scans and your radiologist's reports.</p></div>
+  <a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>
 </div>
-{% if not cases %}
-  <section class="card empty-state">
-    <svg viewBox="0 0 48 48" class="empty-icon" aria-hidden="true"><rect x="8" y="6" width="32" height="36" rx="4"/><path d="M16 18h16M16 26h16M16 34h10"/></svg>
-    <h2>No scans yet</h2>
-    <p class="muted">Upload a brain MRI image (PNG, JPG or DICOM) to start.</p>
-    <a class="btn primary" href="{{ url_for('patient.upload') }}">Upload a scan</a>
-  </section>
-{% else %}
-  <section class="card flush">
-    <table class="table">
-      <thead><tr><th>Submitted</th><th>File</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-      {% for c in cases %}
-        <tr>
-          <td>{{ fmt_time(c.created) }}</td>
-          <td class="mono small">{{ c.scan_filename }}</td>
-          <td><span class="status s-{{ c.status }}">{{ status_text[c.status] }}</span></td>
-          <td class="right"><a class="btn small" href="{{ url_for('patient.case', cid=c.id) }}">{{ 'View report' if c.status == 'finalized' else 'Open' }}</a></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </section>
-{% endif %}
+{% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
+<div class="grid g3 kpis">
+  <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ cases|length }}</span></div>
+  <div class="kpi"><span class="k-label">Reports ready</span><span class="k-val">{{ ready|length }}</span></div>
+  <div class="kpi"><span class="k-label">Under review</span><span class="k-val">{{ cases|length - ready|length }}</span></div>
+</div>
+<section class="card">
+  <div class="card-h"><h2>My studies</h2></div>
+  {% if not cases %}
+    <div class="empty"><svg class="ic"><use href="#i-image"/></svg><h2>No scans yet</h2>
+      <p>Upload a brain MRI image to have it reviewed by a radiologist.</p>
+      <a class="btn primary" href="{{ url_for('patient.upload') }}">Upload a scan</a></div>
+  {% else %}
+    {% for c in cases %}
+    <a class="study" href="{{ url_for('patient.case', cid=c.id) }}">
+      <span class="thumb"><svg class="ic lg"><use href="#{{ 'i-file' if c.status == 'finalized' else 'i-image' }}"/></svg></span>
+      <span><span class="t">MRI Brain</span><br><span class="d">Uploaded {{ fmt_time(c.created) }} · Ref. {{ c.id[:8]|upper }}</span></span>
+      <span class="pill s-{{ c.status }}">{{ status_text[c.status] }}</span>
+      <span class="btn sm go">{{ 'View report' if c.status == 'finalized' else 'Details' }}</span>
+    </a>
+    {% endfor %}
+  {% endif %}
+</section>
 {% endblock %}

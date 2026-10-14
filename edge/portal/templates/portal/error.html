@@ -1,9 +1,13 @@
 {% extends "portal/base.html" %}
 {% block title %}{{ code }}{% endblock %}
-{% block content %}
-<section class="card narrow center">
-  <h1>{{ {400: 'Request not accepted', 403: 'Not allowed', 404: 'Not found', 413: 'File too large', 429: 'Too many requests'}.get(code, 'Error') }}</h1>
-  <p class="muted">{{ message if message and code != 404 else ('This page does not exist or you do not have access to it.' if code == 404 else '') }}</p>
-  <a class="btn primary" href="{{ url_for('auth.home') }}">Go to my start page</a>
-</section>
-{% endblock %}
+{% macro body() %}
+<section class="card"><div class="empty">
+  <svg class="ic"><use href="#i-alert"/></svg>
+  <h2>{{ {400: 'Request not accepted', 403: 'Not allowed', 404: 'Page not found', 413: 'File too large', 429: 'Too many requests'}.get(code, 'Something went wrong') }}</h2>
+  <p>{{ message if message and code != 404 else ('This page does not exist or you do not have access to it.' if code == 404 else '') }}</p>
+  <a class="btn primary" href="{{ url_for('auth.home') }}">Back to start</a>
+</div></section>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block pcontent %}{{ body() }}{% endblock %}
+{% block content_anon %}{{ body() }}{% endblock %}

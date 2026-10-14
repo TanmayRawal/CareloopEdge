@@ -1,34 +1,53 @@
 {% extends "portal/base.html" %}
-{% block title %}Worklist{% endblock %}
+{% block title %}{{ 'Signed reports' if status == 'finalized' else 'Worklist' }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Worklist</h1></div>
+  <div>
+    <h1>{{ 'Signed reports' if status == 'finalized' else 'Reading worklist' }}</h1>
+    <p>{{ counts.awaiting_review + counts.in_review }} open studies · sorted by priority, then waiting time</p>
+  </div>
 </div>
 <div class="kpis">
-  <a class="kpi {{ 'on' if status == 'open' }}" href="{{ url_for('doctor.worklist', status='open') }}"><b>{{ counts.awaiting_review + counts.in_review }}</b><span>Open</span></a>
-  <a class="kpi {{ 'on' if status == 'awaiting_review' }}" href="{{ url_for('doctor.worklist', status='awaiting_review') }}"><b>{{ counts.awaiting_review }}</b><span>New</span></a>
-  <a class="kpi {{ 'on' if status == 'in_review' }}" href="{{ url_for('doctor.worklist', status='in_review') }}"><b>{{ counts.in_review }}</b><span>In review</span></a>
-  <a class="kpi {{ 'on' if status == 'reupload_requested' }}" href="{{ url_for('doctor.worklist', status='reupload_requested') }}"><b>{{ counts.reupload_requested }}</b><span>Waiting for image</span></a>
-  <a class="kpi {{ 'on' if status == 'finalized' }}" href="{{ url_for('doctor.worklist', status='finalized') }}"><b>{{ counts.finalized }}</b><span>Signed</span></a>
+  <a class="kpi {{ 'on' if status == 'open' }}" href="{{ url_for('doctor.worklist', status='open') }}">
+    <span class="k-label"><svg class="ic sm"><use href="#i-inbox"/></svg>Open</span><span class="k-val">{{ counts.awaiting_review + counts.in_review }}</span><span class="k-sub">to report</span></a>
+  <a class="kpi {{ 'on' if status == 'awaiting_review' }}" href="{{ url_for('doctor.worklist', status='awaiting_review') }}">
+    <span class="k-label"><svg class="ic sm"><use href="#i-scan"/></svg>Unread</span><span class="k-val">{{ counts.awaiting_review }}</span><span class="k-sub">not opened yet</span></a>
+  <a class="kpi {{ 'on' if status == 'in_review' }}" href="{{ url_for('doctor.worklist', status='in_review') }}">
+    <span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>In review</span><span class="k-val">{{ counts.in_review }}</span><span class="k-sub">opened, not signed</span></a>
+  <a class="kpi {{ 'on' if status == 'reupload_requested' }}" href="{{ url_for('doctor.worklist', status='reupload_requested') }}">
+    <span class="k-label"><svg class="ic sm"><use href="#i-refresh"/></svg>Awaiting image</span><span class="k-val">{{ counts.reupload_requested }}</span><span class="k-sub">new upload requested</span></a>
+  <a class="kpi {{ 'on' if status == 'finalized' }}" href="{{ url_for('doctor.worklist', status='finalized') }}">
+    <span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Signed</span><span class="k-val">{{ counts.finalized }}</span><span class="k-sub">reports released</span></a>
 </div>
-<section class="card flush">
+
+<section class="card">
+  <form class="toolbar" method="get" action="{{ url_for('doctor.worklist') }}">
+    <input type="hidden" name="status" value="{{ status }}">
+    <label class="search"><svg class="ic"><use href="#i-search"/></svg>
+      <input type="search" name="q" value="{{ q }}" placeholder="Search patient name, patient ID or case number" aria-label="Search"></label>
+    <button class="btn sm" type="submit">Search</button>
+    {% if q %}<a class="btn sm ghost" href="{{ url_for('doctor.worklist', status=status) }}">Clear</a>{% endif %}
+    <span class="grow"></span>
+    <a class="btn sm ghost" href="{{ url_for('doctor.worklist', status='all') }}">All studies</a>
+  </form>
   {% if not items %}
-    <p class="empty-row muted">No cases in this view.</p>
+    <div class="empty"><svg class="ic"><use href="#i-inbox"/></svg><h2>No studies here</h2><p>{{ 'Nothing matches your search.' if q else 'New uploads will appear automatically.' }}</p></div>
   {% else %}
-  <table class="table">
-    <thead><tr><th>Priority</th><th>Patient</th><th>Submitted</th><th>AI result</th><th>Flags</th><th>Status</th><th></th></tr></thead>
+  <table class="table responsive">
+    <thead><tr><th>Priority</th><th>Patient</th><th>Received</th><th>AI finding</th><th>Flags</th><th>Status</th><th></th></tr></thead>
     <tbody>
-    {% for it in items %}{% set c = it.case %}{% set r = it.ai %}
-      <tr>
-        <td>{% if c.priority >= 3 %}<span class="pri p3">Not analysed</span>
-            {% elif c.priority == 2 %}<span class="pri p2">Attention</span>{% else %}<span class="pri p1">Routine</span>{% endif %}</td>
-        <td><b>{{ c.patient_name }}</b><br><span class="small muted mono">#{{ c.id[:8] }}</span></td>
-        <td>{{ fmt_time(c.created) }}</td>
-        <td>{% if r and r.status == 'ok' %}{{ class_text[r.prediction] }} <span class="muted small">{{ '%.0f'|format(100 * r.probabilities[r.prediction]) }}%</span>
-            {% elif r %}<span class="muted">Not analysed</span>{% else %}—{% endif %}</td>
-        <td>{% if r %}{% for f in r.flags if f in flag_text %}<span class="tag" title="{{ flag_text[f] }}">{{ flag_short.get(f, f|replace('_', ' ')) }}</span>{% endfor %}{% endif %}</td>
-        <td><span class="status s-{{ c.status }}">{{ status_text[c.status] }}</span>{% if c.doctor_name %}<br><span class="small muted">{{ c.doctor_name }}</span>{% endif %}</td>
-        <td class="right"><a class="btn small {{ 'primary' if c.status in ('awaiting_review', 'in_review') }}" href="{{ url_for('doctor.case_review', cid=c.id) }}">{{ 'Review' if c.status in ('awaiting_review', 'in_review') else 'Open' }}</a></td>
+    {% for it in items %}{% set c = it.case %}{% set r = it.ai %}{% set age = age_from_dob(c.patient_dob) %}
+      <tr class="link" data-href="{{ url_for('doctor.case_review', cid=c.id) }}">
+        <td>{% if c.priority >= 3 %}<span class="pri p3"><span class="bar"></span>Urgent</span>
+            {% elif c.priority == 2 %}<span class="pri p2"><span class="bar"></span>Attention</span>{% else %}<span class="pri p1"><span class="bar"></span>Routine</span>{% endif %}</td>
+        <td><div class="cell-main">{{ c.patient_name }}</div>
+            <div class="cell-sub">{{ mrn(c.patient_id) }}{% if age is not none %} · {{ age }} y{% endif %}{% if c.patient_sex %} · {{ c.patient_sex[:1] }}{% endif %}</div></td>
+        <td class="nowrap"><div class="cell-main num">{{ fmt_time(c.created) }}</div><div class="cell-sub">{% if c.status != 'finalized' %}Waiting {{ ago(c.created) }}{% else %}MRI Brain{% endif %}</div></td>
+        <td>{% if r and r.status == 'ok' %}<div class="cell-main">{{ class_text[r.prediction] }}</div><div class="cell-sub num">{{ '%.0f'|format(100 * r.probabilities[r.prediction]) }}% confidence</div>
+            {% elif r %}<span class="tag err">Not analysed</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td>{% set fl = (r.flags if r else [])|select('in', flag_text)|list %}{% for f in fl[:2] %}<span class="tag warn" title="{{ flag_text[f] }}">{{ flag_short.get(f, f) }}</span>{% endfor %}{% if fl|length > 2 %}<span class="tag" title="{% for f in fl[2:] %}{{ flag_text[f] }} {% endfor %}">+{{ fl|length - 2 }}</span>{% endif %}{% if not fl %}<span class="faint">—</span>{% endif %}</td>
+        <td><span class="pill s-{{ c.status }}">{{ status_text[c.status] }}</span>{% if c.doctor_name %}<div class="cell-sub">{{ c.doctor_name }}</div>{% endif %}</td>
+        <td class="right"><a class="btn sm {{ 'primary' if c.status in ('awaiting_review', 'in_review') }}" href="{{ url_for('doctor.case_review', cid=c.id) }}">{{ 'Report' if c.status in ('awaiting_review', 'in_review') else 'Open' }}</a></td>
       </tr>
     {% endfor %}
     </tbody>

@@ -1,22 +1,22 @@
 {% extends "portal/base.html" %}
 {% block title %}Users{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Users</h1></div></div>
-<div class="grid-2 admin">
-  <section class="card flush">
-    <table class="table">
-      <thead><tr><th>Name</th><th>E-mail</th><th>Role</th><th>Cases</th><th>Status</th><th></th></tr></thead>
+<div class="page-head"><div><h1>Users</h1><p>{{ users|length }} accounts · patients register themselves</p></div></div>
+<div class="grid g-side">
+  <section class="card">
+    <table class="table responsive">
+      <thead><tr><th>Name</th><th>Role</th><th>Studies</th><th>Status</th><th></th></tr></thead>
       <tbody>
       {% for u in users %}
-        <tr class="{{ 'muted' if not u.active }}">
-          <td><b>{{ u.name }}</b></td><td class="small">{{ u.email }}</td>
-          <td><span class="role role-{{ u.role }}">{{ u.role|title }}</span></td>
-          <td>{{ u.n_cases if u.role == 'patient' else '' }}</td>
-          <td>{{ 'Active' if u.active else 'Disabled' }}{% if u.locked_until and u.locked_until > 0 %} · locked{% endif %}</td>
+        <tr class="{{ 'dim' if not u.active }}">
+          <td><div class="cell-main">{{ u.name }}</div><div class="cell-sub">{{ u.email }}{% if u.role == 'patient' %} · {{ mrn(u.id) }}{% endif %}</div></td>
+          <td><span class="tag {{ 'brand' if u.role != 'patient' }}">{{ {'doctor': 'Radiologist', 'admin': 'Administrator', 'patient': 'Patient'}[u.role] }}</span></td>
+          <td class="num">{{ u.n_cases if u.role == 'patient' else '—' }}</td>
+          <td>{% if not u.active %}<span class="pill">Disabled</span>{% elif u.locked_until and u.locked_until > 0 %}<span class="pill s-reupload_requested">Locked</span>{% else %}<span class="pill s-finalized">Active</span>{% endif %}</td>
           <td class="right">{% if u.id != me.id %}
             <form method="post" action="{{ url_for('admin.toggle', uid=u.id) }}">
               <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-              <button class="btn small {{ 'danger' if u.active }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button>
+              <button class="btn sm {{ 'danger' if u.active }}" type="submit">{{ 'Disable' if u.active else 'Enable' }}</button>
             </form>{% endif %}</td>
         </tr>
       {% endfor %}
@@ -24,16 +24,18 @@
     </table>
   </section>
   <section class="card">
-    <h2>Add a doctor or admin</h2>
-    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
-    <form method="post" class="form">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-      <label>Full name<input name="name" required maxlength="120"></label>
-      <label>E-mail<input type="email" name="email" required maxlength="200"></label>
-      <label>Role<select name="role"><option value="doctor">Doctor</option><option value="admin">Admin</option></select></label>
-      <label>Initial password<input type="password" name="password" required minlength="10" autocomplete="new-password"></label>
-      <button class="btn primary block" type="submit">Create account</button>
-    </form>
+    <div class="card-h"><h2>Add staff account</h2></div>
+    <div class="card-b">
+      {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+      <form method="post" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field">Full name<input name="name" required maxlength="120" placeholder="Dr. A. Sharma"></label>
+        <label class="field">E-mail address<input type="email" name="email" required maxlength="200"></label>
+        <label class="field">Role<select name="role"><option value="doctor">Radiologist</option><option value="admin">Administrator</option></select></label>
+        <label class="field">Initial password<input type="password" name="password" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters; share it privately</span></label>
+        <button class="btn primary block" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Create account</button>
+      </form>
+    </div>
   </section>
 </div>
 {% endblock %}
