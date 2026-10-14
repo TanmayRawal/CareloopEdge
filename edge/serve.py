@@ -117,8 +117,11 @@ def main() -> None:
             generate_key(Path(key))
         if args.portal_data:
             # Development / demo conveniences: e-mails become .eml files, sessions survive restarts.
-            os.environ.setdefault("NEUROEDGE_SMTP", f"file:{Path(args.portal_data) / 'mail'}")
-            os.environ.setdefault("NEUROEDGE_SMTP_ENV", str(Path(args.portal_data) / "smtp.env"))
+            smtp_env = Path(args.portal_data) / "smtp.env"
+            os.environ.setdefault("NEUROEDGE_SMTP_ENV", str(smtp_env))
+            if not (smtp_env.exists() and "NEUROEDGE_SMTP_HOST=" in smtp_env.read_text(encoding="utf-8")):
+                # no real mail account configured: save e-mails as .eml files instead of sending
+                os.environ.setdefault("NEUROEDGE_SMTP", f"file:{Path(args.portal_data) / 'mail'}")
             os.environ.setdefault("NEUROEDGE_SECRET", hashlib.sha256(Path(key).read_bytes() + b"session").hexdigest())
     app = build(args.bundle_dir, args.model, args.threads, args.portal_data, key)
     if args.init_dev and args.portal_data:
