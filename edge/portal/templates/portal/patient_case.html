@@ -4,7 +4,7 @@
 {% set age = age_from_dob(profile.dob if profile else None) %}
 <div class="page-head no-print">
   <div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a>
-    <h1>MRI Brain · {{ fmt_date(case.created) }}</h1><p>Reference {{ case.id[:8]|upper }}</p></div>
+    <h1>MRI Brain · {{ fmt_date(case.created) }}</h1></div>
   <div>{% if report %}<button class="btn primary" type="button" id="print-btn"><svg class="ic sm"><use href="#i-print"/></svg>Print / save as PDF</button>
        {% else %}<span class="pill s-{{ case.status }}">{{ status_text[case.status] }}</span>{% endif %}</div>
 </div>
@@ -13,7 +13,7 @@
 <article class="doc">
   <header class="doc-head">
     <div class="org">{% include "portal/_logo.html" %}<div><b>{{ clinic }}</b><small>Department of Neuroradiology</small></div></div>
-    <div class="title"><b>Radiology report</b><small>Report {{ case.id[:8]|upper }}-{{ report.version }}</small></div>
+    <div class="title"><b>Radiology report</b><small>{{ fmt_date(report.signed_at) }}</small></div>
   </header>
   <div class="doc-meta">
     <div><span>Patient</span><b>{{ me.name }}</b></div>
@@ -30,7 +30,7 @@
   {% if report.recommendation %}<section class="doc-sec"><h3>Recommendation</h3><div class="pre">{{ report.recommendation }}</div></section>{% endif %}
   <div class="doc-sign">
     <div class="sig"><small>Electronically signed by</small><b>{{ report.doctor_name }}</b><small>Radiologist · {{ fmt_time(report.signed_at) }}</small></div>
-    <div class="ver">Version {{ report.version }}<br><a class="no-print" href="{{ url_for('case.report_snapshot', cid=case.id, version=report.version) }}" target="_blank" rel="noopener">Archived copy</a></div>
+    {% if report.version > 1 %}<div class="ver">Amended report</div>{% endif %}
   </div>
   <p class="small muted center">Please discuss this report with your doctor.</p>
 </article>
@@ -41,7 +41,7 @@
     <a class="btn" href="{{ url_for('patient.appointments') }}">Manage</a>
   {% else %}
     <div class="success-ic sm"><svg class="ic"><use href="#i-calendar"/></svg></div>
-    <div class="grow"><span class="eyebrow">Next step</span><h2>Discuss this report with {{ report.doctor_name }}</h2><div class="small muted">Book a follow-up consultation at a time that suits you.</div></div>
+    <div class="grow"><span class="eyebrow">Next step</span><h2>Discuss this report with {{ report.doctor_name }}</h2></div>
     <a class="btn primary" href="{{ url_for('patient.book', cid=case.id) }}">Book a consultation</a>
   {% endif %}
 </section>

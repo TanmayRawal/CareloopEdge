@@ -27,7 +27,7 @@
             <input type="hidden" name="next" value="{{ request.path }}"><button class="linkbtn" type="submit">Mark all read</button></form>{% endif %}</div>
         {% for n in bell_items %}
           <a class="bell-item {{ 'unread' if not n.read_at }}" href="{{ url_for('notifications.open', nid=n.id) }}">
-            <span class="bi-t">{{ n.title }}</span><span class="bi-d">{{ ago(n.created) }} ago</span></a>
+            <span class="bi-t">{{ n.title }}</span><span class="bi-d">{{ 'Just now' if ago(n.created) == '0 min' else ago(n.created) ~ ' ago' }}</span></a>
         {% else %}<div class="bell-empty">You're all caught up.</div>{% endfor %}
         <a class="bell-all" href="{{ url_for('notifications.index') }}">View all notifications</a>
       </div>
@@ -71,7 +71,6 @@
         <a href="{{ url_for('doctor.stats') }}" class="{{ 'active' if ep == 'doctor.stats' }}"><svg class="ic"><use href="#i-chart"/></svg><span>Analytics</span></a>
       {% endif %}
     </nav>
-    <div class="sb-foot"><span class="dot"></span>On-premise · encrypted<br>Model {{ model_info.version or '—' }}</div>
   </aside>
   <div class="main">
     <header class="topbar">

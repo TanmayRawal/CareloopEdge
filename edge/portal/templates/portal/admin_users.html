@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Users{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Users</h1><p>{{ users|length }} accounts · patients register themselves</p></div>
+<div class="page-head"><div><h1>Users</h1><p>{{ users|length }} accounts</p></div>
   <div class="seg nav-seg">{% for r, label in (('', 'All'), ('doctor', 'Radiologists'), ('patient', 'Patients'), ('admin', 'Admins')) %}<a class="{{ 'on' if role == r }}" href="?role={{ r }}">{{ label }}</a>{% endfor %}</div></div>
 <div class="grid g-side">
   <section class="card">
@@ -33,7 +33,7 @@
         <label class="field">Full name<input name="name" required maxlength="120" placeholder="Dr. A. Sharma"></label>
         <label class="field">E-mail address<input type="email" name="email" required maxlength="200"></label>
         <label class="field">Role<select name="role"><option value="doctor">Radiologist</option><option value="admin">Administrator</option></select></label>
-        <label class="field">Initial password<input type="password" name="password" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters; share it privately</span></label>
+        <label class="field">Initial password<input type="password" name="password" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters</span></label>
         <button class="btn primary block" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Create account</button>
       </form>
     </div>

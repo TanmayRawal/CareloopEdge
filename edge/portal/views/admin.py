@@ -16,19 +16,19 @@ from edge.portal.db import DEFAULT_SETTINGS
 STARTED = time.time()
 
 SETTING_FORM = [  # key, label, hint, kind
-    ("clinic_name", "Department name", "Shown in the portal, reports and e-mails", "text"),
-    ("base_url", "Portal address", "Used for links in e-mails, e.g. https://rpi.local", "text"),
-    ("timezone", "Time zone", "IANA name, e.g. Asia/Kolkata", "text"),
-    ("unread_hours", "Unread study target (hours)", "Radiologists are reminded after this", "number"),
-    ("unread_hours_urgent", "Urgent study target (hours)", "For studies flagged urgent or needing attention", "number"),
-    ("unsigned_hours", "Unsigned study reminder (hours)", "Opened but not signed", "number"),
-    ("escalate_hours", "Escalate to administrators (hours)", "Study still unread", "number"),
-    ("remind_before_hours", "Appointment reminders (hours before)", "Comma-separated, e.g. 24,2", "text"),
-    ("unmarked_after_min", "Attendance reminder (minutes after slot)", "Doctor is asked to record attendance", "number"),
-    ("agenda_hour", "Daily agenda e-mail (HH:MM)", "Sent to radiologists with consultations that day", "text"),
-    ("booking_lead_hours", "Minimum booking notice (hours)", "Earliest bookable slot", "number"),
-    ("booking_horizon_days", "Booking window (days)", "How far ahead patients can book", "number"),
-    ("cancel_cutoff_hours", "Change / cancel cutoff (hours)", "Patients cannot change later than this", "number"),
+    ("clinic_name", "Department name", "", "text"),
+    ("base_url", "Portal address", "e.g. https://rpi.local", "text"),
+    ("timezone", "Time zone", "e.g. Asia/Kolkata", "text"),
+    ("unread_hours", "Unread study reminder (hours)", "", "number"),
+    ("unread_hours_urgent", "Urgent study reminder (hours)", "", "number"),
+    ("unsigned_hours", "Unsigned study reminder (hours)", "", "number"),
+    ("escalate_hours", "Escalate to admin (hours)", "", "number"),
+    ("remind_before_hours", "Patient reminders (hours before)", "e.g. 24,2", "text"),
+    ("unmarked_after_min", "Attendance reminder (minutes)", "", "number"),
+    ("agenda_hour", "Daily agenda time", "e.g. 07:30", "text"),
+    ("booking_lead_hours", "Minimum booking notice (hours)", "", "number"),
+    ("booking_horizon_days", "Booking window (days)", "", "number"),
+    ("cancel_cutoff_hours", "Change / cancel cutoff (hours)", "", "number"),
 ]
 
 

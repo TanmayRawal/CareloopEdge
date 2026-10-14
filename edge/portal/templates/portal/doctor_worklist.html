@@ -4,20 +4,19 @@
 <div class="page-head">
   <div>
     <h1>{{ 'Signed reports' if status == 'finalized' else 'Reading worklist' }}</h1>
-    <p>{{ counts.awaiting_review + counts.in_review }} open studies · sorted by priority, then waiting time</p>
   </div>
 </div>
 <div class="kpis">
   <a class="kpi {{ 'on' if status == 'open' }}" href="{{ url_for('doctor.worklist', status='open') }}">
-    <span class="k-label"><svg class="ic sm"><use href="#i-inbox"/></svg>Open</span><span class="k-val">{{ counts.awaiting_review + counts.in_review }}</span><span class="k-sub">to report</span></a>
+    <span class="k-label"><svg class="ic sm"><use href="#i-inbox"/></svg>Open</span><span class="k-val">{{ counts.awaiting_review + counts.in_review }}</span></a>
   <a class="kpi {{ 'on' if status == 'awaiting_review' }}" href="{{ url_for('doctor.worklist', status='awaiting_review') }}">
-    <span class="k-label"><svg class="ic sm"><use href="#i-scan"/></svg>Unread</span><span class="k-val">{{ counts.awaiting_review }}</span><span class="k-sub">not opened yet</span></a>
+    <span class="k-label"><svg class="ic sm"><use href="#i-scan"/></svg>Unread</span><span class="k-val">{{ counts.awaiting_review }}</span></a>
   <a class="kpi {{ 'on' if status == 'in_review' }}" href="{{ url_for('doctor.worklist', status='in_review') }}">
-    <span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>In review</span><span class="k-val">{{ counts.in_review }}</span><span class="k-sub">opened, not signed</span></a>
+    <span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>In review</span><span class="k-val">{{ counts.in_review }}</span></a>
   <a class="kpi {{ 'on' if status == 'reupload_requested' }}" href="{{ url_for('doctor.worklist', status='reupload_requested') }}">
-    <span class="k-label"><svg class="ic sm"><use href="#i-refresh"/></svg>Awaiting image</span><span class="k-val">{{ counts.reupload_requested }}</span><span class="k-sub">new upload requested</span></a>
+    <span class="k-label"><svg class="ic sm"><use href="#i-refresh"/></svg>Awaiting image</span><span class="k-val">{{ counts.reupload_requested }}</span></a>
   <a class="kpi {{ 'on' if status == 'finalized' }}" href="{{ url_for('doctor.worklist', status='finalized') }}">
-    <span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Signed</span><span class="k-val">{{ counts.finalized }}</span><span class="k-sub">reports released</span></a>
+    <span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Signed</span><span class="k-val">{{ counts.finalized }}</span></a>
 </div>
 
 <section class="card">

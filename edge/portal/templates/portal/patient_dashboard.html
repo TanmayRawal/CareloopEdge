@@ -40,7 +40,7 @@
     {% for c in cases %}
     <a class="study" href="{{ url_for('patient.case', cid=c.id) }}">
       <span class="thumb"><svg class="ic lg"><use href="#{{ 'i-file' if c.status == 'finalized' else 'i-image' }}"/></svg></span>
-      <span><span class="t">MRI Brain</span><br><span class="d">Uploaded {{ fmt_time(c.created) }} · Ref. {{ c.id[:8]|upper }}</span></span>
+      <span><span class="t">MRI Brain</span><br><span class="d">Uploaded {{ fmt_time(c.created) }}</span></span>
       <span class="pill s-{{ c.status }}">{{ status_text[c.status] }}</span>
       <span class="btn sm go">{{ 'View report' if c.status == 'finalized' else 'Details' }}</span>
     </a>

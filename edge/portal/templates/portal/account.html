@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Account{% endblock %}
 {% macro body() %}
-<div class="page-head"><div><h1>Account and preferences</h1><p>{{ me.email }} · {{ role_text[me.role] }}{% if me.role == 'patient' %} · {{ mrn(me.id) }}{% endif %}</p></div></div>
+<div class="page-head"><div><h1>Account and preferences</h1><p>{{ me.email }}</p></div></div>
 {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
 <div class="grid g2">
   <section class="card">
@@ -9,7 +9,7 @@
     <form method="post" class="card-b form">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="prefs">
       <label class="check"><input type="checkbox" name="notify_email" value="1" {{ 'checked' if me.notify_email }}>
-        <span><b>E-mail me</b><br><span class="muted">{% if me.role == 'patient' %}When a report is ready, appointment confirmations and reminders.{% elif me.role == 'doctor' %}Studies waiting for review, new bookings, today's agenda and attendance reminders.{% else %}Escalations and system messages.{% endif %} Notifications always appear in the portal.</span></span></label>
+        <span><b>E-mail me</b><br><span class="muted">{% if me.role == 'patient' %}When a report is ready, appointment confirmations and reminders.{% elif me.role == 'doctor' %}Studies waiting for review, new bookings, today's agenda and attendance reminders.{% else %}Escalations and system messages.{% endif %}</span></span></label>
       {% if me.role == 'patient' %}
         <label class="field">Mobile number<input name="phone" value="{{ profile.phone if profile and profile.phone else '' }}" maxlength="30" autocomplete="tel"></label>
       {% endif %}

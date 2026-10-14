@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Appointments{% endblock %}
 {% block pcontent %}
-<div class="page-head"><div><h1>Appointments</h1><p>Consultations with your radiologist</p></div>
+<div class="page-head"><div><h1>Appointments</h1></div>
   {% if bookable %}<a class="btn primary" href="{{ url_for('patient.book', cid=bookable[0].id) }}"><svg class="ic sm"><use href="#i-plus"/></svg>Book a consultation</a>{% endif %}</div>
 
 <section class="card">
