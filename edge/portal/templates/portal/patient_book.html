@@ -3,7 +3,7 @@
 {% block pcontent %}
 <div class="page-head narrow-card wide"><div><a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>
   <h1>{{ 'Choose a new time' if reschedule_of else 'Book a consultation' }}</h1>
-  <p>{% if doctor %}Follow-up consultation with {{ doctor.name }} about your MRI of {{ fmt_date(case.created) }}{% endif %}</p></div></div>
+  <p>{% if doctor %}With {{ doctor.name }}{% endif %}</p></div></div>
 
 {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
 {% if reschedule_of %}<div class="alert"><svg class="ic sm"><use href="#i-calendar"/></svg><span>Current appointment: <b>{{ fmt_long(reschedule_of.start_ts) }} at {{ fmt_clock(reschedule_of.start_ts) }}</b>. It stays booked until you confirm a new time.</span></div>{% endif %}
@@ -13,14 +13,14 @@
       <div class="empty"><svg class="ic"><use href="#i-calendar"/></svg><h2>No times available</h2>
         <p>{{ doctor.name if doctor else 'Your radiologist' }} has no free consultation times in the next weeks. Please contact the department.</p></div>
     {% else %}
-      <div class="card-h"><h2>1. Choose a day</h2><span class="small muted">{{ days|length }} days with free times</span></div>
+      <div class="card-h"><h2>Choose a day</h2></div>
       <div class="datestrip" role="list">
         {% for dday in days %}
           <a role="listitem" class="dchip {{ 'on' if dday == sel }}" href="?day={{ dday.isoformat() }}">
             <span class="dw">{{ dday.strftime('%a') }}</span><span class="dd">{{ dday.day }}</span><span class="dm">{{ dday.strftime('%b') }}</span></a>
         {% endfor %}
       </div>
-      <div class="card-h no-top"><h2>2. Choose a time · {{ sel.strftime('%A %d %B') }}</h2></div>
+      <div class="card-h no-top"><h2>{{ sel.strftime('%A %d %B') }}</h2></div>
       <form method="post" class="card-b form" id="book-form">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         {% set morning = slots|selectattr('label', 'lt', '12:00')|list %}{% set later = slots|selectattr('label', 'ge', '12:00')|list %}

@@ -1,13 +1,13 @@
 {% extends "portal/base.html" %}
 {% block title %}System{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>System</h1><p>{{ info.host }} · running for {{ info.uptime }}</p></div></div>
+<div class="page-head"><div><h1>System</h1></div></div>
 <div class="kpis">
-  <div class="kpi"><span class="k-label">AI model</span><span class="k-val">{{ info.model_version }}</span><span class="k-sub">{{ info.precision|upper }} · signed and verified</span></div>
+  <div class="kpi"><span class="k-label">AI model</span><span class="k-val sm-val">{{ info.model_version }}</span><span class="k-sub">Verified</span></div>
   <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ info.cases }}</span><span class="k-sub">{{ info.reports }} report versions · {{ info.appointments }} consultations</span></div>
   <div class="kpi"><span class="k-label">Users</span><span class="k-val">{{ info.roles.values()|sum }}</span>
     <span class="k-sub">{{ info.roles.get('doctor', 0) }} radiologists · {{ info.roles.get('patient', 0) }} patients</span></div>
-  <div class="kpi"><span class="k-label">Assistant</span><span class="k-val">{{ info.llm }}</span><span class="k-sub">local language model</span></div>
+  <div class="kpi"><span class="k-label">Assistant</span><span class="k-val">{{ info.llm }}</span></div>
   <a class="kpi" href="{{ url_for('admin.outbox') }}"><span class="k-label">E-mail</span><span class="k-val sm-val">{{ 'Connected' if info.mail.configured else 'Not configured' }}</span>
     <span class="k-sub">{{ info.outbox.get('queued', 0) }} queued · {{ info.outbox.get('failed', 0) }} failed</span></a>
 </div>
@@ -21,17 +21,16 @@
         <tr><th>Disk free</th><td class="num">{{ info.disk_free }} of {{ info.disk_total }}</td></tr>
       </table>
       <div class="meter-line" title="{{ info.disk_used_pct }}% used"><svg viewBox="0 0 100 8" preserveAspectRatio="none"><rect width="{{ info.disk_used_pct }}" height="8"/></svg></div>
-      <p class="small muted">Back up regularly: <span class="mono">sudo neuroedge-portal backup --dest &lt;usb&gt;</span> and keep the portal key separately.</p>
+      <p class="small muted">Back up patient data regularly to external storage.</p>
     </div>
   </section>
   <section class="card">
     <div class="card-h"><h2>Security</h2></div>
     <div class="card-b">
       <table class="kv">
-        <tr><th>Model delivery</th><td>Signed and encrypted, verified on load</td></tr>
-        <tr><th>Data at rest</th><td>AES-256-GCM per file</td></tr>
-        <tr><th>Network</th><td>HTTPS only, firewall on</td></tr>
-        <tr><th>Recognised classes</th><td>{{ info.classes }}</td></tr>
+        <tr><th>Data storage</th><td>Encrypted</td></tr>
+        <tr><th>Connections</th><td>Secure (HTTPS)</td></tr>
+        <tr><th>AI model</th><td>Verified</td></tr>
         <tr><th>Last sign-in</th><td>{{ fmt_time(info.last_login) }}</td></tr>
       </table>
     </div>

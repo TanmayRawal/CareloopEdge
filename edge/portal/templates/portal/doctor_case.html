@@ -10,9 +10,8 @@
   <div class="pt"><span class="avatar">{{ patient.name[:1]|upper }}</span>
     <div><h1>{{ patient.name }}</h1><div class="cell-sub">{{ mrn(patient.id) }}{% if age is not none %} · {{ age }} y{% endif %}{% if profile and profile.sex %} · {{ profile.sex }}{% endif %}</div></div></div>
   <div class="meta">
-    <div><span>Study</span><b>MRI Brain · 2D slice</b></div>
+    <div><span>Study</span><b>MRI Brain</b></div>
     <div><span>Received</span><b>{{ fmt_time(case.created) }}</b></div>
-    <div><span>Case</span><b class="mono">{{ case.id[:8]|upper }}</b></div>
     {% if att > 1 %}<div><span>Image</span><b>Upload {{ att }}</b></div>{% endif %}
   </div>
   <div class="actions">
@@ -54,7 +53,7 @@
   <!-- ====================================================== side panel -->
   <div class="side">
     <section class="card">
-      <div class="card-h"><h2>AI findings</h2><span class="tag brand">Model {{ ai.model_version if ai else '—' }}</span></div>
+      <div class="card-h"><h2>AI findings</h2></div>
       <div class="card-b">
       {% if not r %}
         <p class="muted">No AI result for this study.</p>
@@ -78,9 +77,8 @@
         <div class="section-label">Lesion</div>
         <table class="kv">
           {% if r.lesion.present %}
-            <tr><th>Location (image)</th><td>{{ r.lesion.image_vertical|capitalize }} {{ r.lesion.image_side }}</td></tr>
+            <tr><th>Location</th><td>{{ r.lesion.image_vertical|capitalize }} {{ r.lesion.image_side|replace('image-', '') }}</td></tr>
             <tr><th>Size</th><td class="num">{% if r.lesion.area_mm2 %}{{ r.lesion.area_mm2 }} mm²{% else %}{{ '%.1f'|format(100 * r.lesion.area_fraction_of_image) }}% of slice{% endif %}</td></tr>
-            <tr><th>Evidence on lesion</th><td class="num">{% if r.explanation.evidence_inside_lesion is not none %}{{ '%.0f'|format(100 * r.explanation.evidence_inside_lesion) }}%{% else %}—{% endif %}</td></tr>
           {% else %}
             <tr><th>Lesion</th><td>None detected</td></tr>
           {% endif %}
@@ -89,7 +87,7 @@
       {% endif %}
       </div>
       <details class="panel" id="assistant">
-        <summary><svg class="ic sm"><use href="#i-chat"/></svg>Assistant <span class="tag">{{ 'Online' if llm_ready else 'Standard answers' }}</span></summary>
+        <summary><svg class="ic sm"><use href="#i-chat"/></svg>Assistant</summary>
         <div class="panel-b">
           <button class="btn sm" type="button" id="narrative-btn" {% if not r or r.status != 'ok' %}disabled{% endif %}>Draft summary</button>
           <div id="narrative" class="assistant-out"></div>

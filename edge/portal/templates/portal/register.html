@@ -18,7 +18,6 @@
   <section class="auth-main">
     <div class="auth-box wide">
       <h2>Create your patient account</h2>
-      <p class="lead">It takes about a minute.</p>
       {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
       <form method="post" class="form">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">

@@ -1,34 +1,32 @@
 {% extends "portal/base.html" %}
 {% block title %}E-mail{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>E-mail delivery</h1><p>Every reminder is also shown in the portal; e-mails are queued here and retried automatically.</p></div>
+<div class="page-head"><div><h1>E-mail delivery</h1></div>
   <form method="post" action="{{ url_for('admin.outbox_test') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <button class="btn" type="submit" {{ 'disabled' if not mail.configured }}><svg class="ic sm"><use href="#i-send"/></svg>Send test e-mail to me</button></form></div>
 
 <div class="kpis">
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-server"/></svg>Mail server</span>
-    <span class="k-val sm-val">{{ 'Connected' if mail.configured else 'Not configured' }}</span><span class="k-sub">{{ mail.detail }}</span></div>
-  <a class="kpi {{ 'on' if status == 'queued' }}" href="?status=queued"><span class="k-label">Queued</span><span class="k-val">{{ counts.get('queued', 0) }}</span><span class="k-sub">waiting or retrying</span></a>
-  <a class="kpi {{ 'on' if status == 'sent' }}" href="?status=sent"><span class="k-label">Sent</span><span class="k-val">{{ counts.get('sent', 0) }}</span><span class="k-sub">delivered to the server</span></a>
-  <a class="kpi {{ 'on' if status == 'failed' }}" href="?status=failed"><span class="k-label">Failed</span><span class="k-val">{{ counts.get('failed', 0) }}</span><span class="k-sub">gave up after retries</span></a>
+    <span class="k-val sm-val">{{ 'Connected' if mail.configured else 'Not configured' }}</span>{% if mail.configured %}<span class="k-sub">{{ mail.detail }}</span>{% endif %}</div>
+  <a class="kpi {{ 'on' if status == 'queued' }}" href="?status=queued"><span class="k-label">Queued</span><span class="k-val">{{ counts.get('queued', 0) }}</span></a>
+  <a class="kpi {{ 'on' if status == 'sent' }}" href="?status=sent"><span class="k-label">Sent</span><span class="k-val">{{ counts.get('sent', 0) }}</span></a>
+  <a class="kpi {{ 'on' if status == 'failed' }}" href="?status=failed"><span class="k-label">Failed</span><span class="k-val">{{ counts.get('failed', 0) }}</span></a>
 </div>
 {% if not mail.configured %}
-<div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg><div><b>E-mail is not set up yet.</b> On the server run
-  <span class="mono">sudo neuroedge-portal smtp-config</span> (hospital mail server, or Gmail with an app password). Queued messages are sent as soon as it works.</div></div>
+<div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg><div><b>E-mail is not set up.</b> Reminders still appear in the portal; e-mails will be sent once your IT team connects the mail server.</div></div>
 {% endif %}
 <section class="card">
   <div class="toolbar"><b>Messages</b><span class="grow"></span>{% if status %}<a class="btn sm ghost" href="{{ url_for('admin.outbox') }}">Show all</a>{% endif %}</div>
   <table class="table responsive">
-    <thead><tr><th>Created</th><th>To</th><th>Subject</th><th>Status</th><th>Attempts</th><th></th></tr></thead>
+    <thead><tr><th>Created</th><th>To</th><th>Subject</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for m in rows %}
       <tr><td class="num nowrap">{{ fmt_time(m.created) }}</td><td class="small">{{ m.to_email }}</td><td>{{ m.subject }}
           {% if m.last_error and m.status != 'sent' %}<div class="cell-sub err-text" title="{{ m.last_error }}">{{ m.last_error[:80] }}</div>{% endif %}</td>
         <td><span class="pill o-{{ m.status }}">{{ m.status|capitalize }}</span>{% if m.status == 'sent' %}<div class="cell-sub">{{ fmt_time(m.sent_at) }}</div>{% elif m.status == 'queued' %}<div class="cell-sub">next {{ fmt_clock(m.next_try) }}</div>{% endif %}</td>
-        <td class="num">{{ m.attempts }}</td>
         <td class="right">{% if m.status in ('failed', 'queued') and m.attempts %}<form method="post" action="{{ url_for('admin.outbox_retry', oid=m.id) }}">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Retry now</button></form>{% endif %}</td></tr>
-    {% else %}<tr><td colspan="6"><div class="empty slim">No messages.</div></td></tr>{% endfor %}
+    {% else %}<tr><td colspan="5"><div class="empty slim">No messages.</div></td></tr>{% endfor %}
     </tbody>
   </table>
 </section>

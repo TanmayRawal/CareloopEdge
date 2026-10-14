@@ -3,12 +3,11 @@
 {% block content %}
 {% macro tm(m) %}{{ '%02d:%02d'|format(m // 60, m % 60) }}{% endmacro %}
 {% macro tsel(name, value, label) %}<select name="{{ name }}" aria-label="{{ label }}"><option value="">—</option>{% for q in range(24, 89) %}{% set v = '%02d:%02d'|format(q // 4, (q % 4) * 15) %}<option {{ 'selected' if v == value }}>{{ v }}</option>{% endfor %}</select>{% endmacro %}
-<div class="page-head"><div><h1>Consultation availability</h1>
-  <p>{{ upcoming }} free slots in the next 14 days · patients book follow-ups on reports you signed</p></div></div>
+<div class="page-head"><div><h1>Consultation availability</h1></div></div>
 {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
 <div class="grid g-side">
   <section class="card">
-    <div class="card-h"><h2>Weekly hours</h2><span class="small muted">Up to two blocks per day, e.g. a lunch break</span></div>
+    <div class="card-h"><h2>Weekly hours</h2></div>
     <form method="post" class="card-b form">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="hours">
       <table class="hours">
@@ -39,7 +38,7 @@
       <form method="post" class="form">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="off_add">
         <label class="field">Date<input type="date" name="day" required></label>
-        <label class="field">Note <span class="hint">Optional, only you see it</span><input name="note" maxlength="100" placeholder="e.g. Conference"></label>
+        <label class="field">Note <span class="hint">Optional</span><input name="note" maxlength="100" placeholder="e.g. Conference"></label>
         <div><button class="btn" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Add day off</button></div>
       </form>
       <div class="section-label">Upcoming</div>
