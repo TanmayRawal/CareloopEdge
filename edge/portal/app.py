@@ -13,9 +13,12 @@ from X-Forwarded-For for rate limits / audit, Secure __Host- session cookie).
 
 from __future__ import annotations
 
+import datetime as dt
 import hmac
 import ipaddress
+import os
 import secrets
+import shutil
 import socket
 import time
 from pathlib import Path
@@ -27,6 +30,41 @@ from edge.portal.db import DB, DIAGNOSES, STATUSES
 from edge.portal.storage import BlobStore
 
 DISCLAIMER = "NeuroEdge research prototype"
+CLINIC_NAME = os.environ.get("NEUROEDGE_CLINIC_NAME", "NeuroEdge Imaging")
+STARTED = time.time()
+
+
+def mrn(uid) -> str:
+    """Display patient identifier (stable, derived from the account id)."""
+    return f"NE-{int(uid):05d}"
+
+
+def age_from_dob(dob: str | None) -> int | None:
+    try:
+        b = dt.date.fromisoformat(dob)
+    except (TypeError, ValueError):
+        return None
+    t = dt.date.today()
+    return t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+
+
+def ago(ts) -> str:
+    if not ts:
+        return "—"
+    m = max(0, int((time.time() - ts) // 60))
+    if m < 60:
+        return f"{m} min"
+    if m < 48 * 60:
+        return f"{m // 60} h"
+    return f"{m // 1440} d"
+
+
+def human_bytes(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
 CLASS_TEXT = {"glioma": "Glioma", "meningioma": "Meningioma", "pituitary": "Pituitary tumor", "no_tumor": "No tumor",
               "other": "Other finding", "inconclusive": "Inconclusive — further imaging needed"}
 STATUS_TEXT = {"awaiting_review": "Awaiting doctor review", "in_review": "In review",
@@ -122,8 +160,11 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     @app.context_processor
     def inject():
         return {"csrf_token": csrf_token, "disclaimer": DISCLAIMER, "model_info": model_info, "me": g.get("user"),
-                "class_text": CLASS_TEXT, "status_text": STATUS_TEXT, "flag_text": FLAG_TEXT, "flag_short": FLAG_SHORT,
-                "fmt_time": lambda t: time.strftime("%d %b %Y, %H:%M", time.localtime(t)) if t else "—"}
+                "clinic": CLINIC_NAME, "class_text": CLASS_TEXT, "status_text": STATUS_TEXT, "flag_text": FLAG_TEXT,
+                "flag_short": FLAG_SHORT, "mrn": mrn,
+                "open_count": lambda: db.one("SELECT COUNT(*) AS n FROM cases WHERE status IN ('awaiting_review','in_review')")["n"], "age_from_dob": age_from_dob, "ago": ago,
+                "fmt_time": lambda t: time.strftime("%d %b %Y, %H:%M", time.localtime(t)) if t else "—",
+                "fmt_date": lambda t: time.strftime("%d %b %Y", time.localtime(t)) if t else "—"}
 
     def ip():
         return request.remote_addr
@@ -266,7 +307,8 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
             return redirect(url_for("patient.case", cid=cid))
         attempt = (db.latest_ai(cid) or {}).get("result", {}).get("attempt", 1)
         reports = db.reports(cid)
-        return render_template("portal/patient_case.html", case=c, reports=reports,
+        profile = db.one("SELECT * FROM patient_profiles WHERE user_id = ?", (c["patient_id"],))
+        return render_template("portal/patient_case.html", case=c, reports=reports, profile=profile,
                                report=reports[0] if reports else None, attempt=attempt)
 
     # ------------------------------------------------------------------ doctor
@@ -276,18 +318,23 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     @auth.require("doctor")
     def worklist():
         status = request.args.get("status", "open")
+        search = request.args.get("q", "").strip()[:80]
         where = {"open": "c.status IN ('awaiting_review','in_review')", "all": "1=1"}.get(
             status, "c.status = ?" if status in STATUSES else "1=0")
         args = (status,) if status in STATUSES else ()
-        rows = db.q(f"SELECT c.*, u.name AS patient_name, d.name AS doctor_name FROM cases c "
-                    f"JOIN users u ON u.id = c.patient_id LEFT JOIN users d ON d.id = c.doctor_id "
+        if search:
+            where += " AND (u.name LIKE ? OR c.id LIKE ? OR printf('NE-%05d', u.id) LIKE ?)"
+            args += (f"%{search}%", f"{search.lower()}%", f"%{search.upper()}%")
+        rows = db.q(f"SELECT c.*, u.name AS patient_name, d.name AS doctor_name, p.dob AS patient_dob, p.sex AS patient_sex "
+                    f"FROM cases c JOIN users u ON u.id = c.patient_id LEFT JOIN users d ON d.id = c.doctor_id "
+                    f"LEFT JOIN patient_profiles p ON p.user_id = c.patient_id "
                     f"WHERE {where} ORDER BY (c.status = 'finalized'), c.priority DESC, c.created LIMIT 500", args)
         items = []
         for r in rows:
             ai = db.latest_ai(r["id"])
             items.append({"case": r, "ai": ai["result"] if ai else None})
         counts = {s: db.one("SELECT COUNT(*) AS n FROM cases WHERE status = ?", (s,))["n"] for s in STATUSES}
-        return render_template("portal/doctor_worklist.html", items=items, status=status, counts=counts)
+        return render_template("portal/doctor_worklist.html", items=items, status=status, counts=counts, q=search)
 
     @bp_doc.get("/case/<cid>")
     @auth.require("doctor")
@@ -299,9 +346,11 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
         db.audit(g.user["id"], "case_viewed", cid, ip=ip())
         patient = db.user(c["patient_id"])
         profile = db.one("SELECT * FROM patient_profiles WHERE user_id = ?", (c["patient_id"],))
+        history = db.q("SELECT id, created, status FROM cases WHERE patient_id = ? AND id != ? ORDER BY created DESC LIMIT 5",
+                       (c["patient_id"], cid))
         return render_template("portal/doctor_case.html", case=c, ai=ai, r=ai["result"] if ai else None,
                                patient=patient, profile=profile, reports=db.reports(cid), diagnoses=DIAGNOSES,
-                               llm_ready=assistant.llm.available())
+                               llm_ready=assistant.llm.available(), history=history)
 
     @bp_doc.post("/case/<cid>/sign")
     @auth.require("doctor")
@@ -378,9 +427,18 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
         agree = sum(1 for a, d in pairs if a == d)
         counts = {s: db.one("SELECT COUNT(*) AS n FROM cases WHERE status = ?", (s,))["n"] for s in STATUSES}
         med = sorted(turnaround)[len(turnaround) // 2] if turnaround else None
+        today = dt.date.today()
+        days = [today - dt.timedelta(days=i) for i in range(13, -1, -1)]
+        created = [dt.date.fromtimestamp(r["created"]) for r in db.q("SELECT created FROM cases")]
+        signed = [dt.date.fromtimestamp(r["signed_at"]) for r in rows]
+        daily = [{"label": d.strftime("%d %b"), "short": d.strftime("%d"), "received": created.count(d),
+                  "signed": signed.count(d)} for d in days]
+        mix = {d: sum(1 for r in rows if r["final_diagnosis"] == d) for d in DIAGNOSES}
         return render_template("portal/doctor_stats.html", n_reports=len(rows), n_pairs=len(pairs),
                                agreement=(agree / len(pairs)) if pairs else None, confusion=confusion,
-                               classes=classes, counts=counts, median_turnaround_h=med)
+                               classes=classes, counts=counts, median_turnaround_h=med, daily=daily,
+                               daily_max=max([1] + [max(x["received"], x["signed"]) for x in daily]),
+                               mix=mix, mix_max=max([1] + list(mix.values())), n_cases=len(created))
 
     # ------------------------------------------------------------------ admin
     bp_adm = Blueprint("admin", __name__, url_prefix="/admin")
@@ -416,6 +474,25 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
             c.execute("UPDATE users SET active = 1 - active WHERE id = ?", (uid,))
         db.audit(g.user["id"], "user_" + ("disabled" if u["active"] else "enabled"), detail={"user": uid}, ip=ip())
         return redirect(url_for("admin.users"))
+
+    @bp_adm.get("/system")
+    @auth.require("admin")
+    def system():
+        data = Path(data_dir)
+        blob_bytes = sum(p.stat().st_size for p in (data / "blobs").rglob("*") if p.is_file()) if (data / "blobs").exists() else 0
+        db_bytes = sum(p.stat().st_size for p in data.glob("portal.db*"))
+        disk = shutil.disk_usage(data)
+        roles = {r["role"]: r["n"] for r in db.q("SELECT role, COUNT(*) AS n FROM users GROUP BY role")}
+        last_login = db.one("SELECT MAX(ts) AS t FROM audit WHERE action = 'login'")["t"]
+        info = {"model_version": model_info.get("version", "—"), "precision": model_info.get("precision") or "—",
+                "classes": ", ".join(CLASS_TEXT.get(c, c) for c in model_info.get("class_names", [])) or "—",
+                "llm": "Online" if assistant.llm.available() else "Offline",
+                "uptime": ago(STARTED), "cases": db.one("SELECT COUNT(*) AS n FROM cases")["n"],
+                "reports": db.one("SELECT COUNT(*) AS n FROM reports")["n"], "roles": roles,
+                "blob": human_bytes(blob_bytes), "db": human_bytes(db_bytes), "disk_free": human_bytes(disk.free),
+                "disk_total": human_bytes(disk.total), "disk_used_pct": round(100 * (disk.total - disk.free) / disk.total),
+                "last_login": last_login, "host": socket.gethostname()}
+        return render_template("portal/admin_system.html", info=info)
 
     @bp_adm.get("/audit")
     @auth.require("admin")

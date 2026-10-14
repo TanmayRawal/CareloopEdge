@@ -1,54 +1,74 @@
 {% extends "portal/base.html" %}
-{% block title %}Scan {{ case.id[:6] }}{% endblock %}
-{% block content %}
-<div class="page-head">
-  <div>
-    <a class="back" href="{{ url_for('patient.dashboard') }}">← My scans</a>
-    <h1>Scan submitted {{ fmt_time(case.created) }}</h1>
+{% block title %}{{ 'Report' if report else 'Study' }} {{ case.id[:8]|upper }}{% endblock %}
+{% block pcontent %}
+{% set age = age_from_dob(profile.dob if profile else None) %}
+<div class="page-head no-print">
+  <div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a>
+    <h1>MRI Brain · {{ fmt_date(case.created) }}</h1><p>Reference {{ case.id[:8]|upper }}</p></div>
+  <div>{% if report %}<button class="btn primary" type="button" id="print-btn"><svg class="ic sm"><use href="#i-print"/></svg>Print / save as PDF</button>
+       {% else %}<span class="pill s-{{ case.status }}">{{ status_text[case.status] }}</span>{% endif %}</div>
+</div>
+
+{% if report %}
+<article class="doc">
+  <header class="doc-head">
+    <div class="org">{% include "portal/_logo.html" %}<div><b>{{ clinic }}</b><small>Department of Neuroradiology</small></div></div>
+    <div class="title"><b>Radiology report</b><small>Report {{ case.id[:8]|upper }}-{{ report.version }}</small></div>
+  </header>
+  <div class="doc-meta">
+    <div><span>Patient</span><b>{{ me.name }}</b></div>
+    <div><span>Patient ID</span><b>{{ mrn(me.id) }}</b></div>
+    <div><span>Age / sex</span><b>{{ age if age is not none else '—' }}{% if profile and profile.sex %} / {{ profile.sex }}{% endif %}</b></div>
+    <div><span>Date of birth</span><b>{{ profile.dob if profile and profile.dob else '—' }}</b></div>
+    <div><span>Examination</span><b>MRI Brain</b></div>
+    <div><span>Received</span><b>{{ fmt_date(case.created) }}</b></div>
+    <div><span>Reported</span><b>{{ fmt_date(report.signed_at) }}</b></div>
+    <div><span>Status</span><b>Final{% if report.version > 1 %} (amended){% endif %}</b></div>
   </div>
-  <span class="status big s-{{ case.status }}">{{ status_text[case.status] }}</span>
-</div>
+  <section class="doc-sec"><h3>Impression</h3><div class="dx">{{ class_text.get(report.final_diagnosis, report.final_diagnosis) }}</div></section>
+  <section class="doc-sec"><h3>Findings</h3><div class="pre">{{ report.findings }}</div></section>
+  {% if report.recommendation %}<section class="doc-sec"><h3>Recommendation</h3><div class="pre">{{ report.recommendation }}</div></section>{% endif %}
+  <div class="doc-sign">
+    <div class="sig"><small>Electronically signed by</small><b>{{ report.doctor_name }}</b><small>Radiologist · {{ fmt_time(report.signed_at) }}</small></div>
+    <div class="ver">Version {{ report.version }}<br><a class="no-print" href="{{ url_for('case.report_snapshot', cid=case.id, version=report.version) }}" target="_blank" rel="noopener">Archived copy</a></div>
+  </div>
+  <p class="small muted center">Please discuss this report with your doctor.</p>
+</article>
 
-<ol class="timeline" aria-label="Progress">
-  {% set order = ['awaiting_review', 'in_review', 'finalized'] %}
-  {% set idx = order.index(case.status) if case.status in order else 0 %}
-  <li class="done">Uploaded</li>
-  <li class="{{ 'done' if idx >= 1 else ('current' if idx == 0) }}">Doctor review</li>
-  <li class="{{ 'done' if idx >= 2 }}">Report ready</li>
-</ol>
-
-<div class="grid-2">
+{% else %}
+<div class="grid g-side">
   <section class="card">
-    <h2>Your image</h2>
-    <img class="scan" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ attempt) }}" alt="Your uploaded MRI image">
-    <p class="small muted mono">{{ case.scan_filename }}</p>
-    {% if case.patient_note %}<p class="small"><b>Your note:</b> {{ case.patient_note }}</p>{% endif %}
-  </section>
-
-  <section class="card">
-    {% if case.status == 'reupload_requested' %}
-      <h2>The doctor asked for a new image</h2>
-      <div class="alert">{{ case.doctor_message }}</div>
-      <form method="post" enctype="multipart/form-data" class="form">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <label>New image<input type="file" name="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required></label>
-        <button class="btn primary" type="submit">Send new image</button>
-      </form>
-    {% elif report %}
-      <div class="report-head">
-        <h2>Doctor's report</h2>
-        <a class="btn small" href="{{ url_for('case.report_snapshot', cid=case.id, version=report.version) }}" target="_blank" rel="noopener">Printable version</a>
+    <div class="card-h"><h2>Progress</h2></div>
+    <div class="card-b">
+      {% set order = ['awaiting_review', 'in_review', 'finalized'] %}
+      {% set idx = order.index(case.status) if case.status in order else 0 %}
+      <div class="track">
+        <div class="stp done"><span class="dot"><svg class="ic"><use href="#i-check"/></svg></span>Received</div>
+        <div class="stp {{ 'done' if idx >= 1 else 'current' }}"><span class="dot">{% if idx >= 1 %}<svg class="ic"><use href="#i-check"/></svg>{% endif %}</span>Radiologist review</div>
+        <div class="stp {{ 'current' if idx == 1 }}"><span class="dot"></span>Report ready</div>
       </div>
-      <dl class="report">
-        <dt>Diagnosis</dt><dd class="dx">{{ class_text.get(report.final_diagnosis, report.final_diagnosis) }}</dd>
-        <dt>Findings</dt><dd class="pre">{{ report.findings }}</dd>
-        {% if report.recommendation %}<dt>Recommendation</dt><dd class="pre">{{ report.recommendation }}</dd>{% endif %}
-        <dt>Signed</dt><dd>{{ report.doctor_name }} · {{ fmt_time(report.signed_at) }}{% if report.version > 1 %} · amended (version {{ report.version }}){% endif %}</dd>
-      </dl>
-    {% else %}
-      <h2>Waiting for your doctor</h2>
-      <p>Your scan has been received. The report will appear here once your doctor has reviewed it.</p>
-    {% endif %}
+      <div class="section-label"></div>
+      {% if case.status == 'reupload_requested' %}
+        <div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg><div><b>Your radiologist asked for a new image.</b><br>{{ case.doctor_message }}</div></div>
+        <form method="post" enctype="multipart/form-data" class="form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="dropzone" id="dropzone"><svg class="ic"><use href="#i-upload"/></svg><span class="dz-title">Choose the new image</span>
+            <span class="dz-file" id="dz-file"></span><input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required></label>
+          <button class="btn primary" type="submit">Send new image</button>
+        </form>
+      {% else %}
+        <p>Your scan has been received. The report will appear here once your radiologist has reviewed it.</p>
+      {% endif %}
+    </div>
   </section>
+  <aside class="card">
+    <div class="card-h"><h2>Your image</h2></div>
+    <div class="card-b">
+      <img class="thumb-img" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ attempt) }}" alt="Your uploaded scan">
+      <p class="small muted">Uploaded {{ fmt_time(case.created) }}</p>
+      {% if case.patient_note %}<p class="small"><b>Your note:</b> {{ case.patient_note }}</p>{% endif %}
+    </div>
+  </aside>
 </div>
+{% endif %}
 {% endblock %}

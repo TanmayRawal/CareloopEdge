@@ -1,17 +1,19 @@
 {% extends "portal/base.html" %}
 {% block title %}Audit log{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Audit log</h1></div></div>
-<section class="card flush">
-  <table class="table small">
-    <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Case</th><th>Detail</th><th>IP</th></tr></thead>
+<div class="page-head"><div><h1>Audit log</h1><p>Latest {{ rows|length }} events · sign-ins, uploads, views, signatures and account changes</p></div></div>
+<section class="card">
+  <table class="table responsive">
+    <thead><tr><th>Time</th><th>User</th><th>Event</th><th>Case</th><th>Details</th><th>IP address</th></tr></thead>
     <tbody>
     {% for a in rows %}
-      <tr><td class="nowrap">{{ fmt_time(a.ts) }}</td>
-        <td>{{ a.user_name or '—' }}{% if a.user_role %} <span class="role role-{{ a.user_role }}">{{ a.user_role }}</span>{% endif %}</td>
-        <td><span class="tag">{{ a.action|replace('_', ' ') }}</span></td>
-        <td class="mono">{{ a.case_id[:8] if a.case_id else '' }}</td>
-        <td class="mono small">{{ a.detail if a.detail != '{}' else '' }}</td><td class="mono">{{ a.ip or '' }}</td></tr>
+      <tr><td class="nowrap num">{{ fmt_time(a.ts) }}</td>
+        <td><div class="cell-main">{{ a.user_name or 'System' }}</div>{% if a.user_role %}<div class="cell-sub">{{ {'doctor': 'Radiologist', 'admin': 'Administrator', 'patient': 'Patient'}[a.user_role] }}</div>{% endif %}</td>
+        <td><span class="tag {{ 'err' if 'fail' in a.action or 'reject' in a.action else ('brand' if a.action in ('report_signed', 'login') else '') }}">{{ a.action|replace('_', ' ')|capitalize }}</span></td>
+        <td class="mono">{{ a.case_id[:8]|upper if a.case_id else '' }}</td>
+        <td class="mono xs">{{ a.detail if a.detail != '{}' else '' }}</td><td class="mono">{{ a.ip or '' }}</td></tr>
+    {% else %}
+      <tr><td colspan="6"><div class="empty">No events yet.</div></td></tr>
     {% endfor %}
     </tbody>
   </table>
