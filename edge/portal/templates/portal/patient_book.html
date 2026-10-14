@@ -1,0 +1,60 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ 'Reschedule' if reschedule_of else 'Book a consultation' }}{% endblock %}
+{% block pcontent %}
+<div class="page-head"><div><a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>
+  <h1>{{ 'Choose a new time' if reschedule_of else 'Book a consultation' }}</h1>
+  <p>{% if doctor %}Follow-up consultation with {{ doctor.name }} about your MRI of {{ fmt_date(case.created) }}{% endif %}</p></div></div>
+
+{% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+{% if reschedule_of %}<div class="alert"><svg class="ic sm"><use href="#i-calendar"/></svg><span>Current appointment: <b>{{ fmt_long(reschedule_of.start_ts) }} at {{ fmt_clock(reschedule_of.start_ts) }}</b>. It stays booked until you confirm a new time.</span></div>{% endif %}
+
+<div class="grid g-side">
+  <section class="card">
+    {% if not days %}
+      <div class="empty"><svg class="ic"><use href="#i-calendar"/></svg><h2>No times available</h2>
+        <p>{{ doctor.name if doctor else 'Your radiologist' }} has no free consultation times in the next weeks. Please contact the department.</p></div>
+    {% else %}
+      <div class="card-h"><h2>1. Choose a day</h2><span class="small muted">{{ days|length }} days with free times</span></div>
+      <div class="datestrip" role="list">
+        {% for dday in days %}
+          <a role="listitem" class="dchip {{ 'on' if dday == sel }}" href="?day={{ dday.isoformat() }}">
+            <span class="dw">{{ dday.strftime('%a') }}</span><span class="dd">{{ dday.day }}</span><span class="dm">{{ dday.strftime('%b') }}</span></a>
+        {% endfor %}
+      </div>
+      <div class="card-h no-top"><h2>2. Choose a time · {{ sel.strftime('%A %d %B') }}</h2></div>
+      <form method="post" class="card-b form" id="book-form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        {% set morning = slots|selectattr('label', 'lt', '12:00')|list %}{% set later = slots|selectattr('label', 'ge', '12:00')|list %}
+        {% for title, group in (('Morning', morning), ('Afternoon', later)) if group %}
+          <div class="section-label">{{ title }}</div>
+          <div class="slots">
+            {% for s in group %}<label class="slot"><input type="radio" name="start_ts" value="{{ s.start_ts }}" required data-label="{{ sel.strftime('%a %d %b') }}, {{ s.label }}" data-room="{{ s.room or clinic }}"><span>{{ s.label }}</span></label>{% endfor %}
+          </div>
+        {% endfor %}
+        {% if not reschedule_of %}
+        <label class="field">Reason for the visit <span class="hint">Optional</span>
+          <textarea name="reason" rows="2" maxlength="500" placeholder="e.g. Discuss the report and next steps"></textarea></label>
+        {% endif %}
+        <div class="confirm-bar">
+          <div><span class="eyebrow">Selected</span><b id="sel-label">No time selected</b><span class="small muted" id="sel-room"></span></div>
+          <button class="btn primary lg" type="submit" id="book-btn" disabled><svg class="ic sm"><use href="#i-check"/></svg>{{ 'Confirm new time' if reschedule_of else 'Confirm booking' }}</button>
+        </div>
+      </form>
+    {% endif %}
+  </section>
+  <aside class="card">
+    <div class="card-h"><h2>Your consultation</h2></div>
+    <div class="card-b">
+      <div class="doc-mini"><span class="avatar">{{ doctor.name.replace('Dr. ', '')[:1] if doctor else '?' }}</span>
+        <div><b>{{ doctor.name if doctor else '—' }}</b><div class="small muted">Radiologist · reporting doctor</div></div></div>
+      <ul class="hist">
+        <li><span><svg class="ic sm"><use href="#i-clock"/></svg> About 20 minutes</span></li>
+        <li><span><svg class="ic sm"><use href="#i-pin"/></svg> {{ clinic }}</span></li>
+        <li><span><svg class="ic sm"><use href="#i-mail"/></svg> Confirmation and reminders by e-mail</span></li>
+      </ul>
+      <div class="section-label">Good to know</div>
+      <p class="small muted">Bring any earlier scans or reports. You can reschedule or cancel up to the cutoff shown in your confirmation.</p>
+    </div>
+  </aside>
+</div>
+{% endblock %}

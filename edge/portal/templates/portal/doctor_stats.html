@@ -11,6 +11,11 @@
     <span class="k-val">{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</span><span class="k-sub">{{ n_pairs }} analysed studies</span></div>
 </div>
 
+<div class="kpis">
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-calendar"/></svg>Consultations booked</span><span class="k-val">{{ appts.values()|sum }}</span><span class="k-sub">{{ appts.get('booked', 0) }} upcoming</span></div>
+  <div class="kpi"><span class="k-label">Completed</span><span class="k-val">{{ appts.get('completed', 0) }}</span><span class="k-sub">{{ appts.get('cancelled', 0) }} cancelled</span></div>
+  <div class="kpi"><span class="k-label">No-show rate</span><span class="k-val">{{ '%.0f%%'|format(100 * no_show_rate) if no_show_rate is not none else '—' }}</span><span class="k-sub">{{ appts.get('no_show', 0) }} missed</span></div>
+</div>
 <div class="grid g-side">
   <section class="card">
     <div class="card-h"><h2>Daily volume · last 14 days</h2>

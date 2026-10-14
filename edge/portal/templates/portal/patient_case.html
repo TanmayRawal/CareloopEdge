@@ -34,6 +34,17 @@
   </div>
   <p class="small muted center">Please discuss this report with your doctor.</p>
 </article>
+<section class="card next-appt cta no-print doc-cta">
+  {% if appt %}
+    <div class="at-date sm"><span>{{ fmt_day(appt.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(appt.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(appt.start_ts).split(' ')[2] }}</span></div>
+    <div class="grow"><span class="eyebrow">Consultation booked</span><h2>{{ fmt_clock(appt.start_ts) }} with {{ appt.doctor_name }}</h2><div class="small muted">{{ appt.room or clinic }}</div></div>
+    <a class="btn" href="{{ url_for('patient.appointments') }}">Manage</a>
+  {% else %}
+    <div class="success-ic sm"><svg class="ic"><use href="#i-calendar"/></svg></div>
+    <div class="grow"><span class="eyebrow">Next step</span><h2>Discuss this report with {{ report.doctor_name }}</h2><div class="small muted">Book a follow-up consultation at a time that suits you.</div></div>
+    <a class="btn primary" href="{{ url_for('patient.book', cid=case.id) }}">Book a consultation</a>
+  {% endif %}
+</section>
 
 {% else %}
 <div class="grid g-side">

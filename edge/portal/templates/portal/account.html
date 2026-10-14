@@ -1,0 +1,32 @@
+{% extends "portal/base.html" %}
+{% block title %}Account{% endblock %}
+{% macro body() %}
+<div class="page-head"><div><h1>Account and preferences</h1><p>{{ me.email }} · {{ role_text[me.role] }}{% if me.role == 'patient' %} · {{ mrn(me.id) }}{% endif %}</p></div></div>
+{% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+<div class="grid g2">
+  <section class="card">
+    <div class="card-h"><h2>Notifications</h2></div>
+    <form method="post" class="card-b form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="prefs">
+      <label class="check"><input type="checkbox" name="notify_email" value="1" {{ 'checked' if me.notify_email }}>
+        <span><b>E-mail me</b><br><span class="muted">{% if me.role == 'patient' %}When a report is ready, appointment confirmations and reminders.{% elif me.role == 'doctor' %}Studies waiting for review, new bookings, today's agenda and attendance reminders.{% else %}Escalations and system messages.{% endif %} Notifications always appear in the portal.</span></span></label>
+      {% if me.role == 'patient' %}
+        <label class="field">Mobile number<input name="phone" value="{{ profile.phone if profile and profile.phone else '' }}" maxlength="30" autocomplete="tel"></label>
+      {% endif %}
+      <div><button class="btn primary" type="submit">Save preferences</button></div>
+    </form>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Change password</h2></div>
+    <form method="post" class="card-b form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="password">
+      <label class="field">Current password<input type="password" name="current" required autocomplete="current-password"></label>
+      <label class="field">New password<input type="password" name="new" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters</span></label>
+      <label class="field">Confirm new password<input type="password" name="new2" required minlength="10" autocomplete="new-password"></label>
+      <div><button class="btn" type="submit"><svg class="ic sm"><use href="#i-lock"/></svg>Update password</button></div>
+    </form>
+  </section>
+</div>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block pcontent %}{{ body() }}{% endblock %}

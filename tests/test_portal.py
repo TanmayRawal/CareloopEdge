@@ -232,7 +232,8 @@ def test_backup_restore_and_restart(env, tmp_path):
     copy.close()
     again = DB(env["tmp"] / "data" / "portal.db")                         # survives a "restart"
     assert again.case(cid)["status"] == "awaiting_review"
-    assert again.one("SELECT version FROM schema_version")["version"] == 1
+    from edge.portal.db import MIGRATIONS
+    assert again.one("SELECT version FROM schema_version")["version"] == len(MIGRATIONS)
 
 
 def test_admin_creates_doctor_and_disables_user(env):

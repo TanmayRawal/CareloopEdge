@@ -1,0 +1,18 @@
+{% extends "portal/base.html" %}
+{% block title %}Appointment confirmed{% endblock %}
+{% block pcontent %}
+<section class="card success-card">
+  <div class="success-ic"><svg class="ic"><use href="#i-check"/></svg></div>
+  <h1>Your appointment is confirmed</h1>
+  <p class="muted">A confirmation has been sent to {{ me.email }}.</p>
+  <div class="appt-ticket">
+    <div class="at-date"><span>{{ fmt_day(a.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(a.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(a.start_ts).split(' ')[2] }}</span></div>
+    <div class="at-body"><b>{{ fmt_clock(a.start_ts) }} – {{ fmt_clock(a.end_ts) }}</b>
+      <span>Consultation with {{ a.doctor_name }}</span><span class="muted">{{ a.room or clinic }}</span></div>
+  </div>
+  <div class="row-actions">
+    <a class="btn" href="{{ url_for('patient.ics', aid=a.id) }}"><svg class="ic sm"><use href="#i-download"/></svg>Add to calendar</a>
+    <a class="btn primary" href="{{ url_for('patient.appointments') }}">View my appointments</a>
+  </div>
+</section>
+{% endblock %}

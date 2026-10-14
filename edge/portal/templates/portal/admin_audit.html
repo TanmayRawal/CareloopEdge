@@ -1,8 +1,13 @@
 {% extends "portal/base.html" %}
 {% block title %}Audit log{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Audit log</h1><p>Latest {{ rows|length }} events · sign-ins, uploads, views, signatures and account changes</p></div></div>
+<div class="page-head"><div><h1>Audit log</h1><p>Every sign-in, upload, view, signature, booking and account change</p></div></div>
 <section class="card">
+  <form class="toolbar" method="get">
+    <label class="search"><svg class="ic"><use href="#i-search"/></svg><input type="search" name="user" value="{{ who }}" placeholder="Filter by user name" aria-label="User"></label>
+    <select name="action" aria-label="Event" class="w-auto"><option value="">All events</option>{% for a in actions %}<option value="{{ a }}" {{ 'selected' if a == action }}>{{ a|replace('_', ' ')|capitalize }}</option>{% endfor %}</select>
+    <button class="btn sm" type="submit">Filter</button>{% if who or action %}<a class="btn sm ghost" href="{{ url_for('admin.audit') }}">Clear</a>{% endif %}
+  </form>
   <table class="table responsive">
     <thead><tr><th>Time</th><th>User</th><th>Event</th><th>Case</th><th>Details</th><th>IP address</th></tr></thead>
     <tbody>
@@ -18,4 +23,5 @@
     </tbody>
   </table>
 </section>
+{% include "portal/_pager.html" %}
 {% endblock %}

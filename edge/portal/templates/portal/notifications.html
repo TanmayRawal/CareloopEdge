@@ -1,0 +1,21 @@
+{% extends "portal/base.html" %}
+{% block title %}Notifications{% endblock %}
+{% macro body() %}
+<div class="page-head"><div><h1>Notifications</h1><p>{{ bell_count }} unread</p></div>
+  {% if bell_count %}<form method="post" action="{{ url_for('notifications.read') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn" type="submit"><svg class="ic sm"><use href="#i-check"/></svg>Mark all read</button></form>{% endif %}</div>
+<section class="card">
+  {% for n in rows %}
+    <a class="notif {{ 'unread' if not n.read_at }}" href="{{ url_for('notifications.open', nid=n.id) }}">
+      <span class="n-dot"></span>
+      <span class="grow"><b>{{ n.title }}</b><span class="n-body">{{ n.body }}</span></span>
+      <span class="small muted nowrap">{{ fmt_time(n.created) }}</span>
+    </a>
+  {% else %}
+    <div class="empty"><svg class="ic"><use href="#i-bell"/></svg><h2>No notifications</h2><p>Updates about your studies and appointments appear here.</p></div>
+  {% endfor %}
+</section>
+{% include "portal/_pager.html" %}
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block pcontent %}{{ body() }}{% endblock %}

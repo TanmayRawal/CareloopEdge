@@ -53,6 +53,31 @@
     });
   }
 
+  // ------------------------------------------------------------------ confirmations for destructive actions
+  $$("form[data-confirm]").forEach(f => f.addEventListener("submit", ev => {
+    if (!window.confirm(f.dataset.confirm)) ev.preventDefault();
+  }));
+
+  // ------------------------------------------------------------------ notification bell: close on outside click / Esc
+  const bell = $("details.bell");
+  if (bell) {
+    document.addEventListener("click", ev => { if (bell.open && !bell.contains(ev.target)) bell.open = false; });
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape") bell.open = false; });
+  }
+
+  // ------------------------------------------------------------------ booking: live summary of the chosen slot
+  const bookForm = $("#book-form");
+  if (bookForm) {
+    const btn = $("#book-btn"), lbl = $("#sel-label"), room = $("#sel-room");
+    bookForm.addEventListener("change", ev => {
+      if (ev.target.name !== "start_ts") return;
+      lbl.textContent = ev.target.dataset.label;
+      room.textContent = ev.target.dataset.room;
+      btn.disabled = false;
+    });
+    bookForm.addEventListener("submit", () => { btn.disabled = true; btn.textContent = "Booking…"; });
+  }
+
   // ------------------------------------------------------------------ case review: viewer
   const review = $("#review");
   if (!review) return;

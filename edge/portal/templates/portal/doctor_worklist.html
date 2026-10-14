@@ -42,7 +42,7 @@
             {% elif c.priority == 2 %}<span class="pri p2"><span class="bar"></span>Attention</span>{% else %}<span class="pri p1"><span class="bar"></span>Routine</span>{% endif %}</td>
         <td><div class="cell-main">{{ c.patient_name }}</div>
             <div class="cell-sub">{{ mrn(c.patient_id) }}{% if age is not none %} · {{ age }} y{% endif %}{% if c.patient_sex %} · {{ c.patient_sex[:1] }}{% endif %}</div></td>
-        <td class="nowrap"><div class="cell-main num">{{ fmt_time(c.created) }}</div><div class="cell-sub">{% if c.status != 'finalized' %}Waiting {{ ago(c.created) }}{% else %}MRI Brain{% endif %}</div></td>
+        <td class="nowrap"><div class="cell-main num">{{ fmt_time(c.created) }}</div><div class="cell-sub">{% if it.overdue %}<span class="overdue">Overdue · {{ ago(c.created) }}</span>{% elif c.status != 'finalized' %}Waiting {{ ago(c.created) }}{% else %}MRI Brain{% endif %}</div></td>
         <td>{% if r and r.status == 'ok' %}<div class="cell-main">{{ class_text[r.prediction] }}</div><div class="cell-sub num">{{ '%.0f'|format(100 * r.probabilities[r.prediction]) }}% confidence</div>
             {% elif r %}<span class="tag err">Not analysed</span>{% else %}<span class="faint">—</span>{% endif %}</td>
         <td>{% set fl = (r.flags if r else [])|select('in', flag_text)|list %}{% for f in fl[:2] %}<span class="tag warn" title="{{ flag_text[f] }}">{{ flag_short.get(f, f) }}</span>{% endfor %}{% if fl|length > 2 %}<span class="tag" title="{% for f in fl[2:] %}{{ flag_text[f] }} {% endfor %}">+{{ fl|length - 2 }}</span>{% endif %}{% if not fl %}<span class="faint">—</span>{% endif %}</td>
@@ -54,4 +54,5 @@
   </table>
   {% endif %}
 </section>
+{% include "portal/_pager.html" %}
 {% endblock %}

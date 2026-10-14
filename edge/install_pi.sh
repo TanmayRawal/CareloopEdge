@@ -121,6 +121,10 @@ fi
 chown root:neuroedge "$ETC/portal.key"; chmod 640 "$ETC/portal.key"
 install -d -m 750 -o neuroedge -g neuroedge "$STATE/portal"
 (cd "$APP/src" && runuser -u neuroedge -- "$APP/venv/bin/python" -m edge.portal.manage init --data "$STATE/portal" --key "$ETC/portal.key")
+# Links in e-mails point at this device (admins can change it under Settings).
+(cd "$APP/src" && runuser -u neuroedge -- "$APP/venv/bin/python" -m edge.portal.manage set-setting --data "$STATE/portal" base_url "https://$(hostname).local" >/dev/null)
+# Outgoing e-mail credentials: empty until `sudo neuroedge-portal smtp-config`; never in the database.
+[[ -f "$ETC/smtp.env" ]] || install -m 640 -o root -g neuroedge /dev/null "$ETC/smtp.env"
 if [[ -n "$DEV_BUNDLE" ]]; then
   echo "WARNING: dev bundle = plaintext model on disk; use enrollment + sync for real deployments." >&2
   rsync -a --delete "$DEV_BUNDLE/" "$STATE/dev_bundle/"
@@ -134,8 +138,14 @@ cat > /usr/local/bin/neuroedge-portal <<EOF
 # Portal administration as the service user, e.g.
 #   sudo neuroedge-portal create-user --role admin --email you@clinic.org --name "Your Name"
 #   sudo neuroedge-portal backup --dest /media/usb/neuroedge-backups
+#   sudo neuroedge-portal smtp-config            (outgoing e-mail; writes $ETC/smtp.env as root)
+#   sudo neuroedge-portal smtp-test --to you@clinic.org
 cmd="\$1"; shift
-cd $APP/src && exec runuser -u neuroedge -- $APP/venv/bin/python -m edge.portal.manage "\$cmd" --data $STATE/portal "\$@"
+if [ "\$cmd" = "smtp-config" ]; then
+  cd $APP/src && $APP/venv/bin/python -m edge.portal.manage smtp-config --file $ETC/smtp.env "\$@" && chown root:neuroedge $ETC/smtp.env && chmod 640 $ETC/smtp.env
+  exit
+fi
+cd $APP/src && exec runuser -u neuroedge -- env NEUROEDGE_SMTP_ENV=$ETC/smtp.env $APP/venv/bin/python -m edge.portal.manage "\$cmd" --data $STATE/portal "\$@"
 EOF
 chmod 755 /usr/local/bin/neuroedge-portal
 cat > /usr/local/bin/neuroedge-sync <<EOF
@@ -148,7 +158,7 @@ chmod 755 /usr/local/bin/neuroedge-sync
 say "systemd units"
 install -m 644 "$APP/src/edge/systemd/"neuroedge-*.{service,timer,path} /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now neuroedge-llm.service neuroedge-sync.timer neuroedge-web-restart.path
+systemctl enable --now neuroedge-llm.service neuroedge-sync.timer neuroedge-web-restart.path neuroedge-reminders.timer
 systemctl enable neuroedge-web.service
 systemctl restart neuroedge-web.service || true    # skipped (condition) until a model is installed
 
@@ -186,6 +196,8 @@ NeuroEdge installed.
 
 Create the first portal administrator (then add doctors from the Users page):
   sudo neuroedge-portal create-user --role admin --email you@clinic.org --name "Your Name"
+Reminder e-mails (hospital SMTP server, or Gmail with an App Password):
+  sudo neuroedge-portal smtp-config && sudo neuroedge-portal smtp-test --to you@clinic.org
 
 Next, enroll this Pi with the model registry. On the server machine, create a one-time token:
   curl -X POST -H "Authorization: Bearer \$NE_ADMIN_TOKEN" https://<registry>/v1/admin/enrollment-tokens

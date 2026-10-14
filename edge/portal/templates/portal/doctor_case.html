@@ -145,6 +145,15 @@
       {% endif %}
     </section>
 
+    {% if appt %}
+    <section class="card">
+      <div class="card-h"><h2>Consultation</h2><span class="pill a-{{ appt.status }}">{{ appt_text[appt.status] }}</span></div>
+      <div class="card-b tight"><b>{{ fmt_long(appt.start_ts) }}, {{ fmt_clock(appt.start_ts) }}</b>
+        <div class="small muted">with {{ appt.doctor_name }} · {{ appt.room or clinic }}</div>
+        {% if no_shows %}<div class="small"><span class="tag warn">{{ no_shows }} earlier no-show{{ 's' if no_shows > 1 }}</span></div>{% endif %}
+        <a class="small" href="{{ url_for('doctor.schedule') }}">Open schedule</a></div>
+    </section>
+    {% endif %}
     {% if history or reports|length > 1 %}
     <section class="card">
       <div class="card-h"><h2>History</h2></div>

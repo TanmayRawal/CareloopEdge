@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}{{ clinic }}{% endblock %} · {{ clinic }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='portal.css') }}">
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ asset('portal.css') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
 </head>
 <body>
 {% include "portal/_icons.html" %}
@@ -15,6 +15,31 @@
     {% for cat, m in msgs %}<div class="alert {{ 'error' if cat == 'error' else 'success' }}" role="status">
       <svg class="ic sm"><use href="#{{ 'i-alert' if cat == 'error' else 'i-check' }}"/></svg><span>{{ m }}</span></div>{% endfor %}
   {% endwith %}
+{% endmacro %}
+{% macro user_menu(subtitle) %}
+  <div class="user-menu">
+    <details class="bell">
+      <summary class="icon-btn" aria-label="Notifications{{ ' (' ~ bell_count ~ ' unread)' if bell_count }}" title="Notifications">
+        <svg class="ic sm"><use href="#i-bell"/></svg>{% if bell_count %}<b class="bell-n">{{ bell_count if bell_count < 100 else '99+' }}</b>{% endif %}</summary>
+      <div class="bell-menu">
+        <div class="bell-h"><b>Notifications</b>
+          {% if bell_count %}<form method="post" action="{{ url_for('notifications.read') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.path }}"><button class="linkbtn" type="submit">Mark all read</button></form>{% endif %}</div>
+        {% for n in bell_items %}
+          <a class="bell-item {{ 'unread' if not n.read_at }}" href="{{ url_for('notifications.open', nid=n.id) }}">
+            <span class="bi-t">{{ n.title }}</span><span class="bi-d">{{ ago(n.created) }} ago</span></a>
+        {% else %}<div class="bell-empty">You're all caught up.</div>{% endfor %}
+        <a class="bell-all" href="{{ url_for('notifications.index') }}">View all notifications</a>
+      </div>
+    </details>
+    <a class="who-link" href="{{ url_for('auth.account') }}" title="Account and preferences">
+      <span class="avatar" aria-hidden="true">{{ me.name.replace('Dr. ', '').replace('Dr ', '')[:1]|upper }}</span>
+      <span class="who"><b>{{ me.name }}</b><small>{{ subtitle }}</small></span></a>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="icon-btn" type="submit" title="Sign out" aria-label="Sign out"><svg class="ic sm"><use href="#i-logout"/></svg></button>
+    </form>
+  </div>
 {% endmacro %}
 {% set ep = request.endpoint or '' %}
 
@@ -30,34 +55,35 @@
           <svg class="ic"><use href="#i-inbox"/></svg><span>Worklist</span>{% if open_count() %}<b class="count">{{ open_count() }}</b>{% endif %}</a>
         <a href="{{ url_for('doctor.worklist', status='finalized') }}" class="{{ 'active' if ep == 'doctor.worklist' and request.args.get('status') == 'finalized' }}">
           <svg class="ic"><use href="#i-file"/></svg><span>Signed reports</span></a>
+        <span class="sb-label">Consultations</span>
+        <a href="{{ url_for('doctor.schedule') }}" class="{{ 'active' if ep == 'doctor.schedule' }}"><svg class="ic"><use href="#i-calendar"/></svg><span>Schedule</span></a>
+        <a href="{{ url_for('doctor.availability') }}" class="{{ 'active' if ep == 'doctor.availability' }}"><svg class="ic"><use href="#i-clock"/></svg><span>Availability</span></a>
         <span class="sb-label">Insights</span>
         <a href="{{ url_for('doctor.stats') }}" class="{{ 'active' if ep == 'doctor.stats' }}"><svg class="ic"><use href="#i-chart"/></svg><span>Analytics</span></a>
       {% else %}
         <span class="sb-label">Administration</span>
         <a href="{{ url_for('admin.users') }}" class="{{ 'active' if ep == 'admin.users' }}"><svg class="ic"><use href="#i-users"/></svg><span>Users</span></a>
+        <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep == 'admin.settings' }}"><svg class="ic"><use href="#i-settings"/></svg><span>Settings</span></a>
+        <a href="{{ url_for('admin.outbox') }}" class="{{ 'active' if ep == 'admin.outbox' }}"><svg class="ic"><use href="#i-mail"/></svg><span>E-mail</span></a>
         <a href="{{ url_for('admin.audit') }}" class="{{ 'active' if ep == 'admin.audit' }}"><svg class="ic"><use href="#i-list"/></svg><span>Audit log</span></a>
         <a href="{{ url_for('admin.system') }}" class="{{ 'active' if ep == 'admin.system' }}"><svg class="ic"><use href="#i-server"/></svg><span>System</span></a>
         <span class="sb-label">Insights</span>
         <a href="{{ url_for('doctor.stats') }}" class="{{ 'active' if ep == 'doctor.stats' }}"><svg class="ic"><use href="#i-chart"/></svg><span>Analytics</span></a>
       {% endif %}
     </nav>
-    <div class="sb-foot"><span class="dot"></span>On-premise · offline<br>Encrypted storage</div>
+    <div class="sb-foot"><span class="dot"></span>On-premise · encrypted<br>Model {{ model_info.version or '—' }}</div>
   </aside>
   <div class="main">
     <header class="topbar">
       <div class="crumbs">{% block crumbs %}<b>{{ self.title() }}</b>{% endblock %}</div>
-      <div class="user-menu">
-        <span class="avatar" aria-hidden="true">{{ me.name.replace('Dr. ', '').replace('Dr ', '')[:1]|upper }}</span>
-        <span class="who"><b>{{ me.name }}</b><small>{{ 'Radiologist' if me.role == 'doctor' else 'Administrator' }}</small></span>
-        <form method="post" action="{{ url_for('auth.logout') }}">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <button class="icon-btn" type="submit" title="Sign out" aria-label="Sign out"><svg class="ic sm"><use href="#i-logout"/></svg></button>
-        </form>
-      </div>
+      {{ user_menu(role_text[me.role]) }}
     </header>
     <nav class="mobile-nav" aria-label="Main navigation (mobile)">
-      {% if me.role == 'doctor' %}<a href="{{ url_for('doctor.worklist') }}" class="{{ 'active' if ep.startswith('doctor.') and ep != 'doctor.stats' }}">Worklist</a>
-      {% else %}<a href="{{ url_for('admin.users') }}">Users</a><a href="{{ url_for('admin.audit') }}">Audit log</a><a href="{{ url_for('admin.system') }}">System</a>{% endif %}
+      {% if me.role == 'doctor' %}<a href="{{ url_for('doctor.worklist') }}" class="{{ 'active' if ep in ('doctor.worklist', 'doctor.case_review') }}">Worklist</a>
+        <a href="{{ url_for('doctor.schedule') }}" class="{{ 'active' if ep == 'doctor.schedule' }}">Schedule</a>
+        <a href="{{ url_for('doctor.availability') }}" class="{{ 'active' if ep == 'doctor.availability' }}">Availability</a>
+      {% else %}<a href="{{ url_for('admin.users') }}">Users</a><a href="{{ url_for('admin.settings') }}">Settings</a>
+        <a href="{{ url_for('admin.outbox') }}">E-mail</a><a href="{{ url_for('admin.audit') }}">Audit</a><a href="{{ url_for('admin.system') }}">System</a>{% endif %}
       <a href="{{ url_for('doctor.stats') }}" class="{{ 'active' if ep == 'doctor.stats' }}">Analytics</a>
     </nav>
     <main class="content {% block content_class %}{% endblock %}">
@@ -75,23 +101,18 @@
         <span><span class="name">{{ clinic }}</span><br><span class="sub">Patient portal</span></span></a>
       <nav class="pnav" aria-label="Main">
         <a href="{{ url_for('patient.dashboard') }}" class="{{ 'active' if ep in ('patient.dashboard', 'patient.case') }}">My reports</a>
+        <a href="{{ url_for('patient.appointments') }}" class="{{ 'active' if ep in ('patient.appointments', 'patient.book', 'patient.reschedule', 'patient.appointment_done') }}">Appointments</a>
         <a href="{{ url_for('patient.upload') }}" class="{{ 'active' if ep == 'patient.upload' }}">New scan</a>
       </nav>
-      <div class="user-menu">
-        <span class="avatar" aria-hidden="true">{{ me.name[:1]|upper }}</span>
-        <span class="who"><b>{{ me.name }}</b><small>Patient ID {{ mrn(me.id) }}</small></span>
-        <form method="post" action="{{ url_for('auth.logout') }}">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <button class="icon-btn" type="submit" title="Sign out" aria-label="Sign out"><svg class="ic sm"><use href="#i-logout"/></svg></button>
-        </form>
-      </div>
+      {{ user_menu('Patient ID ' ~ mrn(me.id)) }}
     </div>
   </header>
   <main class="pcontent">
     {{ flashes() }}
     {% block pcontent %}{% endblock %}
   </main>
-  <footer class="pfoot"><div class="pfoot-in"><span>{{ clinic }}</span><span>Your records are stored securely at the clinic.</span></div></footer>
+  <footer class="pfoot"><div class="pfoot-in"><span>© {{ clinic }}</span><span>Your records are stored securely at the clinic.</span>
+    <span class="grow"></span><a href="{{ url_for('auth.account') }}">Account &amp; preferences</a></div></footer>
 </div>
 
 {% else %}
@@ -99,6 +120,6 @@
   <main class="pcontent">{{ flashes() }}{% block content_anon %}{% endblock %}</main>
   {% endblock %}
 {% endif %}
-<script src="{{ url_for('static', filename='portal.js') }}"></script>
+<script src="{{ asset('portal.js') }}"></script>
 </body>
 </html>

@@ -1,0 +1,56 @@
+{% extends "portal/base.html" %}
+{% block title %}Schedule{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Consultations</h1><p>{{ 'Week of ' ~ day.strftime('%d %B %Y') if view == 'week' else day.strftime('%A %d %B %Y') }}{% if day == today %} · today{% endif %}</p></div>
+  <div class="row-actions">
+    <div class="seg nav-seg">
+      <a class="{{ 'on' if view == 'day' }}" href="{{ url_for('doctor.schedule', day=day.isoformat(), view='day') }}">Day</a>
+      <a class="{{ 'on' if view == 'week' }}" href="{{ url_for('doctor.schedule', day=day.isoformat(), view='week') }}">Week</a>
+    </div>
+    <a class="icon-btn" href="{{ url_for('doctor.schedule', day=prev_day.isoformat(), view=view) }}" aria-label="Previous"><svg class="ic sm"><use href="#i-back"/></svg></a>
+    <a class="btn sm" href="{{ url_for('doctor.schedule', view=view) }}">Today</a>
+    <a class="icon-btn" href="{{ url_for('doctor.schedule', day=next_day.isoformat(), view=view) }}" aria-label="Next"><svg class="ic sm"><use href="#i-chevron"/></svg></a>
+  </div>
+</div>
+
+{% if not has_hours %}
+<div class="alert warn"><svg class="ic sm"><use href="#i-clock"/></svg><span>Patients cannot book you yet: set your consultation hours in <a href="{{ url_for('doctor.availability') }}">Availability</a>.</span></div>
+{% endif %}
+{% if unmarked %}
+<section class="card attention">
+  <div class="card-h"><h2><svg class="ic sm"><use href="#i-alert"/></svg> Attendance not recorded ({{ unmarked|length }})</h2></div>
+  {% for a in unmarked %}
+    <div class="appt-row">
+      <div class="time-col"><b>{{ fmt_clock(a.start_ts) }}</b><span>{{ fmt_day(a.start_ts) }}</span></div>
+      <div class="grow"><b>{{ a.patient_name }}</b><div class="small muted">{{ mrn(a.patient_id) }}</div></div>
+      {% include "portal/_mark_buttons.html" %}
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% for dday in span_days %}
+{% if view == 'week' and not by_day.get(dday) %}
+<section class="card"><div class="card-h day-empty"><h2>{{ dday.strftime('%A %d %B') }}{% if dday == today %} <span class="tag brand">Today</span>{% endif %}</h2>
+  <span class="small muted">No consultations</span></div></section>
+{% else %}
+<section class="card">
+  <div class="card-h"><h2>{{ dday.strftime('%A %d %B') }}{% if dday == today %} <span class="tag brand">Today</span>{% endif %}</h2>
+    <span class="small muted">{{ (by_day.get(dday) or [])|rejectattr('status', 'equalto', 'cancelled')|list|length }} booked</span></div>
+  {% for a in by_day.get(dday, []) %}
+    <div class="appt-row {{ 'dim' if a.status == 'cancelled' }} {{ 'now' if a.start_ts <= now < a.end_ts and a.status in ('booked', 'arrived') }}">
+      <div class="time-col"><b>{{ fmt_clock(a.start_ts) }}</b><span>{{ ((a.end_ts - a.start_ts) / 60)|int }} min</span></div>
+      <div class="grow"><b>{{ a.patient_name }}</b>{% if a.no_shows >= 2 %} <span class="tag warn" title="Missed {{ a.no_shows }} appointments">{{ a.no_shows }} no-shows</span>{% endif %}
+        <div class="small muted">{{ mrn(a.patient_id) }}{% if a.patient_phone %} · {{ a.patient_phone }}{% endif %}{% if a.reason %} · {{ a.reason }}{% endif %}</div></div>
+      <a class="btn sm ghost" href="{{ url_for('doctor.case_review', cid=a.case_id) }}">Study</a>
+      <span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span>
+      {% if a.status in ('booked', 'arrived') %}{% include "portal/_mark_buttons.html" %}{% endif %}
+    </div>
+  {% else %}
+    <div class="empty slim">No consultations.</div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endfor %}
+{% endblock %}

@@ -7,6 +7,25 @@
   <a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>
 </div>
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
+{% if upcoming %}{% set a = upcoming[0] %}
+<section class="card next-appt">
+  <div class="at-date"><span>{{ fmt_day(a.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(a.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(a.start_ts).split(' ')[2] }}</span></div>
+  <div class="grow"><span class="eyebrow">Next appointment</span><h2>{{ fmt_clock(a.start_ts) }} · Consultation with {{ a.doctor_name }}</h2>
+    <div class="small muted">{{ a.room or clinic }} · please arrive 10 minutes early</div></div>
+  <div class="row-actions">
+    <a class="btn sm" href="{{ url_for('patient.ics', aid=a.id) }}"><svg class="ic sm"><use href="#i-download"/></svg>Calendar</a>
+    <a class="btn sm" href="{{ url_for('patient.appointments') }}">Manage</a>
+  </div>
+</section>
+{% else %}{% set pending = ready|rejectattr('appt_id')|list %}
+  {% if pending %}
+  <section class="card next-appt cta">
+    <div class="success-ic sm"><svg class="ic"><use href="#i-calendar"/></svg></div>
+    <div class="grow"><span class="eyebrow">Your report is ready</span><h2>Book a consultation to discuss it with your radiologist</h2></div>
+    <a class="btn primary" href="{{ url_for('patient.book', cid=pending[0].id) }}">Book now</a>
+  </section>
+  {% endif %}
+{% endif %}
 <div class="grid g3 kpis">
   <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ cases|length }}</span></div>
   <div class="kpi"><span class="k-label">Reports ready</span><span class="k-val">{{ ready|length }}</span></div>

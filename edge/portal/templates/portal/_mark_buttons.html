@@ -1,0 +1,15 @@
+<div class="row-actions">
+  {% if now >= a.start_ts - 900 %}
+    {% if a.status == 'booked' %}
+    <form method="post" action="{{ url_for('doctor.mark', aid=a.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="btn sm" name="status" value="arrived" type="submit">Arrived</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('doctor.mark', aid=a.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="btn sm primary" name="status" value="completed" type="submit">Completed</button></form>
+    <form method="post" action="{{ url_for('doctor.mark', aid=a.id) }}" data-confirm="Mark {{ a.patient_name }} as did not attend? The patient will be invited to rebook.">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm danger" name="status" value="no_show" type="submit">No-show</button></form>
+  {% elif a.status == 'booked' %}
+    <form method="post" action="{{ url_for('doctor.cancel', aid=a.id) }}" data-confirm="Cancel this consultation? The patient will be notified.">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm ghost" type="submit">Cancel</button></form>
+  {% endif %}
+</div>
