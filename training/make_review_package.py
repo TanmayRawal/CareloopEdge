@@ -115,8 +115,8 @@ Stop the app with Ctrl+C. On the Pi the same portal is served over HTTPS; on the
    * the review flags and the assistant.
 3. Pick the final diagnosis and **sign the report** (it asks for your password again).
 4. Sign in as the patient again: the doctor's signed report is now visible.
-5. Book a consultation as the patient (the radiologist's demo hours must be set under **Availability** first),
-   then open **Schedule** as the doctor to mark attendance.
+5. Book a consultation as the patient (from the signed report), then open **Schedule** as the doctor to mark
+   attendance. The demo radiologist works Mon–Sat 09:00–13:00 and 14:00–17:00 (change under **Availability**).
 6. The **admin** account has users, department settings, the e-mail outbox and the audit log. In this demo
    every e-mail (confirmations, reminders) is saved as an `.eml` file in `portal_data/mail/`; open one with any
    mail program.

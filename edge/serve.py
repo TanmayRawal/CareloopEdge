@@ -60,7 +60,12 @@ def seed_dev_accounts(app, data_dir: Path) -> None:
                                        ("patient", "patient@neuroedge.test", "Rahul Verma",
                                         {"dob": None, "sex": None, "phone": None})):
         pw = secrets.token_urlsafe(12)
-        db.create_user(email, name, role, hash_password(pw), profile)
+        uid = db.create_user(email, name, role, hash_password(pw), profile)
+        if role == "doctor":                             # demo consultation hours: Mon-Sat 09-13 and 14-17
+            from edge.portal import scheduling
+            scheduling.set_hours(db, uid, [{"weekday": w, "start_min": a, "end_min": b, "slot_min": 20,
+                                            "room": "Radiology OPD, Room 3"}
+                                           for w in range(6) for a, b in ((540, 780), (840, 1020))])
         rows.append(f"{role:<8} {email:<28} {pw}")
     (data_dir / "DEV_ACCOUNTS.txt").write_text(
         "# NeuroEdge DEV portal test accounts (local only; delete the folder to regenerate). Not real users.\n\n"
