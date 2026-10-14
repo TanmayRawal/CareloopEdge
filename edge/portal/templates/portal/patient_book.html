@@ -1,15 +1,14 @@
 {% extends "portal/base.html" %}
 {% block title %}{{ 'Reschedule' if reschedule_of else 'Book a consultation' }}{% endblock %}
 {% block pcontent %}
-<div class="page-head"><div><a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>
+<div class="page-head narrow-card wide"><div><a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>
   <h1>{{ 'Choose a new time' if reschedule_of else 'Book a consultation' }}</h1>
   <p>{% if doctor %}Follow-up consultation with {{ doctor.name }} about your MRI of {{ fmt_date(case.created) }}{% endif %}</p></div></div>
 
 {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
 {% if reschedule_of %}<div class="alert"><svg class="ic sm"><use href="#i-calendar"/></svg><span>Current appointment: <b>{{ fmt_long(reschedule_of.start_ts) }} at {{ fmt_clock(reschedule_of.start_ts) }}</b>. It stays booked until you confirm a new time.</span></div>{% endif %}
 
-<div class="grid g-side">
-  <section class="card">
+<section class="card narrow-card wide">
     {% if not days %}
       <div class="empty"><svg class="ic"><use href="#i-calendar"/></svg><h2>No times available</h2>
         <p>{{ doctor.name if doctor else 'Your radiologist' }} has no free consultation times in the next weeks. Please contact the department.</p></div>
@@ -42,19 +41,5 @@
       </form>
     {% endif %}
   </section>
-  <aside class="card">
-    <div class="card-h"><h2>Your consultation</h2></div>
-    <div class="card-b">
-      <div class="doc-mini"><span class="avatar">{{ doctor.name.replace('Dr. ', '')[:1] if doctor else '?' }}</span>
-        <div><b>{{ doctor.name if doctor else '—' }}</b><div class="small muted">Radiologist · reporting doctor</div></div></div>
-      <ul class="hist">
-        <li><span><svg class="ic sm"><use href="#i-clock"/></svg> About 20 minutes</span></li>
-        <li><span><svg class="ic sm"><use href="#i-pin"/></svg> {{ clinic }}</span></li>
-        <li><span><svg class="ic sm"><use href="#i-mail"/></svg> Confirmation and reminders by e-mail</span></li>
-      </ul>
-      <div class="section-label">Good to know</div>
-      <p class="small muted">Bring any earlier scans or reports. You can reschedule or cancel up to the cutoff shown in your confirmation.</p>
-    </div>
-  </aside>
-</div>
+
 {% endblock %}

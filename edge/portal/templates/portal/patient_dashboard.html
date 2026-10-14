@@ -2,8 +2,7 @@
 {% block title %}My reports{% endblock %}
 {% block pcontent %}
 <div class="welcome">
-  <div><span class="eyebrow">Patient ID {{ mrn(me.id) }}</span><h1>Hello, {{ me.name.split(' ')[0] }}</h1>
-    <p class="muted">Your scans and your radiologist's reports.</p></div>
+  <div><h1>Hello, {{ me.name.split(' ')[0] }}</h1></div>
   <a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>
 </div>
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
