@@ -10,6 +10,7 @@ What runs on the Pi, all offline after setup:
 | `neuroedge-llm` | llama.cpp server with Qwen3-1.7B Q4_K_M (assistant narratives and Q&A) | `127.0.0.1:8081` (loopback only) |
 | `neuroedge-sync.timer` | daily check for a new signed + encrypted model; a new version is trial-decrypted and verified before it is activated | — |
 | `neuroedge-web-restart.path` | restarts the web app when a newly verified model version is activated | — |
+| `neuroedge-reminders.timer` | every 5 min: reminder rules (unread/unsigned studies, appointment reminders, daily agenda, attendance, no-shows) and e-mail delivery from the outbox | outbound SMTP only |
 
 The model is stored only as ciphertext on the Pi. It is decrypted and its signature verified in RAM at startup.
 Patient data (portal database, encrypted scans, overlays and signed reports) lives in `/var/lib/neuroedge/portal`;
@@ -119,6 +120,34 @@ sudo bash edge/install_pi.sh --dev-bundle ~/mri_v1_0.2.0_int8
    Add doctors from the admin **Users** page. Patients register themselves.
 3. Open `https://<pi-ip>/` or `https://<hostname>.local/` from any device on the same network.
 
+### E-mail reminders (optional but recommended)
+Every reminder is always shown inside the portal (notification bell). To also send e-mails:
+```bash
+sudo neuroedge-portal smtp-config           # host, port, security, user, password (hidden), from address
+sudo neuroedge-portal smtp-test --to you@hospital.org
+```
+* **Hospital mail server:** use its SMTP host and port (usually 587 + STARTTLS).
+* **Gmail:**
+  * host `smtp.gmail.com`, port `587`, `starttls`;
+  * the password must be a Google **App Password** (Google Account → Security → 2-Step Verification →
+    App passwords), never the account password.
+* **Where the credentials live:** `/etc/neuroedge/smtp.env` (root:neuroedge, mode 640). They are never in the
+  database or the web UI.
+* **Offline:** messages wait in the outbox (Admin → E-mail) and are retried with backoff.
+* **Content:** e-mails contain no diagnoses or findings, only "your report is ready", appointment times and
+  links.
+* **Clock:** reminders depend on the Pi's clock. The Pi has no battery-backed clock, so it needs network time
+  (NTP, on by default). Check it with `timedatectl`.
+* **Department policy** (reporting targets, reminder times, booking window, cancellation cutoff, time zone,
+  portal address used in links) is set under **Admin → Settings**.
+
+### Consultations
+* Each radiologist sets weekly hours, slot length, room and days off under **Availability**.
+* After a report is signed, the patient can book a follow-up consultation with the reporting radiologist.
+  They get a confirmation with a calendar invite, plus reminders (24 h and 2 h before by default).
+* The radiologist marks **Arrived / Completed / No-show** on the **Schedule**. A no-show sends the patient a
+  rebooking invitation.
+
 ## 6. Benchmark (results go into docs/FINDINGS.md)
 ```bash
 cd /opt/neuroedge/src
@@ -139,6 +168,7 @@ It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, S
 | Restart | `sudo systemctl restart neuroedge-web neuroedge-llm` |
 | Temperature / throttling | `vcgencmd measure_temp`, `vcgencmd get_throttled` |
 | Portal users | `sudo neuroedge-portal create-user --role doctor --email ... --name ...` (or the admin Users page) |
+| Reminders / e-mail | `systemctl list-timers neuroedge-reminders.timer`, `journalctl -u neuroedge-reminders`, `sudo neuroedge-portal smtp-test --to ...` |
 | Back up patient data | `sudo neuroedge-portal backup --dest /media/usb/neuroedge-backups` (database + encrypted files; **back up `/etc/neuroedge/portal.key` separately**) |
 | Restore | stop `neuroedge-web`, then `sudo neuroedge-portal restore --src <backup dir>` |
 | Portal CA fingerprint | `sudo neuroedge-ca` |

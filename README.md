@@ -14,11 +14,32 @@ and encrypted** bundle through a self-hosted registry.
                     ├─ INT8 ResNet-50, lesion-attention head + segmentation (ONNX Runtime)   120 ms
                     ├─ exact Grad-CAM (28×28) · lesion outline · 95% conformal set · OOD reject/warn
                     ├─ doctor worklist → review → signed, versioned report → patient
+                    ├─ consultation booking · reminders (in-app + e-mail) · attendance / no-shows
                     └─ doctor assistant: Qwen3-1.7B (llama.cpp) + cited KB + deterministic verifier
                               ▲
                               │  signed (OpenSSF Model Signing) + AES-256-GCM, key wrapped per device (X25519)
  Training PC ──publish──►  Registry: FastAPI + Caddy TLS in Docker (enrollment, revocation, audit log)
 ```
+
+## Portal features (radiology department)
+* **Patients:**
+  * register, upload a scan, follow its review and read the signed report (print / PDF);
+  * book, reschedule or cancel a consultation with the reporting radiologist, with calendar invites.
+* **Radiologists:**
+  * a prioritised worklist with SLA timers and a PACS-style viewer (Grad-CAM, lesion outline, zoom and pan);
+  * the AI findings panel and the doctor assistant;
+  * signed and amended reports;
+  * the consultation schedule with attendance marking;
+  * availability editing (hours and days off);
+  * analytics.
+* **Administrators:** users, department settings (reporting targets, reminder and booking rules), the e-mail
+  outbox, the audit log and system status.
+* **Reminders**, in-app and by e-mail through SMTP, carry no clinical content:
+  * studies left unread or unsigned (with escalation);
+  * booking confirmations and appointment reminders;
+  * the daily agenda;
+  * unrecorded attendance;
+  * rebooking after a no-show.
 
 ## Results: v1, `mri/0.2.0` (details in [docs/FINDINGS.md](docs/FINDINGS.md) §10)
 All numbers are for the deployed INT8 model on the leakage-free held-out test set, compared with v0.
@@ -50,7 +71,7 @@ Key findings:
 | `server/` | Model registry (FastAPI), Docker Compose + Caddy, publish tool, live end-to-end check |
 | `edge/` | Pi runtime: engine, sync, clinic portal (`edge/portal`), assistant, benchmark, parity check, installer, Caddy, firewall, systemd units |
 | `docs/` | [Findings](docs/FINDINGS.md), [model card](docs/MODEL_CARD.md), [Pi deployment guide](docs/PI_DEPLOY.md) |
-| `tests/` | 87 tests: CAM exactness, crypto and tamper detection, leakage dedupe, portal access control and security, verifier, deploy files |
+| `tests/` | 108 tests: appointments, reminders, mailer, CAM exactness, crypto and tamper detection, leakage dedupe, portal access control and security, verifier, deploy files |
 | `reference/` | The original notebook (reference only) |
 
 ## Quick start
