@@ -82,7 +82,7 @@ cd code
 exec python -m edge.serve --bundle-dir ../model/mri_v1 --portal-data ../portal_data --init-dev --port 8080
 """
 
-README = """# NeuroEdge: review package (v1, model mri/0.2.0)
+README = """# NeuroEdge: review package (v2 portal, model mri/0.2.0)
 
 Secure, explainable brain-tumor MRI review that runs offline on a Raspberry Pi 5. This package runs the same
 clinic portal and trained model **on your laptop** so you can review the workflow, code, results and documentation.
@@ -115,7 +115,11 @@ Stop the app with Ctrl+C. On the Pi the same portal is served over HTTPS; on the
    * the review flags and the assistant.
 3. Pick the final diagnosis and **sign the report** (it asks for your password again).
 4. Sign in as the patient again: the doctor's signed report is now visible.
-5. The **admin** account manages users and shows the audit log.
+5. Book a consultation as the patient (the radiologist's demo hours must be set under **Availability** first),
+   then open **Schedule** as the doctor to mark attendance.
+6. The **admin** account has users, department settings, the e-mail outbox and the audit log. In this demo
+   every e-mail (confirmations, reminders) is saved as an `.eml` file in `portal_data/mail/`; open one with any
+   mail program.
 
 **Optional: AI assistant narratives.** These need a local LLM server; without it the assistant uses deterministic
 template answers. To enable it:
@@ -136,7 +140,7 @@ template answers. To enable it:
 | `code/training/data/`, `code/training/ablation_v1.py`, `code/training/report_v1.py` | Leakage audit and split, ablation, acceptance report |
 | `code/edge/portal/` | Clinic portal: roles, encrypted storage, signed reports, audit |
 | `code/neuroedge/security.py`, `code/server/` | Signing, encryption, registry |
-| `code/tests/` | 87 tests. Running them needs the training dependencies (`code/requirements-train.txt`, PyTorch). |
+| `code/tests/` | 108 tests. Running them needs the training dependencies (`code/requirements-train.txt`, PyTorch). |
 
 ## 3. Key results (deployed INT8 model, held-out leakage-free test set)
 | | v0 | v1 (3-seed mean ± sd) |
@@ -185,7 +189,7 @@ def main() -> None:
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     date = time.strftime("%Y-%m-%d")
     name = "NeuroEdge_review"                              # short top folder (Windows path limit)
-    zip_name = f"NeuroEdge_review_v1_{date}_{commit}"
+    zip_name = f"NeuroEdge_review_v2_{date}_{commit}"
     stage = args.out / name
     shutil.rmtree(stage, ignore_errors=True)
     (stage / "code").mkdir(parents=True)

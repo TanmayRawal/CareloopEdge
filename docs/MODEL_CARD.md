@@ -72,6 +72,9 @@
   * reports are versioned and never overwritten.
 * **Doctor assistant:** Qwen3-1.7B via llama.cpp, grounded in the case facts and a cited knowledge base. Every
   answer passes a deterministic verifier, and statistical questions get fixed template answers.
+* **Consultations:** after the report, the patient books a follow-up with the reporting radiologist. The
+  radiologist records attendance. Reminders are delivered in-app and by e-mail, and the e-mails never contain
+  clinical content.
 
 ## Intended use and out-of-scope use
 * **Intended:** research, teaching and demonstrations of explainable, secure edge AI on public data.
