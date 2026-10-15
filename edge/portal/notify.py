@@ -41,6 +41,23 @@ TEMPLATES = {
     "doc_agenda": ("Today: {n} consultations", "Your consultations today:\n\n{agenda}"),
     "doc_unmarked": ("Please record attendance: {patient}", "The consultation with {patient} at {when} has ended but attendance "
                      "was not recorded. Please mark it as completed or no-show."),
+    # CareLoop follow-up
+    "followup_reminder": ("Your next step: {step}", "Your care team would like to remind you about the next step in your "
+                          "care: {step}, due by {due}.\n\n{message}"),
+    "referral_ready": ("Your referral letter is ready", "Your doctor has signed a referral to {facility}. You can view and "
+                       "print the letter in the patient portal and take it to your appointment there."),
+    "invite": ("Set up your patient portal account", "{clinic} has registered you for follow-up care. Set a password to see "
+               "your reports, appointments and next steps online.\n\nThis link works once and expires in 7 days."),
+    "password_reset": ("Reset your password", "We received a request to reset the password for your account.\n\nThe link "
+                       "works once and expires in 1 hour. If you did not ask for this, you can ignore this e-mail."),
+    "doc_approvals": ("{n} follow-up plans waiting for approval", "{n} follow-up plans proposed by the care coordinator are "
+                      "waiting for your approval. Outreach to these patients starts only after a doctor approves."),
+    "doc_plan_proposed": ("Follow-up plan to approve: {patient}", "A {step} for {patient} (due {due}) was proposed and needs "
+                          "a doctor's approval."),
+    "admin_digest": ("Follow-up today: {n} patients need attention", "{overdue} overdue follow-ups, {soon} due within "
+                     "{soon_days} days, {stale} referrals not completed and {lost} plans now marked lost to follow-up."),
+    "admin_appt_declined": ("Patient cannot attend: {patient}", "{patient} replied that they cannot attend the consultation "
+                            "on {when} with {doctor}.{extra}"),
 }
 
 
@@ -53,7 +70,7 @@ def ics(db, appt, uid: str, method: str = "REQUEST") -> str:
     f = lambda ts: dt.datetime.fromtimestamp(ts, dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")  # noqa: E731
     esc = lambda s: (s or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")  # noqa: E731
     status = "CANCELLED" if method == "CANCEL" else "CONFIRMED"
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//NeuroEdge Imaging//Portal//EN", f"METHOD:{method}",
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CareLoop-Edge//Portal//EN", f"METHOD:{method}",
              "BEGIN:VEVENT", f"UID:{uid}", f"DTSTAMP:{f(time.time())}", f"DTSTART:{f(appt['start_ts'])}",
              f"DTEND:{f(appt['end_ts'])}", f"SUMMARY:{esc('Consultation · ' + db.setting('clinic_name'))}",
              f"LOCATION:{esc(appt['room'] or db.setting('clinic_name'))}", f"STATUS:{status}",
@@ -61,11 +78,16 @@ def ics(db, appt, uid: str, method: str = "REQUEST") -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
-def _html(db, title: str, body: str, link: str | None) -> str:
+def _html(db, title: str, body: str, link: str | None, actions: list | None = None) -> str:
     base = db.setting("base_url").rstrip("/")
     paras = "".join(f"<p style=\"margin:0 0 12px\">{html.escape(p).replace(chr(10), '<br>')}</p>" for p in body.split("\n\n"))
-    button = (f"<p style=\"margin:20px 0\"><a href=\"{html.escape(base + link)}\" style=\"background:#0b5c7a;color:#fff;"
-              f"padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600\">Open the portal</a></p>") if link else ""
+    btn = ("display:inline-block;margin:0 8px 8px 0;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;"
+           "{}")
+    styles = ("background:#0b5c7a;color:#fff", "background:#fff;color:#0b5c7a;border:1px solid #0b5c7a")
+    items = actions or ([("Open the portal", link)] if link else [])
+    button = ("<p style=\"margin:20px 0 8px\">" + "".join(
+        f"<a href=\"{html.escape(base + path)}\" style=\"{btn.format(styles[min(i, 1)])}\">{html.escape(label)}</a>"
+        for i, (label, path) in enumerate(items)) + "</p>") if items else ""
     clinic = html.escape(db.setting("clinic_name"))
     return (f"<!doctype html><html><body style=\"margin:0;background:#f3f5f8;font:15px/1.55 Segoe UI,Arial,sans-serif;color:#0f172a\">"
             f"<div style=\"max-width:560px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px\">"
@@ -76,26 +98,31 @@ def _html(db, title: str, body: str, link: str | None) -> str:
 
 
 def notify(db, user, kind: str, ctx: dict | None = None, link: str | None = None, email: bool = True,
-           dedupe: str | None = None, ics_text: str | None = None, now: float | None = None) -> bool:
-    """Create the in-app notification and queue the e-mail. Returns False if `dedupe` was already used."""
+           dedupe: str | None = None, ics_text: str | None = None, now: float | None = None,
+           actions: list | None = None, in_app: bool = True, force_email: bool = False) -> bool:
+    """Create the in-app notification and queue the e-mail. Returns False if `dedupe` was already used.
+    actions: [(label, path)] buttons for the e-mail only (they may carry single-use tokens, so they never go in-app).
+    force_email: account e-mails (invite, password reset) that are sent even if reminders are switched off."""
     now = time.time() if now is None else now
     if dedupe and not db.once(f"notify:{dedupe}:{user['id']}", now):
         return False
     subject_t, body_t = TEMPLATES[kind]
     ctx = {k: ("" if v is None else v) for k, v in (ctx or {}).items()}
     subject, body = subject_t.format(**ctx), body_t.format(**ctx)
-    with db.tx() as c:
-        c.execute("INSERT INTO notifications (user_id,kind,title,body,link,created) VALUES (?,?,?,?,?,?)",
-                  (user["id"], kind, subject, body, link, now))
-    if email and user["active"] and user["notify_email"]:
+    if in_app:
+        with db.tx() as c:
+            c.execute("INSERT INTO notifications (user_id,kind,title,body,link,created) VALUES (?,?,?,?,?,?)",
+                      (user["id"], kind, subject, body, link, now))
+    if email and user["email"] and user["active"] and (user["notify_email"] or force_email):
         base = db.setting("base_url").rstrip("/")
-        text = f"{body}\n\n{('Open the portal: ' + base + link) if link else ''}\n\n— {db.setting('clinic_name')}\n"
+        lines = [f"{label}: {base + path}" for label, path in (actions or ([("Open the portal", link)] if link else []))]
+        text = f"{body}\n\n" + "\n".join(lines) + f"\n\n— {db.setting('clinic_name')}\n"
         try:
             with db.tx() as c:
                 c.execute("INSERT INTO outbox (user_id,to_email,subject,text,html,ics,created,next_try,dedupe_key) "
                           "VALUES (?,?,?,?,?,?,?,?,?)",
                           (user["id"], user["email"], f"{subject} · {db.setting('clinic_name')}", text,
-                           _html(db, subject, body, link), ics_text, now, now,
+                           _html(db, subject, body, link, actions), ics_text, now, now,
                            f"{dedupe}:{user['id']}" if dedupe else None))
         except sqlite3.IntegrityError:
             pass

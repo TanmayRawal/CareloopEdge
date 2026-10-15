@@ -1,0 +1,23 @@
+{% extends "portal/base.html" %}
+{% block title %}Forgot password{% endblock %}
+{% block bare %}
+<div class="auth">
+  <section class="auth-side">
+    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
+    <div class="tagline"><h1>Reset your password</h1><p>We will e-mail you a link to choose a new password.</p></div>
+    <div class="legal">© {{ clinic }} · Authorised use only</div>
+  </section>
+  <section class="auth-main">
+    <div class="auth-box">
+      <h2>Forgot password</h2>
+      {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+      <form method="post" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field">E-mail address<input type="email" name="email" required autofocus autocomplete="username"></label>
+        <button class="btn primary lg block" type="submit">Send reset link</button>
+      </form>
+      <div class="auth-alt"><a href="{{ url_for('auth.login') }}">Back to sign in</a></div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -25,8 +25,26 @@ EVENTS = {
     "appointment_completed": ("Consultation completed", "booking"), "appointment_no_show": ("Patient did not attend", "booking"),
     "hours_updated": ("Hours updated", "account"), "settings_updated": ("Settings changed", "account"),
     "email_test": ("Test e-mail", "account"), "email_retry": ("E-mail retried", "account"),
+    # follow-up (CareLoop)
+    "plan_created": ("Follow-up planned", "followup"), "plan_proposed": ("Follow-up proposed", "followup"),
+    "plan_approved": ("Follow-up approved", "followup"), "plan_rejected": ("Follow-up declined", "followup"),
+    "plan_completed": ("Follow-up completed", "followup"), "plan_lost": ("Lost to follow-up", "alert"),
+    "plan_cancelled": ("Follow-up closed", "followup"),
+    "contact_logged": ("Contact recorded", "followup"), "followup_reminder_sent": ("Reminder sent", "followup"),
+    "referral_signed": ("Referral signed", "followup"), "referral_updated": ("Referral updated", "followup"),
+    "referral_viewed": ("Referral letter viewed", "view"),
+    "patient_registered": ("Patient registered at desk", "account"), "patient_updated": ("Patient details updated", "account"),
+    "patient_record_viewed": ("Patient record opened", "view"), "scan_uploaded_for_patient": ("Scan uploaded for patient", "clinical"),
+    "document_added": ("Document added", "clinical"), "document_viewed": ("Document opened", "view"),
+    "invite_sent": ("Portal invitation sent", "account"), "invite_accepted": ("Invitation accepted", "account"),
+    "password_reset_requested": ("Password reset requested", "access"), "password_reset": ("Password reset", "access"),
+    "appointment_reply_yes": ("Patient confirmed by e-mail", "booking"), "appointment_reply_no": ("Patient declined by e-mail", "booking"),
+    "two_step_enabled": ("Two-step sign-in on", "account"), "two_step_disabled": ("Two-step sign-in off", "alert"),
+    "login_code_failed": ("Wrong sign-in code", "alert"), "login_recovery_code": ("Recovery code used", "alert"),
+    "data_exported": ("Data downloaded by patient", "account"), "deletion_requested": ("Deletion requested", "account"),
+    "deletion_request_done": ("Account closed on request", "account"), "deletion_request_rejected": ("Deletion declined", "account"),
 }
-CATEGORIES = {"access": "Sign-ins", "clinical": "Clinical", "booking": "Consultations", "account": "Accounts & settings",
+CATEGORIES = {"access": "Sign-ins", "clinical": "Clinical", "followup": "Follow-up", "booking": "Consultations", "account": "Accounts & settings",
               "alert": "Security alerts", "view": "Image and report views"}
 
 
@@ -72,6 +90,21 @@ def describe(action: str, detail: str | None) -> str:
         return f"Appointment #{d.get('from')} → #{d.get('to')}"
     if action.startswith("appointment_") and d.get("appointment"):
         return f"Appointment #{d['appointment']}" + (" · by doctor" if d.get("by") == "doctor" else "")
+    if action in ("plan_created", "plan_proposed") and d.get("kind"):
+        from edge.portal.careplan import PLAN_TEXT
+        return PLAN_TEXT.get(d["kind"], d["kind"]) + (f" · due {d['due']}" if d.get("due") else "")
+    if action == "contact_logged" and d.get("outcome"):
+        from edge.portal.outreach import OUTCOME_TEXT
+        return OUTCOME_TEXT.get(d["outcome"], d["outcome"])
+    if action == "referral_updated" and d.get("status"):
+        from edge.portal.careplan import REFERRAL_TEXT
+        return REFERRAL_TEXT.get(d["status"], d["status"])
+    if action == "followup_reminder_sent":
+        return "E-mail and portal" if d.get("email") else "Portal only"
+    if d.get("patient") and action in ("patient_registered", "patient_record_viewed", "patient_updated", "invite_sent",
+                                       "document_added", "plan_approved", "plan_rejected", "plan_completed", "plan_lost",
+                                       "plan_cancelled", "referral_signed"):
+        return f"Patient NE-{int(d['patient']):05d}"
     if action == "email_test":
         return f"{d.get('sent', 0)} sent" if "sent" in d else ""
     return ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in d.items())

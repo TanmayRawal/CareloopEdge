@@ -29,6 +29,10 @@ SETTING_FORM = [  # key, label, hint, kind
     ("booking_lead_hours", "Minimum booking notice (hours)", "", "number"),
     ("booking_horizon_days", "Booking window (days)", "", "number"),
     ("cancel_cutoff_hours", "Change / cancel cutoff (hours)", "", "number"),
+    ("followup_due_soon_days", "Follow-up due-soon window (days)", "", "number"),
+    ("referral_stale_days", "Referral not completed after (days)", "", "number"),
+    ("lost_after_days", "Lost to follow-up after (days overdue)", "", "number"),
+    ("require_staff_2fa", "Require two-step sign-in for staff", "1 = yes, 0 = no", "flag"),
 ]
 
 
@@ -56,6 +60,9 @@ def validate(key: str, value: str) -> str | None:
                 raise ValueError
         except ValueError:
             return "must be a time such as 07:30"
+    elif dict((k, kind) for k, _, _, kind in SETTING_FORM)[key] == "flag":
+        if value not in ("0", "1"):
+            return "must be 0 or 1"
     elif dict((k, kind) for k, _, _, kind in SETTING_FORM)[key] == "number":
         try:
             if not 0 < float(value) <= 10000:
@@ -91,7 +98,28 @@ def blueprint(d) -> Blueprint:
         where, args = ("WHERE u.role = ?", (role,)) if role in ("patient", "doctor", "admin") else ("", ())
         rows = db.q(f"SELECT u.*, (SELECT COUNT(*) FROM cases WHERE patient_id = u.id) AS n_cases FROM users u {where} "
                     f"ORDER BY u.role, u.name", args)
-        return render_template("portal/admin_users.html", users=rows, error=error, role=role), (400 if error else 200)
+        requests_ = db.q("SELECT r.*, u.name, u.email FROM data_requests r JOIN users u ON u.id = r.user_id "
+                         "WHERE r.status = 'open' ORDER BY r.created")
+        return render_template("portal/admin_users.html", users=rows, error=error, role=role, requests=requests_), \
+            (400 if error else 200)
+
+    @bp.post("/requests/<int:rid>")
+    @auth.require("admin")
+    def data_request(rid):
+        r = db.one("SELECT * FROM data_requests WHERE id = ? AND status = 'open'", (rid,))
+        if r is None:
+            abort(404)
+        done = request.form.get("decision") == "done"
+        with db.tx() as c:
+            c.execute("UPDATE data_requests SET status = ?, handled_by = ?, handled_at = ? WHERE id = ?",
+                      ("done" if done else "rejected", g.user["id"], time.time(), rid))
+            if done:   # sign-in disabled and no more messages; clinical records are kept as the law requires
+                c.execute("UPDATE users SET active = 0, notify_email = 0 WHERE id = ?", (r["user_id"],))
+                c.execute("UPDATE consents SET withdrawn_at = ? WHERE user_id = ? AND withdrawn_at IS NULL",
+                          (time.time(), r["user_id"]))
+        db.audit(g.user["id"], "deletion_request_" + ("done" if done else "rejected"), detail={"user": r["user_id"]}, ip=d.ip())
+        flash("Account closed and consents withdrawn." if done else "Request declined.")
+        return redirect(url_for("admin.users"))
 
     @bp.post("/users/<int:uid>/toggle")
     @auth.require("admin")
@@ -134,7 +162,7 @@ def blueprint(d) -> Blueprint:
             days[-1][1].append({"r": r, "label": audit_text.label(r["action"]), "cat": audit_text.category(r["action"]),
                                 "text": audit_text.describe(r["action"], r["detail"])})
         return render_template("portal/admin_audit.html", days=days, more=len(rows) > PAGE_SIZE, page=page,
-                               categories=audit_text.CATEGORIES, cat=cat, who=who)
+                               categories=audit_text.CATEGORIES, cat=cat, who=who, chain=db.verify_audit_chain())
 
     @bp.get("/system")
     @auth.require("admin")
@@ -153,7 +181,9 @@ def blueprint(d) -> Blueprint:
                 "appointments": db.one("SELECT COUNT(*) AS n FROM appointments")["n"], "roles": roles,
                 "blob": human_bytes(blob_bytes), "db": human_bytes(db_bytes), "disk_free": human_bytes(disk.free),
                 "disk_total": human_bytes(disk.total), "disk_used_pct": round(100 * (disk.total - disk.free) / disk.total),
-                "last_login": last_login, "host": socket.gethostname(), "mail": mailer.status(), "outbox": out}
+                "last_login": last_login, "host": socket.gethostname(), "mail": mailer.status(), "outbox": out,
+                "staff": db.q("SELECT name, role, totp_on FROM users WHERE role != 'patient' AND active = 1 ORDER BY role, name"),
+                "chain": db.verify_audit_chain()}
         return render_template("portal/admin_system.html", info=info)
 
     @bp.get("/outbox")

@@ -1,0 +1,40 @@
+{% extends "portal/base.html" %}
+{% block title %}Documents{% endblock %}
+{% block pcontent %}
+<div class="page-head"><div><h1>Documents</h1></div></div>
+
+{% if refs %}
+<section class="card">
+  <div class="card-h"><h2>Referral letters</h2></div>
+  {% for r in refs %}
+    <a class="doc-row" href="{{ url_for('patient.referral', rid=r.id) }}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-send"/></svg>
+      <div class="grow"><b>{{ r.facility }}</b><div class="small muted">{{ r.specialty or 'Referral' }} · signed by {{ r.signed_by_name }} on {{ fmt_date(r.signed_at) }}</div></div>
+      <span class="btn sm">View and print</span></a>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="grid g-side">
+  <section class="card">
+    <div class="card-h"><h2>My documents</h2></div>
+    {% for dc in docs %}
+      <a class="doc-row" href="{{ url_for('patient.document', did=dc.id) }}"><svg class="ic"><use href="#i-file"/></svg>
+        <div class="grow"><b>{{ dc.title }}</b><div class="small muted">{{ doc_text[dc.kind] }} · {{ fmt_date(dc.created) }}</div></div>
+        <svg class="ic sm"><use href="#i-download"/></svg></a>
+    {% else %}
+      <div class="empty"><svg class="ic"><use href="#i-file"/></svg><h2>No documents yet</h2>
+        <p>Add earlier reports or biopsy results so your care team has your full history.</p></div>
+    {% endfor %}
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Add a document</h2></div>
+    <form method="post" enctype="multipart/form-data" class="card-b form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="field">Type<select name="kind">{% for k in doc_kinds %}<option value="{{ k }}">{{ doc_text[k] }}</option>{% endfor %}</select></label>
+      <label class="field">Title<input name="title" maxlength="120" placeholder="e.g. Biopsy report, March 2026"></label>
+      <label class="field">File<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.dcm,.dicom" required><span class="hint">PDF, JPG, PNG or DICOM · up to 20 MB</span></label>
+      <button class="btn primary" type="submit"><svg class="ic sm"><use href="#i-upload"/></svg>Upload</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

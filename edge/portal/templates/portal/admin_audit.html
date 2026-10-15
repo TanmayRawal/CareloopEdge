@@ -7,6 +7,8 @@
     <label class="search"><svg class="ic"><use href="#i-search"/></svg><input type="search" name="user" value="{{ who }}" placeholder="Search user" aria-label="Search user"></label>
   </form>
 </div>
+{% if not chain.ok %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span><b>The audit log was altered.</b> Entry {{ chain.bad_id }} does not match the tamper-evident chain.</span></div>
+{% else %}<div class="chain-ok"><svg class="ic sm"><use href="#i-lock"/></svg>Tamper-evident log verified · {{ chain.n }} entries</div>{% endif %}
 <div class="chips">
   <a class="chip-f {{ 'on' if not cat }}" href="?{{ {'user': who}|urlencode if who }}">All activity</a>
   {% for k, v in categories.items() %}<a class="chip-f {{ 'on' if cat == k }}" href="?{{ {'cat': k, 'user': who}|urlencode if who else {'cat': k}|urlencode }}">{{ v }}</a>{% endfor %}

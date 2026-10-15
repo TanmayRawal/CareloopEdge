@@ -3,14 +3,14 @@
 {% block bare %}
 <div class="auth">
   <section class="auth-side">
-    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ clinic }}</span><br><span class="sub">Neuroradiology</span></span></span>
+    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
     <div class="tagline">
-      <h1>Brain MRI reporting, from upload to signed report.</h1>
-      <p>Patients share scans securely. Radiologists review them with AI assistance and release a signed report.</p>
+      <h1>From scan to follow-through. Nobody left behind.</h1>
+      <p>Brain MRI reporting with AI-assisted reading, and a care team that makes sure every patient reaches their next step.</p>
       <ul class="auth-feats">
         <li><svg class="ic"><use href="#i-scan"/></svg>AI-prioritised reading worklist</li>
-        <li><svg class="ic"><use href="#i-file"/></svg>Signed, versioned radiology reports</li>
-        <li><svg class="ic"><use href="#i-lock"/></svg>On-premise, encrypted, fully audited</li>
+        <li><svg class="ic"><use href="#i-calendar"/></svg>Follow-up plans, reminders and referrals</li>
+        <li><svg class="ic"><use href="#i-lock"/></svg>Runs on-site, encrypted, fully audited</li>
       </ul>
     </div>
     <div class="legal">© {{ clinic }} · Authorised use only</div>
@@ -31,6 +31,7 @@
         <label class="field">Password<input type="password" name="password" required autocomplete="current-password"></label>
         <button class="btn primary lg block" type="submit">Sign in</button>
       </form>
+      <div class="auth-alt"><a href="{{ url_for('public.forgot') }}">Forgot password?</a></div>
       <div class="auth-alt" id="alt-patient">New patient? <a href="{{ url_for('auth.register') }}">Create an account</a></div>
       <div class="auth-alt hide" id="alt-staff">Clinician accounts are issued by the clinic administrator.</div>
     </div>

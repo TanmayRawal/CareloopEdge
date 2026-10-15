@@ -64,6 +64,15 @@ class BlobStore:
         blob = self._path(case_id, kind).read_bytes()
         return self._aead.decrypt(blob[:12], blob[12:], f"{case_id}/{kind}".encode())
 
+    def seal(self, purpose: str, value: str) -> str:
+        """Encrypt a small value for a database column (e.g. a two-step sign-in secret); hex of nonce||ct."""
+        nonce = os.urandom(12)
+        return (nonce + self._aead.encrypt(nonce, value.encode("utf-8"), f"value/{purpose}".encode())).hex()
+
+    def unseal(self, purpose: str, sealed: str) -> str:
+        blob = bytes.fromhex(sealed)
+        return self._aead.decrypt(blob[:12], blob[12:], f"value/{purpose}".encode()).decode("utf-8")
+
     def exists(self, case_id: str, kind: str) -> bool:
         return self._path(case_id, kind).exists()
 

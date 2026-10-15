@@ -1,4 +1,4 @@
-"""NeuroEdge Imaging — radiology department portal (Flask; runs offline on the Raspberry Pi).
+"""CareLoop-Edge — radiology follow-up and continuity-of-care portal (Flask; runs offline on the Raspberry Pi).
 
 Roles
   patient  registers, uploads scans, follows the review, reads the DOCTOR's signed report (never AI output),
@@ -6,7 +6,9 @@ Roles
   doctor   prioritised worklist with SLA badges, case review with AI (calibrated probabilities, 95% set, Grad-CAM,
            lesion outline, review flags, assistant), signs / amends reports, consultation schedule and attendance,
            working hours and days off
-  admin    users, audit log, system status, e-mail outbox, department settings (reminder and booking policy)
+  admin    care coordinator + administrator: follow-up worklist ranked by an explainable risk score, patient record
+           with a unified timeline, walk-in registration, contact log and reminders (doctor-approved plans only),
+           referral tracking; users, hash-chained audit log, system status, e-mail outbox, department settings
 Reminders (unread / unsigned studies, appointment reminders, daily agenda, attendance, no-shows) are produced by
 `edge.portal.reminders`, run every 5 minutes by neuroedge-reminders.timer; e-mail via `edge.portal.mailer`.
 Security: argon2 passwords, lockout + rate limits, CSRF on every POST, strict CSP (no inline script, no
@@ -23,12 +25,15 @@ import secrets
 from pathlib import Path
 from types import SimpleNamespace
 
-from flask import Flask, abort, g, render_template, request, session, url_for
+from flask import Flask, abort, g, redirect, render_template, request, session, url_for
 
-from edge.portal import auth, common, notify, scheduling, services
+from edge.portal import auth, careplan, common, notify, outreach, scheduling, services
 from edge.portal.common import safe_next, tls_name_allowed  # noqa: F401  (re-exported; tests import them here)
 from edge.portal.db import DB
 from edge.portal.storage import BlobStore
+
+
+TWO_STEP_EXEMPT = {"auth.account", "auth.logout", "static"}
 
 
 def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | Path,
@@ -70,6 +75,10 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
             sent = request.form.get("csrf") or request.headers.get("X-CSRF-Token", "")
             if not sent or not hmac.compare_digest(sent, session.get("csrf", "")):
                 abort(400, "Security check failed — please reload the page and try again.")
+        u = g.get("user")
+        if (u is not None and u["role"] != "patient" and not u["totp_on"] and request.endpoint not in TWO_STEP_EXEMPT
+                and db.setting("require_staff_2fa") == "1"):
+            return redirect(url_for("auth.account"))
 
     @app.after_request
     def headers(resp):
@@ -93,7 +102,11 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     def inject():
         me = g.get("user")
         bell = notify.unread(db, me["id"]) if me else (0, [])
-        return {"csrf_token": csrf_token, "asset": asset, "disclaimer": common.DISCLAIMER, "model_info": model_info,
+        return {"brand": common.BRAND, "plan_text": careplan.PLAN_TEXT, "plan_status_text": careplan.PLAN_STATUS_TEXT,
+                "referral_text": careplan.REFERRAL_TEXT, "outcome_text": outreach.OUTCOME_TEXT,
+                "channel_text": outreach.CHANNEL_TEXT,
+                "approvals_count": lambda: db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'proposed'")["n"],
+                "csrf_token": csrf_token, "asset": asset, "disclaimer": common.DISCLAIMER, "model_info": model_info,
                 "me": me, "clinic": db.setting("clinic_name"), "class_text": common.CLASS_TEXT,
                 "status_text": common.STATUS_TEXT, "appt_text": common.APPT_TEXT, "role_text": common.ROLE_TEXT,
                 "flag_text": common.FLAG_TEXT, "flag_short": common.FLAG_SHORT, "mrn": common.mrn,
@@ -101,7 +114,7 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
                 "open_count": lambda: db.one("SELECT COUNT(*) AS n FROM cases WHERE status IN ('awaiting_review','in_review')")["n"],
                 "fmt_time": lambda t: fmt(t, "%d %b %Y, %H:%M"), "fmt_date": lambda t: fmt(t, "%d %b %Y"),
                 "fmt_day": lambda t: fmt(t, "%a %d %b"), "fmt_clock": lambda t: fmt(t, "%H:%M"),
-                "fmt_long": lambda t: fmt(t, "%A %d %B %Y")}
+                "fmt_long": lambda t: fmt(t, "%A %d %B %Y"), "fmt_iso": common.fmt_iso}
 
     def get_case_or_404(cid: str):
         case = db.case(cid)
@@ -120,9 +133,10 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     deps = SimpleNamespace(app=app, db=db, store=store, ctx=ctx, assistant=assistant, model_info=model_info,
                            data_dir=Path(data_dir), ip=lambda: request.remote_addr, get_case_or_404=get_case_or_404,
                            login_limiter=auth.RateLimiter(20, 60), register_limiter=auth.RateLimiter(5, 3600),
-                           booking_limiter=auth.RateLimiter(20, 3600))
-    from edge.portal.views import admin, auth as auth_views, case, doctor, notifications, patient
-    for mod in (auth_views, case, patient, doctor, admin, notifications):
+                           booking_limiter=auth.RateLimiter(20, 3600), reset_limiter=auth.RateLimiter(5, 3600),
+                           export_limiter=auth.RateLimiter(3, 3600), token_limiter=auth.RateLimiter(30, 600))
+    from edge.portal.views import admin, auth as auth_views, care, case, doctor, notifications, patient, public
+    for mod in (auth_views, case, patient, doctor, admin, notifications, care, public):
         app.register_blueprint(mod.blueprint(deps))
 
     @app.errorhandler(413)

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Referral letter · {{ patient.name }}</title>
+<style>
+  body { font: 14px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: #111827; background: #f3f5f8; margin: 0; }
+  .page { max-width: 800px; margin: 28px auto; background: #fff; padding: 40px 48px; border: 1px solid #e2e8f0; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b5c7a; padding-bottom: 14px; }
+  .org b { font-size: 17px; display: block; } .org small, .title small { color: #64748b; font-size: 12px; }
+  .title { text-align: right; } .title b { display: block; color: #073b4f; font-size: 15px; letter-spacing: .05em; text-transform: uppercase; }
+  .to { padding: 18px 0 6px; } .to span, .meta span { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
+  .to b { font-size: 16px; }
+  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 18px; padding: 14px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-top: 12px; }
+  .meta b { font-size: 13.5px; font-weight: 600; }
+  .urgent { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #fdecea; color: #b42318; }
+  .sec { padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
+  .sec h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #073b4f; }
+  .pre { white-space: pre-wrap; }
+  .sign { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 26px; }
+  .sign b { display: block; font-size: 15px; } .sign small, .ver { color: #64748b; font-size: 12px; } .ver { text-align: right; }
+  @media print { body { background: #fff; } .page { margin: 0; border: 0; padding: 0; max-width: none; } }
+</style></head>
+<body><div class="page">
+<div class="head">
+  <div class="org"><b>{{ clinic }}</b><small>Department of Radiology</small></div>
+  <div class="title"><b>Referral letter</b><small>Ref. R-{{ '%05d'|format(ref.id) }} · {{ signed }}</small></div>
+</div>
+<div class="to"><span>To</span><b>{{ ref.facility }}</b>{% if ref.specialty %}<div>{{ ref.specialty }}</div>{% endif %}
+  {% if ref.urgency != 'routine' %}<div class="urgent">{{ urgency }}</div>{% endif %}</div>
+<div class="meta">
+  <div><span>Patient</span><b>{{ patient.name }}</b></div>
+  <div><span>Patient ID</span><b>{{ mrn(patient.id) }}</b></div>
+  <div><span>Date of birth</span><b>{{ profile.dob if profile and profile.dob else '—' }}</b></div>
+  <div><span>Sex</span><b>{{ profile.sex if profile and profile.sex else '—' }}</b></div>
+  <div><span>Phone</span><b>{{ profile.phone if profile and profile.phone else '—' }}</b></div>
+  <div><span>District</span><b>{{ profile.district if profile and profile.district else '—' }}</b></div>
+  <div><span>Urgency</span><b>{{ urgency }}</b></div>
+  <div><span>Date</span><b>{{ signed }}</b></div>
+</div>
+<div class="sec"><h3>Reason for referral</h3><div class="pre">{{ ref.reason }}</div></div>
+<div class="sec"><h3>Enclosed</h3><div>The signed radiology report is available to the patient in the patient portal and can be printed for this visit.</div></div>
+<div class="sign">
+  <div><small>Electronically signed by</small><b>{{ doctor.name }}</b><small>Radiologist · {{ clinic }}</small></div>
+  <div class="ver">Archived, tamper-evident copy</div>
+</div>
+</div></body></html>

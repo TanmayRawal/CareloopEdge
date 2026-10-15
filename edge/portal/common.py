@@ -7,14 +7,15 @@ import ipaddress
 import socket
 import time
 
-DISCLAIMER = "NeuroEdge research prototype"
+BRAND = "CareLoop-Edge"
+DISCLAIMER = "CareLoop-Edge research prototype"
 CLASS_TEXT = {"glioma": "Glioma", "meningioma": "Meningioma", "pituitary": "Pituitary tumor", "no_tumor": "No tumor",
               "other": "Other finding", "inconclusive": "Inconclusive — further imaging needed"}
 STATUS_TEXT = {"awaiting_review": "Awaiting doctor review", "in_review": "In review",
                "reupload_requested": "New image requested", "finalized": "Report ready"}
 APPT_TEXT = {"booked": "Booked", "arrived": "Arrived", "completed": "Completed", "no_show": "Did not attend",
              "cancelled": "Cancelled"}
-ROLE_TEXT = {"doctor": "Radiologist", "admin": "Administrator", "patient": "Patient"}
+ROLE_TEXT = {"doctor": "Radiologist", "admin": "Care coordinator", "patient": "Patient"}
 FLAG_TEXT = {
     "out_of_distribution": "Image differs from the scans the model was trained on.",
     "unusual_image": "Image is less typical than 95% of calibration scans.",
@@ -46,6 +47,14 @@ def age_from_dob(dob: str | None) -> int | None:
         return None
     t = dt.date.today()
     return t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+
+
+def fmt_iso(day: str | None) -> str:
+    """'2026-10-29' -> '29 Oct 2026' (dates stored as ISO text, e.g. follow-up due dates)."""
+    try:
+        return dt.date.fromisoformat(day).strftime("%d %b %Y")
+    except (TypeError, ValueError):
+        return day or "—"
 
 
 def ago(ts, now: float | None = None) -> str:
