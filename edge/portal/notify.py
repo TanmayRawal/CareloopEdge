@@ -42,6 +42,8 @@ TEMPLATES = {
     "doc_unmarked": ("Please record attendance: {patient}", "The consultation with {patient} at {when} has ended but attendance "
                      "was not recorded. Please mark it as completed or no-show."),
     # CareLoop follow-up
+    "followup_planned": ("Your next step: {step} by {due}", "Your doctor has planned the next step in your care: {step}, "
+                         "by {due}.\n\n{action}"),
     "followup_reminder": ("Your next step: {step}", "Your care team would like to remind you about the next step in your "
                           "care: {step}, due by {due}.\n\n{message}"),
     "referral_ready": ("Your referral letter is ready", "Your doctor has signed a referral to {facility}. You can view and "

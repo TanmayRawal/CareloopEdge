@@ -391,3 +391,27 @@ def test_every_new_page_renders_for_its_role(env):
         assert anon.get(path).status_code == 200
     assert anon.get("/r/not-a-token?a=yes").status_code == 410
     assert anon.get("/welcome/not-a-token").status_code == 410
+
+
+def test_patient_is_told_about_the_follow_up_the_doctor_decides(env):
+    p, d, a = (env["app"].test_client() for _ in range(3))
+    register(p)
+    upload(p)
+    cid = env["db"].q("SELECT id FROM cases")[0]["id"]
+    login(d, "doc@clinic.test")
+    d.post(f"/doctor/case/{cid}/sign", data={"csrf": csrf(d, f"/doctor/case/{cid}"), "diagnosis": "meningioma", "agrees": "yes",
+                                             "findings": "Small mass.", "password": PW, "fu_kind": "repeat_scan", "fu_days": "7"})
+    db = env["db"]
+    mail = db.one("SELECT * FROM outbox WHERE to_email = 'pat@x.test' AND subject LIKE 'Your next step%'")
+    assert mail and "repeat mri" in mail["subject"].lower() and "/patient/upload" in mail["text"]
+    assert "meningioma" not in (mail["text"] + mail["html"]).lower()             # no clinical content in e-mail
+    # a coordinator proposal is announced only once a doctor approves it
+    pat = db.user_by_email("pat@x.test")["id"]
+    careplan.close(db, careplan.active(db, pat), "completed", "", None)
+    login(a, "admin@clinic.test")
+    a.post(f"/care/patients/{pat}/plan", data={"csrf": csrf(a, "/care/patients"), "kind": "consultation", "due": due(db, 10)})
+    n = db.one("SELECT COUNT(*) AS n FROM outbox WHERE subject LIKE 'Your next step: consultation%'")["n"]
+    assert n == 0
+    plan = careplan.active(db, pat)
+    d.post(f"/care/plans/{plan['id']}/approve", data={"csrf": csrf(d, "/care/approvals"), "decision": "approve"})
+    assert db.one("SELECT COUNT(*) AS n FROM outbox WHERE subject LIKE 'Your next step: consultation%'")["n"] == 1

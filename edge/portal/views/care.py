@@ -218,7 +218,8 @@ def blueprint(d) -> Blueprint:
                 notify.notify(db, doc, "doc_plan_proposed", ctx, "/care/approvals", email=False)
             flash("Plan proposed. Outreach can start once a doctor approves it.")
         else:
-            flash("Follow-up plan created.")
+            outreach.announce_plan(db, plan)
+            flash("Follow-up plan created; the patient was informed.")
         return back(uid)
 
     # ------------------------------------------------------------------ approvals (doctor)
@@ -242,7 +243,8 @@ def blueprint(d) -> Blueprint:
             else:
                 careplan.approve(db, plan, g.user, request.form.get("due") or None, request.form.get("note"))
                 db.audit(g.user["id"], "plan_approved", detail={"patient": plan["patient_id"], "plan": pid}, ip=d.ip())
-                flash(f"Follow-up approved for {plan['patient_name']}.")
+                outreach.announce_plan(db, careplan.get(db, pid))
+                flash(f"Follow-up approved for {plan['patient_name']}; the patient was informed.")
         except careplan.PlanError as e:
             flash(str(e), "error")
         return back(plan["patient_id"])
