@@ -129,8 +129,13 @@ def main() -> None:
             print("Nothing was entered. Paste the password again.")
         if user and not pw:
             sys.exit("no password entered; nothing saved")
-        if "gmail.com" in host and len(pw.replace(" ", "")) != 16:
-            print(f"Note: received {len(pw.replace(' ', ''))} characters; a Gmail App Password has 16.")
+        compact = pw.replace(" ", "")
+        if "gmail.com" in host and len(compact) > 16 and len(compact) % 16 == 0 \
+                and len({compact[i:i + 16] for i in range(0, len(compact), 16)}) == 1:
+            pw = compact[:16]                                 # the same code pasted several times (input is hidden)
+            print(f"The password was pasted {len(compact) // 16} times; one copy was kept (16 characters).")
+        elif "gmail.com" in host and len(compact) != 16:
+            sys.exit(f"Received {len(compact)} characters, but a Gmail App Password has 16. Nothing saved; try again.")
         else:
             print(f"Password received ({len(pw)} characters).")
         sender = input(f"From address [{user}]: ").strip() or user
