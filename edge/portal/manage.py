@@ -121,7 +121,18 @@ def main() -> None:
         port = input("Port [587]: ").strip() or "587"
         sec = (input("Security starttls/ssl/none [starttls]: ").strip() or "starttls").lower()
         user = input("Username (e-mail address): ").strip()
-        pw = getpass.getpass("Password / app password (hidden): ")
+        pw = ""
+        for _ in range(3):
+            pw = getpass.getpass("Password / app password (hidden; right-click or Ctrl+Shift+V to paste): ").strip()
+            if pw or not user:
+                break
+            print("Nothing was entered. Paste the password again.")
+        if user and not pw:
+            sys.exit("no password entered; nothing saved")
+        if "gmail.com" in host and len(pw.replace(" ", "")) != 16:
+            print(f"Note: received {len(pw.replace(' ', ''))} characters; a Gmail App Password has 16.")
+        else:
+            print(f"Password received ({len(pw)} characters).")
         sender = input(f"From address [{user}]: ").strip() or user
         if sec not in ("starttls", "ssl", "none") or not host or not port.isdigit():
             sys.exit("invalid settings")
