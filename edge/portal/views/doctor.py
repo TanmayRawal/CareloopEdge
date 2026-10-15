@@ -8,8 +8,8 @@ import time
 
 from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, url_for
 
-from edge.portal import auth, careplan, notify, scheduling, services
-from edge.portal.common import CLASS_TEXT, PAGE_SIZE, page_args
+from edge.portal import auth, careplan, notify, outreach, scheduling, services
+from edge.portal.common import CLASS_TEXT, PAGE_SIZE, fmt_iso, page_args
 from edge.portal.db import DIAGNOSES, STATUSES
 
 # Latest AI result per case in one query (instead of one query per worklist row).
@@ -110,7 +110,8 @@ def blueprint(d) -> Blueprint:
         pid = careplan.create(db, c["patient_id"], kind, due, note, g.user, case_id=c["id"])
         db.audit(g.user["id"], "plan_created", c["id"], {"plan": pid, "kind": kind, "due": due}, d.ip())
         if kind != "referral":
-            return f"Follow-up {careplan.PLAN_TEXT[kind].lower()} due {due}."
+            outreach.announce_plan(db, careplan.get(db, pid))
+            return f"Follow-up {careplan.PLAN_TEXT[kind].lower()} due {fmt_iso(due)}; the patient was informed."
         rid = careplan.create_referral(db, c["patient_id"], f.get("ref_facility", ""), f.get("ref_specialty", ""),
                                        f.get("ref_urgency", "routine"), note or (f.get("findings") or "")[:1500], g.user,
                                        case_id=c["id"], plan_id=pid)

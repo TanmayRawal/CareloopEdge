@@ -66,6 +66,30 @@ def send_reminder(db, plan, by_user, message: str = "", now: float | None = None
     return emailed
 
 
+PLAN_ACTION = {"consultation": ("Please book a consultation in the patient portal at a time that suits you.", "Book a consultation"),
+               "repeat_scan": ("Please have a follow-up MRI done and upload it in the patient portal, or bring it to the "
+                               "department.", "Upload the new scan"),
+               "referral": ("Your referral details are in the patient portal.", "Open the portal"),
+               "other": ("Please sign in to the patient portal for details.", "Open the portal")}
+
+
+def announce_plan(db, plan, now: float | None = None) -> None:
+    """Tell the patient about a follow-up step a doctor has just decided (sent once per plan). This is the doctor's
+    instruction, so it goes out immediately; later reminders are sent by the coordinator."""
+    if plan["status"] != "approved":
+        return
+    patient = db.user(plan["patient_id"])
+    due = careplan.due_info(plan, scheduling.local(time.time() if now is None else now, scheduling.tz(db)).date())["due"]
+    text, button = PLAN_ACTION[plan["kind"]]
+    if plan["kind"] == "other" and plan["note"]:
+        text = plan["note"]
+    link = {"consultation": f"/patient/book/{plan['case_id']}" if plan["case_id"] else "/patient/appointments",
+            "repeat_scan": "/patient/upload", "referral": "/patient/documents"}.get(plan["kind"], "/patient/")
+    notify.notify(db, patient, "followup_planned", {"step": careplan.PLAN_TEXT[plan["kind"]].lower(),
+                                                    "due": due.strftime("%d %b %Y"), "action": text},
+                  link, dedupe=f"plan:{plan['id']}", now=now, actions=[(button, link)])
+
+
 def reminder_actions(db, appt, now: float | None = None) -> list[tuple[str, str]]:
     """Buttons for an appointment reminder e-mail."""
     yes = tokens.issue(db, "appt_yes", appt["patient_id"], appt["id"], now)
