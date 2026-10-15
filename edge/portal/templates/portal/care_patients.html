@@ -1,0 +1,34 @@
+{% extends "portal/base.html" %}
+{% block title %}Patients{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Patients</h1></div>
+  {% if me.role == 'admin' %}<a class="btn primary" href="{{ url_for('care.register') }}"><svg class="ic sm"><use href="#i-plus"/></svg>Register patient</a>{% endif %}</div>
+<section class="card">
+  <form class="toolbar" method="get">
+    <label class="search"><svg class="ic"><use href="#i-search"/></svg>
+      <input type="search" name="q" value="{{ q }}" placeholder="Name, patient ID, phone or e-mail" aria-label="Search patients"></label>
+    <button class="btn sm" type="submit">Search</button>
+    {% if q %}<a class="btn sm ghost" href="{{ url_for('care.patients') }}">Clear</a>{% endif %}
+  </form>
+  {% if not rows %}
+    <div class="empty"><svg class="ic"><use href="#i-users"/></svg><h2>No patients found</h2></div>
+  {% else %}
+  <table class="table responsive">
+    <thead><tr><th>Patient</th><th>Contact</th><th>Studies</th><th>Next step</th><th>Risk</th><th></th></tr></thead>
+    <tbody>
+    {% for u in rows %}{% set age = age_from_dob(u.dob) %}
+      <tr class="link" data-href="{{ url_for('care.patient', uid=u.id) }}">
+        <td><div class="cell-main">{{ u.name }}</div><div class="cell-sub">{{ mrn(u.id) }}{% if age is not none %} · {{ age }} y{% endif %}{% if u.sex %} · {{ u.sex[:1] }}{% endif %}</div></td>
+        <td><div class="cell-main">{{ u.phone or '—' }}</div><div class="cell-sub">{{ u.district or u.email or '' }}</div></td>
+        <td class="num">{{ u.n_cases }}</td>
+        <td>{% if u.plan %}{% set k, st, due = u.plan.split('|') %}<div class="cell-main">{{ plan_text[k] }}</div><div class="cell-sub">{{ 'Awaiting approval' if st == 'proposed' else 'Due ' ~ fmt_iso(due) }}</div>{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td>{% with rk = risk.get(u.id) %}{% include "portal/_risk.html" %}{% endwith %}{% if not risk.get(u.id) %}<span class="faint">—</span>{% endif %}</td>
+        <td class="right"><a class="btn sm" href="{{ url_for('care.patient', uid=u.id) }}">Open</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% include "portal/_pager.html" %}
+{% endblock %}

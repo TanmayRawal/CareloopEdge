@@ -1,0 +1,30 @@
+{% extends "portal/base.html" %}
+{% block title %}Verification code{% endblock %}
+{% block bare %}
+<div class="auth">
+  <section class="auth-side">
+    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
+    <div class="tagline"><h1>Two-step sign-in</h1><p>Enter the code from your authenticator app.</p></div>
+    <div class="legal">© {{ clinic }} · Authorised use only</div>
+  </section>
+  <section class="auth-main">
+    <div class="auth-box">
+      <h2>Verification code</h2>
+      {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+      <form method="post" class="form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <label class="field">6-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required autofocus></label>
+        <button class="btn primary lg block" type="submit">Verify</button>
+      </form>
+      <details class="panel flat"><summary>Use a recovery code</summary>
+        <form method="post" class="panel-b form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="recovery" value="1">
+          <label class="field">Recovery code<input name="code" maxlength="20" required autocomplete="off"></label>
+          <button class="btn block" type="submit">Sign in</button>
+        </form>
+      </details>
+      <div class="auth-alt"><a href="{{ url_for('auth.login') }}">Cancel</a></div>
+    </div>
+  </section>
+</div>
+{% endblock %}

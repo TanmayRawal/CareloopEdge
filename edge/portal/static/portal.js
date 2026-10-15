@@ -65,6 +65,27 @@
     document.addEventListener("keydown", ev => { if (ev.key === "Escape") bell.open = false; });
   }
 
+  // ------------------------------------------------------------------ pop-over forms (log contact): one open at a time
+  const pops = document.querySelectorAll("details.pop");
+  if (pops.length) {
+    pops.forEach(p => p.addEventListener("toggle", () => { if (p.open) pops.forEach(o => { if (o !== p) o.open = false; }); }));
+    document.addEventListener("click", ev => pops.forEach(p => { if (p.open && !p.contains(ev.target)) p.open = false; }));
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape") pops.forEach(p => { p.open = false; }); });
+  }
+
+  // ------------------------------------------------------------------ sign panel: referral fields only for a referral
+  const fuKind = $("#fu-kind"), fuRef = $("#fu-ref");
+  if (fuKind && fuRef) {
+    const sync = () => {
+      const on = fuKind.value === "referral";
+      fuRef.classList.toggle("on", on);
+      const fac = fuRef.querySelector("input[name=ref_facility]");
+      if (fac) fac.required = on;
+    };
+    fuKind.addEventListener("change", sync);
+    sync();
+  }
+
   // ------------------------------------------------------------------ booking: live summary of the chosen slot
   const bookForm = $("#book-form");
   if (bookForm) {

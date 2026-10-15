@@ -1,0 +1,177 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ p.name }}{% endblock %}
+{% block crumbs %}<a href="{{ url_for('care.patients') }}">Patients</a><svg class="ic"><use href="#i-chevron"/></svg><b>{{ p.name }} · {{ mrn(p.id) }}</b>{% endblock %}
+{% block content %}
+{% set admin = me.role == 'admin' %}
+{% set age = age_from_dob(prof.dob if prof else None) %}
+<div class="case-head">
+  <div class="pt"><span class="avatar">{{ p.name[:1]|upper }}</span>
+    <div><h1>{{ p.name }}</h1>
+      <div class="cell-sub">{{ mrn(p.id) }}{% if age is not none %} · {{ age }} y{% endif %}{% if prof and prof.sex %} · {{ prof.sex }}{% endif %}{% if not p.pw_hash %} · No portal account{% endif %}</div></div></div>
+  <div class="meta">
+    <div><span>Phone</span><b>{{ prof.phone if prof and prof.phone else '—' }}</b></div>
+    <div><span>District</span><b>{{ prof.district if prof and prof.district else '—' }}</b></div>
+    {% if prof and prof.distance_km %}<div><span>Distance</span><b>{{ prof.distance_km|round|int }} km</b></div>{% endif %}
+    <div><span>Contact</span><b class="{{ 'err-text' if prof and prof.contact_status != 'ok' }}">{{ contact_status_text[prof.contact_status if prof else 'ok'] }}</b></div>
+  </div>
+  <div class="actions">
+    {% with rk = risk %}{% include "portal/_risk.html" %}{% endwith %}
+    {% if admin and bookable %}<a class="btn sm primary" href="{{ url_for('care.book', uid=p.id) }}"><svg class="ic sm"><use href="#i-calendar"/></svg>Book consultation</a>{% endif %}
+    {% if admin and p.email and not p.pw_hash %}<form method="post" action="{{ url_for('care.invite', uid=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="btn sm" type="submit"><svg class="ic sm"><use href="#i-mail"/></svg>Send portal invite</button></form>{% endif %}
+  </div>
+</div>
+
+<div class="grid g-side">
+  <section class="card">
+    <div class="card-h"><h2>Timeline</h2><span class="small muted">{{ events|length }} events</span></div>
+    <div class="tl">
+    {% for ts, cat, title, sub, cid in events %}
+      <div class="ev">
+        <span class="ev-time num">{{ fmt_date(ts) }}</span>
+        <span class="ev-dot c-{{ {'plan': 'clinical', 'contact': 'access'}.get(cat, cat) }}"></span>
+        <div class="ev-main"><div><b>{{ title }}</b>{% if cid and me.role == 'doctor' %} · <a href="{{ url_for('doctor.case_review', cid=cid) }}">Open study</a>{% endif %}</div>
+          {% if sub %}<div class="ev-sub">{{ sub }}</div>{% endif %}</div>
+        <div class="ev-who"><span>{{ fmt_clock(ts) }}</span></div>
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+
+  <div class="side-stack">
+    <section class="card">
+      <div class="card-h"><h2>Follow-up plan</h2>{% if plan %}<span class="pill pl-{{ plan.status }}">{{ plan_status_text[plan.status] }}</span>{% endif %}</div>
+      <div class="card-b">
+      {% if plan %}{% set di = plan.due_date %}
+        <div class="plan-box"><b>{{ plan_text[plan.kind] }}</b><span>Due {{ fmt_iso(plan.due_date) }}</span>
+          {% if plan.note %}<p class="small muted">{{ plan.note }}</p>{% endif %}</div>
+        {% if plan.status == 'proposed' %}
+          {% if me.role == 'doctor' %}
+          <form method="post" action="{{ url_for('care.approve', pid=plan.id) }}" class="form">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <label class="field">Due date<input type="date" name="due" value="{{ plan.due_date }}"></label>
+            <div class="row-actions"><button class="btn primary sm" name="decision" value="approve" type="submit">Approve</button>
+              <button class="btn sm danger" name="decision" value="reject" type="submit">Decline</button></div>
+          </form>
+          {% else %}<p class="small muted">Waiting for a doctor to approve. Reminders can be sent after approval.</p>{% endif %}
+        {% else %}
+          {% if admin %}
+          <form method="post" action="{{ url_for('care.remind', pid=plan.id) }}" class="form" data-confirm="Send a follow-up reminder to {{ p.name }}?">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <label class="field">Message <span class="hint">Optional</span><input name="message" maxlength="500" placeholder="e.g. Please call us to fix a date."></label>
+            <button class="btn sm" type="submit"><svg class="ic sm"><use href="#i-mail"/></svg>Send reminder</button>
+          </form>
+          {% endif %}
+        {% endif %}
+        <details class="panel"><summary>Close this plan</summary>
+          <form method="post" action="{{ url_for('care.close_plan', pid=plan.id) }}" class="panel-b form">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <label class="field">Outcome<select name="status"><option value="completed">Completed</option><option value="lost">Lost to follow-up</option><option value="cancelled">No longer needed</option></select></label>
+            <label class="field">Note<input name="reason" maxlength="300"></label>
+            <button class="btn sm" type="submit">Close plan</button>
+          </form>
+        </details>
+      {% else %}
+        <form method="post" action="{{ url_for('care.new_plan', uid=p.id) }}" class="form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <div class="row2">
+            <label class="field">Next step<select name="kind">{% for k in plan_kinds %}<option value="{{ k }}">{{ plan_text[k] }}</option>{% endfor %}</select></label>
+            <label class="field">Due<input type="date" name="due" value="{{ default_due }}" min="{{ today.isoformat() }}" required></label>
+          </div>
+          <label class="field">Note<input name="note" maxlength="500"></label>
+          <button class="btn sm primary" type="submit">{{ 'Create plan' if me.role == 'doctor' else 'Propose plan' }}</button>
+          {% if admin %}<span class="hint">A doctor approves the plan before outreach.</span>{% endif %}
+        </form>
+      {% endif %}
+      </div>
+    </section>
+
+    {% if upcoming %}
+    <section class="card">
+      <div class="card-h"><h2>Upcoming</h2></div>
+      {% for a in upcoming %}
+        <div class="appt-row"><div class="time-col"><b>{{ fmt_clock(a.start_ts) }}</b><span>{{ fmt_day(a.start_ts) }}</span></div>
+          <div class="grow"><b>Consultation</b><div class="small muted">{{ a.doctor_name }}{% if a.room %} · {{ a.room }}{% endif %}</div></div>
+          <span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span></div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if admin %}
+    <section class="card">
+      <div class="card-h"><h2>Log contact</h2></div>
+      <form method="post" action="{{ url_for('care.contact', uid=p.id) }}" class="card-b form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <div class="row2">
+          <label class="field">How<select name="channel">{% for c in channels if c != 'portal' %}<option value="{{ c }}">{{ channel_text[c] }}</option>{% endfor %}</select></label>
+          <label class="field">Outcome<select name="outcome">{% for o in outcomes if o != 'message_sent' %}<option value="{{ o }}">{{ outcome_text[o] }}</option>{% endfor %}</select></label>
+        </div>
+        <label class="field">Note<input name="note" maxlength="500"></label>
+        <label class="field">Try again on<input type="date" name="next_action" min="{{ today.isoformat() }}"></label>
+        <button class="btn sm primary" type="submit">Save contact</button>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <div class="card-h"><h2>Referrals</h2></div>
+      {% for r in refs %}
+        <div class="doc-row">
+          <div class="grow"><b>{{ r.facility }}</b><div class="small muted">{{ r.specialty or '' }}{% if r.urgency != 'routine' %} · {{ urgency_text[r.urgency] }}{% endif %}{% if r.signed_by_name %} · {{ r.signed_by_name }}{% endif %}</div></div>
+          <span class="pill rf-{{ r.status }}">{{ referral_text[r.status] }}</span>
+          {% if r.status != 'draft' %}<a class="btn sm ghost" href="{{ url_for('care.letter', rid=r.id) }}" target="_blank" rel="noopener">Letter</a>{% endif %}
+        </div>
+      {% else %}<div class="empty slim">No referrals.</div>{% endfor %}
+      {% if me.role == 'doctor' %}
+      <details class="panel"><summary><svg class="ic sm"><use href="#i-plus"/></svg>New referral</summary>
+        <form method="post" action="{{ url_for('care.new_referral', uid=p.id) }}" class="panel-b form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field">Refer to<input name="facility" required maxlength="150"></label>
+          <div class="row2"><label class="field">Specialty<input name="specialty" maxlength="80"></label>
+            <label class="field">Urgency<select name="urgency">{% for k, t in urgency_text.items() %}<option value="{{ k }}">{{ t }}</option>{% endfor %}</select></label></div>
+          <label class="field">Reason<textarea name="reason" rows="3" required maxlength="1500"></textarea></label>
+          <label class="field">Password <span class="hint">Confirms your signature</span><input type="password" name="password" required autocomplete="current-password"></label>
+          <button class="btn sm primary" type="submit">Sign referral</button>
+        </form>
+      </details>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Documents</h2></div>
+      {% for dc in docs %}
+        <a class="doc-row" href="{{ url_for('care.document', did=dc.id) }}"><svg class="ic"><use href="#i-file"/></svg>
+          <div class="grow"><b>{{ dc.title }}</b><div class="small muted">{{ doc_text[dc.kind] }} · {{ fmt_date(dc.created) }}{% if dc.by_name %} · {{ dc.by_name }}{% endif %}</div></div>
+          <svg class="ic sm"><use href="#i-download"/></svg></a>
+      {% else %}<div class="empty slim">No documents.</div>{% endfor %}
+      <details class="panel"><summary><svg class="ic sm"><use href="#i-upload"/></svg>Add document</summary>
+        <form method="post" action="{{ url_for('care.upload_document', uid=p.id) }}" enctype="multipart/form-data" class="panel-b form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field">Type<select name="kind">{% for k in doc_kinds %}<option value="{{ k }}">{{ doc_text[k] }}</option>{% endfor %}</select></label>
+          <label class="field">Title<input name="title" maxlength="120" placeholder="e.g. Biopsy report, District Hospital"></label>
+          <label class="field">File<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.dcm,.dicom" required><span class="hint">PDF, JPG, PNG or DICOM · up to 20 MB</span></label>
+          <button class="btn sm" type="submit">Upload</button>
+        </form>
+      </details>
+    </section>
+
+    {% if admin %}
+    <section class="card">
+      <details class="panel flat"><summary>Contact details</summary>
+        <form method="post" action="{{ url_for('care.profile', uid=p.id) }}" class="panel-b form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field">E-mail<input type="email" name="email" value="{{ p.email or '' }}" maxlength="200"></label>
+          <div class="row2"><label class="field">Phone<input name="phone" value="{{ prof.phone or '' }}" maxlength="30"></label>
+            <label class="field">Alternate phone<input name="alt_phone" value="{{ prof.alt_phone or '' }}" maxlength="30"></label></div>
+          <label class="field">Address<input name="address" value="{{ prof.address or '' }}" maxlength="200"></label>
+          <div class="row2"><label class="field">District<input name="district" value="{{ prof.district or '' }}" maxlength="80"></label>
+            <label class="field">Distance (km)<input name="distance_km" inputmode="decimal" value="{{ prof.distance_km if prof.distance_km is not none else '' }}"></label></div>
+          <label class="field">Contact status<select name="contact_status">{% for k, t in contact_status_text.items() %}<option value="{{ k }}" {{ 'selected' if prof.contact_status == k }}>{{ t }}</option>{% endfor %}</select></label>
+          <button class="btn sm" type="submit">Save</button>
+        </form>
+      </details>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% macro body() %}
+<div class="narrow-card success-card">
+  <div class="success-ic {{ '' if ok else 'muted-ic' }}"><svg class="ic"><use href="#{{ 'i-check' if ok else 'i-clock' }}"/></svg></div>
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ message }}</p>
+  <a class="btn primary" href="{{ url_for('auth.home') }}">{{ 'Go to the portal' if me else 'Sign in' }}</a>
+</div>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block pcontent %}{{ body() }}{% endblock %}
+{% block content_anon %}{{ body() }}{% endblock %}

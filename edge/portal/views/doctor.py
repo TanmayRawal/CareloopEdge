@@ -8,7 +8,7 @@ import time
 
 from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, url_for
 
-from edge.portal import auth, notify, scheduling, services
+from edge.portal import auth, careplan, notify, scheduling, services
 from edge.portal.common import CLASS_TEXT, PAGE_SIZE, page_args
 from edge.portal.db import DIAGNOSES, STATUSES
 
@@ -71,7 +71,8 @@ def blueprint(d) -> Blueprint:
                                patient=patient, profile=profile, reports=db.reports(cid), diagnoses=DIAGNOSES,
                                llm_ready=assistant.llm.available(), history=history,
                                appt=scheduling.appointment(db, appt["id"]) if appt else None,
-                               no_shows=scheduling.no_show_count(db, c["patient_id"]))
+                               no_shows=scheduling.no_show_count(db, c["patient_id"]),
+                               plan=careplan.active(db, c["patient_id"]))
 
     @bp.post("/case/<cid>/sign")
     @auth.require("doctor")
@@ -88,8 +89,36 @@ def blueprint(d) -> Blueprint:
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("doctor.case_review", cid=cid))
-        flash(f"Report version {v} signed and released to the patient.")
+        msg = f"Report version {v} signed and released to the patient."
+        kind = f.get("fu_kind", "")
+        if kind and careplan.active(db, c["patient_id"]) is None:
+            try:
+                msg += " " + start_follow_up(c, kind, f)
+            except careplan.PlanError as e:
+                flash(f"Report signed, but the follow-up was not saved: {e}", "error")
+        flash(msg)
         return redirect(url_for("doctor.worklist"))
+
+    def start_follow_up(c, kind: str, f) -> str:
+        """Approved care plan from the sign panel; a referral is drafted and signed with the same signature."""
+        if kind == "referral" and not f.get("ref_facility", "").strip():
+            raise careplan.PlanError("enter the facility to refer to (you can add it from the patient record).")
+        zone = scheduling.tz(db)
+        days = max(1, min(400, int(f.get("fu_days", "14") or 14)))
+        due = (scheduling.local(time.time(), zone).date() + dt.timedelta(days=days)).isoformat()
+        note = (f.get("recommendation") or "").strip()[:500]
+        pid = careplan.create(db, c["patient_id"], kind, due, note, g.user, case_id=c["id"])
+        db.audit(g.user["id"], "plan_created", c["id"], {"plan": pid, "kind": kind, "due": due}, d.ip())
+        if kind != "referral":
+            return f"Follow-up {careplan.PLAN_TEXT[kind].lower()} due {due}."
+        rid = careplan.create_referral(db, c["patient_id"], f.get("ref_facility", ""), f.get("ref_specialty", ""),
+                                       f.get("ref_urgency", "routine"), note or (f.get("findings") or "")[:1500], g.user,
+                                       case_id=c["id"], plan_id=pid)
+        careplan.sign_referral(db, d.store, careplan.referral(db, rid), g.user, db.setting("clinic_name"))
+        db.audit(g.user["id"], "referral_signed", c["id"], {"referral": rid}, d.ip())
+        notify.notify(db, db.user(c["patient_id"]), "referral_ready", {"facility": f.get("ref_facility", "")},
+                      f"/patient/referrals/{rid}", dedupe=f"referral:{rid}")
+        return "Referral letter signed and shared with the patient."
 
     @bp.post("/case/<cid>/reupload")
     @auth.require("doctor")
@@ -177,6 +206,9 @@ def blueprint(d) -> Blueprint:
             db.audit(g.user["id"], f"appointment_{status}", a["case_id"], {"appointment": aid}, d.ip())
             if status == "no_show":
                 notify.appointment_event(db, aid, "no_show")
+            elif status == "completed" and careplan.complete_matching(db, a["patient_id"], ("consultation",),
+                                                                       "Consultation completed"):
+                db.audit(g.user["id"], "plan_completed", a["case_id"], {"kind": "consultation"}, d.ip())
             flash({"arrived": "Checked in.", "completed": "Consultation completed.",
                    "no_show": "Marked as did not attend. The patient was invited to rebook."}[status])
         return redirect(request.referrer if (request.referrer or "").find("/doctor/") >= 0 else url_for("doctor.schedule"))

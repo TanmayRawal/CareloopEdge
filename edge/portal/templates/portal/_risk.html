@@ -1,0 +1,3 @@
+{# risk badge with the factors behind it; expects `rk` (risk.scores entry) #}
+{% if rk %}<span class="risk r-{{ rk.band }}" title="{% for t, pts in rk.factors %}{{ t }} ({{ '+' if pts >= 0 }}{{ pts }}){{ '\n' if not loop.last }}{% endfor %}">
+  <b class="num">{{ rk.score }}</b>{{ rk.band_text }}</span>{% endif %}

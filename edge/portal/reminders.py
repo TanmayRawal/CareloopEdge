@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import time
 
-from edge.portal import notify, scheduling
+from edge.portal import careplan, notify, outreach, scheduling
 
 
 def _hours(db, key: str) -> float:
@@ -76,8 +76,13 @@ def appointment_reminders(db, now: float) -> int:
         if a["created"] > a["start_ts"] - h * 3600:      # booked inside this window: the confirmation suffices
             continue
         ctx = notify.appt_ctx(db, a) | {"rel": "tomorrow" if h >= 12 else f"in {h:g} hours"}
-        sent += notify.notify(db, db.user(a["patient_id"]), "appt_reminder", ctx, "/patient/appointments",
-                              dedupe=f"remind:{a['id']}:{h:g}", now=now)
+        patient = db.user(a["patient_id"])
+        key = f"remind:{a['id']}:{h:g}"
+        if db.one("SELECT 1 FROM reminder_log WHERE dedupe_key = ?", (f"notify:{key}:{patient['id']}",)):
+            continue
+        actions = outreach.reminder_actions(db, a, now) + [("Manage appointment", "/patient/appointments")]
+        sent += notify.notify(db, patient, "appt_reminder", ctx, "/patient/appointments", dedupe=key, now=now,
+                              actions=actions)
     return sent
 
 
@@ -112,7 +117,59 @@ def unmarked_attendance(db, now: float) -> int:
     return sent
 
 
-RULES = (unread_studies, unsigned_studies, appointment_reminders, daily_agenda, unmarked_attendance)
+def lost_to_follow_up(db, now: float) -> int:
+    """Approved plans overdue longer than `lost_after_days` with no contact attempt since they fell due are marked
+    'lost to follow-up' (they stay visible on the patient's record and in the digest; staff can reopen by planning anew)."""
+    zone = scheduling.tz(db)
+    limit = scheduling.local(now, zone).date() - dt.timedelta(days=int(db.setting("lost_after_days")))
+    n = 0
+    for p in db.q("SELECT * FROM care_plans WHERE status = 'approved' AND due_date < ?", (limit.isoformat(),)):
+        due_ts = dt.datetime.combine(dt.date.fromisoformat(p["due_date"]), dt.time(0), zone).timestamp()
+        if db.one("SELECT 1 FROM contacts WHERE patient_id = ? AND created >= ?", (p["patient_id"], due_ts)):
+            continue
+        careplan.close(db, p, "lost", f"No follow-up for {db.setting('lost_after_days')} days after the due date", None, now)
+        db.audit(None, "plan_lost", detail={"plan": p["id"], "patient": p["patient_id"]})
+        n += 1
+    return n
+
+
+def plans_awaiting_approval(db, now: float) -> int:
+    """Plans proposed by the coordinator and not approved within 24 h -> a daily nudge to every doctor."""
+    n = db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'proposed' AND proposed_at <= ?", (now - 86400,))["n"]
+    if not n:
+        return 0
+    sent = 0
+    for d in db.q("SELECT * FROM users WHERE role = 'doctor' AND active = 1"):
+        sent += notify.notify(db, d, "doc_approvals", {"n": n}, "/care/approvals", dedupe=f"approvals:{int(now // 86400)}", now=now)
+    return sent
+
+
+def followup_digest(db, now: float) -> int:
+    """Once a day after the agenda time: overdue / due-soon follow-ups and stale referrals -> administrators."""
+    zone = scheduling.tz(db)
+    t = scheduling.local(now, zone)
+    hh, mm = (int(x) for x in db.setting("agenda_hour").split(":"))
+    if (t.hour, t.minute) < (hh, mm):
+        return 0
+    today = t.date()
+    soon_days = int(db.setting("followup_due_soon_days"))
+    overdue = db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'approved' AND due_date < ?", (today.isoformat(),))["n"]
+    soon = db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'approved' AND due_date >= ? AND due_date <= ?",
+                  (today.isoformat(), (today + dt.timedelta(days=soon_days)).isoformat()))["n"]
+    stale = db.one("SELECT COUNT(*) AS n FROM referrals WHERE status IN ('signed','sent','appointment_made') "
+                   "AND COALESCE(signed_at, created) < ?", (now - float(db.setting("referral_stale_days")) * 86400,))["n"]
+    lost = db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'lost' AND closed_at >= ?", (now - 86400,))["n"]
+    if not (overdue or soon or stale or lost):
+        return 0
+    ctx = {"n": overdue + soon + stale, "overdue": overdue, "soon": soon, "soon_days": soon_days, "stale": stale, "lost": lost}
+    sent = 0
+    for a in db.q("SELECT * FROM users WHERE role = 'admin' AND active = 1"):
+        sent += notify.notify(db, a, "admin_digest", ctx, "/care/", dedupe=f"digest:{today.isoformat()}", now=now)
+    return sent
+
+
+RULES = (unread_studies, unsigned_studies, appointment_reminders, daily_agenda, unmarked_attendance,
+         lost_to_follow_up, plans_awaiting_approval, followup_digest)
 
 
 def run_once(db, now: float | None = None) -> dict:

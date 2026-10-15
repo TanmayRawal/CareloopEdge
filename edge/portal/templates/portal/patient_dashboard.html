@@ -6,6 +6,27 @@
   <a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>
 </div>
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
+{% if stage >= 0 %}
+<ol class="journey" aria-label="Your care journey">
+  {% for label in ('Scan sent', 'Report ready', 'Consultation', 'Follow-up') %}
+    <li class="{{ 'done' if loop.index0 < stage else 'current' if loop.index0 == stage }}"><span class="dot">{% if loop.index0 < stage %}<svg class="ic"><use href="#i-check"/></svg>{% else %}{{ loop.index }}{% endif %}</span>{{ label }}</li>
+  {% endfor %}
+</ol>
+{% endif %}
+{% if plan and not upcoming %}
+<section class="card next-appt cta">
+  <div class="success-ic sm"><svg class="ic"><use href="#{{ 'i-send' if plan.kind == 'referral' else 'i-scan' if plan.kind == 'repeat_scan' else 'i-calendar' }}"/></svg></div>
+  <div class="grow"><span class="eyebrow">Your next step · by {{ fmt_iso(plan.due_date) }}</span>
+    <h2>{% if plan.kind == 'consultation' %}Book a consultation with your radiologist
+        {% elif plan.kind == 'repeat_scan' %}Have a follow-up MRI and upload it here
+        {% elif plan.kind == 'referral' %}Visit {{ ref.facility if ref else 'the specialist' }} with your referral letter
+        {% else %}{{ plan.note or 'Follow-up with your care team' }}{% endif %}</h2>
+    {% if plan.note and plan.kind != 'other' %}<div class="small muted">{{ plan.note }}</div>{% endif %}</div>
+  {% if plan.kind == 'consultation' and plan.case_id %}<a class="btn primary" href="{{ url_for('patient.book', cid=plan.case_id) }}">Book now</a>
+  {% elif plan.kind == 'repeat_scan' %}<a class="btn primary" href="{{ url_for('patient.upload') }}">Upload scan</a>
+  {% elif plan.kind == 'referral' and ref %}<a class="btn primary" href="{{ url_for('patient.referral', rid=ref.id) }}" target="_blank" rel="noopener">View letter</a>{% endif %}
+</section>
+{% endif %}
 {% if upcoming %}{% set a = upcoming[0] %}
 <section class="card next-appt">
   <div class="at-date"><span>{{ fmt_day(a.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(a.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(a.start_ts).split(' ')[2] }}</span></div>
@@ -16,7 +37,7 @@
     <a class="btn sm" href="{{ url_for('patient.appointments') }}">Manage</a>
   </div>
 </section>
-{% else %}{% set pending = ready|rejectattr('appt_id')|list %}
+{% elif not plan %}{% set pending = ready|rejectattr('appt_id')|list %}
   {% if pending %}
   <section class="card next-appt cta">
     <div class="success-ic sm"><svg class="ic"><use href="#i-calendar"/></svg></div>

@@ -1,17 +1,34 @@
 {% extends "portal/base.html" %}
 {% block title %}Account{% endblock %}
 {% macro body() %}
-<div class="page-head"><div><h1>Account and preferences</h1><p>{{ me.email }}</p></div></div>
+<div class="page-head"><div><h1>Account and preferences</h1><p>{{ me.email }}</p></div>
+  {% if me.role == 'patient' %}<a class="btn" href="{{ url_for('patient.export') }}"><svg class="ic sm"><use href="#i-download"/></svg>Download my data</a>{% endif %}</div>
 {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+{% if must_2fa and not setup and not codes %}<div class="alert warn"><svg class="ic sm"><use href="#i-lock"/></svg><span>The department requires two-step sign-in for staff. Please set it up below to continue.</span></div>{% endif %}
+
+{% if codes %}
+<section class="card attention">
+  <div class="card-h"><h2><svg class="ic sm"><use href="#i-lock"/></svg> Recovery codes</h2></div>
+  <div class="card-b">
+    <p>Keep these codes somewhere safe. Each one signs you in once if you lose your phone. They are shown only now.</p>
+    <div class="codes mono">{% for c in codes %}<span>{{ c }}</span>{% endfor %}</div>
+    <a class="btn primary" href="{{ url_for('auth.account') }}">I have saved them</a>
+  </div>
+</section>
+{% endif %}
+
 <div class="grid g2">
   <section class="card">
     <div class="card-h"><h2>Notifications</h2></div>
     <form method="post" class="card-b form">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="prefs">
       <label class="check"><input type="checkbox" name="notify_email" value="1" {{ 'checked' if me.notify_email }}>
-        <span><b>E-mail me</b><br><span class="muted">{% if me.role == 'patient' %}When a report is ready, appointment confirmations and reminders.{% elif me.role == 'doctor' %}Studies waiting for review, new bookings, today's agenda and attendance reminders.{% else %}Escalations and system messages.{% endif %}</span></span></label>
+        <span><b>E-mail me</b><br><span class="muted">{% if me.role == 'patient' %}When a report is ready, appointment confirmations, reminders and follow-up messages from your care team.{% elif me.role == 'doctor' %}Studies waiting for review, plans to approve, new bookings, today's agenda and attendance reminders.{% else %}Daily follow-up summary, escalations and patient replies.{% endif %}</span></span></label>
       {% if me.role == 'patient' %}
-        <label class="field">Mobile number<input name="phone" value="{{ profile.phone if profile and profile.phone else '' }}" maxlength="30" autocomplete="tel"></label>
+        <div class="row2">
+          <label class="field">Mobile number<input name="phone" value="{{ profile.phone if profile and profile.phone else '' }}" maxlength="30" autocomplete="tel"></label>
+          <label class="field">District<input name="district" value="{{ profile.district if profile and profile.district else '' }}" maxlength="80"></label>
+        </div>
       {% endif %}
       <div><button class="btn primary" type="submit">Save preferences</button></div>
     </form>
@@ -26,6 +43,66 @@
       <div><button class="btn" type="submit"><svg class="ic sm"><use href="#i-lock"/></svg>Update password</button></div>
     </form>
   </section>
+
+  {% if me.role != 'patient' %}
+  <section class="card">
+    <div class="card-h"><h2>Two-step sign-in</h2><span class="pill {{ 's-finalized' if me.totp_on else '' }}">{{ 'On' if me.totp_on else 'Off' }}</span></div>
+    <div class="card-b form">
+    {% if setup %}
+      <ol class="steps-list">
+        <li>Open an authenticator app (Google Authenticator, Microsoft Authenticator) and choose <b>Enter a setup key</b>.</li>
+        <li>Account: <b>{{ me.email }}</b> · Key: <span class="mono key">{{ setup.key }}</span> · Time based.</li>
+        <li>Enter the 6-digit code the app shows.</li>
+      </ol>
+      <a class="small" href="{{ setup.uri }}">Open in an authenticator app on this device</a>
+      <form method="post" class="form inline-form">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="2fa_confirm">
+        <label class="field">Code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required autofocus></label>
+        <button class="btn primary" type="submit">Turn on</button>
+      </form>
+    {% elif me.totp_on %}
+      <p class="muted">Sign-in asks for a code from your authenticator app. {{ recovery_left }} recovery code{{ 's' if recovery_left != 1 }} left.</p>
+      <details class="panel flat"><summary>Turn off</summary>
+        <form method="post" class="panel-b form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="2fa_off">
+          <label class="field">Password<input type="password" name="password" required autocomplete="current-password"></label>
+          <button class="btn danger sm" type="submit">Turn off two-step sign-in</button>
+        </form>
+      </details>
+    {% else %}
+      <p class="muted">Protect your account with a code from your phone in addition to your password.</p>
+      <form method="post"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="2fa_start">
+        <button class="btn primary" type="submit"><svg class="ic sm"><use href="#i-lock"/></svg>Set up</button></form>
+    {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if me.role == 'patient' %}
+  <section class="card">
+    <div class="card-h"><h2>Privacy and consent</h2></div>
+    <div class="card-b">
+      <table class="kv">
+        {% for c in consents %}
+          <tr><th>{{ {'care': 'Storage and care', 'email_reminders': 'E-mail reminders'}[c.purpose] }}</th>
+            <td>{% if c.withdrawn_at %}Withdrawn {{ fmt_date(c.withdrawn_at) }}{% else %}Given {{ fmt_date(c.granted_at) }}{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      <p class="small muted">You can switch e-mail reminders off above at any time. Your records stay encrypted at this hospital and are seen only by its care team.</p>
+      {% if deletion %}
+        <div class="alert"><svg class="ic sm"><use href="#i-clock"/></svg><span>Deletion requested on {{ fmt_date(deletion.created) }}. The department will contact you.</span></div>
+      {% else %}
+      <details class="panel flat"><summary>Request deletion of my account</summary>
+        <form method="post" class="panel-b form" data-confirm="Send a request to delete your account and records?">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="deletion">
+          <label class="field">Reason <span class="hint">Optional</span><input name="note" maxlength="500"></label>
+          <button class="btn danger sm" type="submit">Send request</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endmacro %}
 {% block content %}{{ body() }}{% endblock %}

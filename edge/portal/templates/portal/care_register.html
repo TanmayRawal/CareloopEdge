@@ -1,0 +1,47 @@
+{% extends "portal/base.html" %}
+{% block title %}Register patient{% endblock %}
+{% block content %}
+<div class="page-head narrow-card wide"><div><a class="small" href="{{ url_for('care.patients') }}">← Patients</a><h1>Register a patient</h1></div></div>
+{% if error %}<div class="alert error narrow-card wide" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
+<form method="post" enctype="multipart/form-data" class="narrow-card wide">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <section class="card">
+    <div class="card-h"><h2>Patient</h2></div>
+    <div class="card-b form">
+      <label class="field">Full name<input name="name" value="{{ form.name or '' }}" required maxlength="120" autofocus></label>
+      <div class="row2">
+        <label class="field">Date of birth<input type="date" name="dob" value="{{ form.dob or '' }}"></label>
+        <label class="field">Sex<select name="sex"><option value="">Select</option>{% for s in ('Female', 'Male', 'Other') %}<option {{ 'selected' if form.sex == s }}>{{ s }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="row2">
+        <label class="field">Mobile number<input name="phone" value="{{ form.phone or '' }}" maxlength="30" inputmode="tel"></label>
+        <label class="field">Alternate number<input name="alt_phone" value="{{ form.alt_phone or '' }}" maxlength="30" inputmode="tel"></label>
+      </div>
+      <label class="field">E-mail address <span class="hint">Optional</span><input type="email" name="email" value="{{ form.email or '' }}" maxlength="200"></label>
+      <label class="field">Address<input name="address" value="{{ form.address or '' }}" maxlength="200"></label>
+      <div class="row2">
+        <label class="field">District<input name="district" value="{{ form.district or '' }}" maxlength="80"></label>
+        <label class="field">Distance to the hospital (km)<input name="distance_km" value="{{ form.distance_km or '' }}" inputmode="decimal"></label>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>First scan</h2><span class="hint">Optional</span></div>
+    <div class="card-b form">
+      <label class="field">MRI image<input type="file" name="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom"><span class="hint">PNG, JPG or DICOM · up to 20 MB</span></label>
+      <label class="field">Note for the radiologist<input name="note" maxlength="1000" value="{{ form.note or '' }}"></label>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-b form">
+      <label class="check"><input type="checkbox" name="consent" value="yes" required>
+        <span>The patient agrees that their scans and records are stored encrypted at this hospital and seen only by its care team.</span></label>
+      <label class="check"><input type="checkbox" name="email_consent" value="yes" checked>
+        <span>The patient agrees to receive appointment and follow-up reminders by e-mail.</span></label>
+      <label class="check"><input type="checkbox" name="invite" value="yes" checked>
+        <span>E-mail an invitation to set up the patient portal (if an e-mail address is given).</span></label>
+      <div><button class="btn primary lg" type="submit">Register patient</button></div>
+    </div>
+  </section>
+</form>
+{% endblock %}

@@ -1,9 +1,11 @@
 {% extends "portal/base.html" %}
 {% block title %}{{ 'Reschedule' if reschedule_of else 'Book a consultation' }}{% endblock %}
-{% block pcontent %}
-<div class="page-head narrow-card wide"><div><a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>
+{% macro body() %}
+<div class="page-head narrow-card wide"><div>
+  {% if staff_for %}<a class="small" href="{{ url_for('care.patient', uid=staff_for.id) }}">← {{ staff_for.name }}</a>
+  {% else %}<a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>{% endif %}
   <h1>{{ 'Choose a new time' if reschedule_of else 'Book a consultation' }}</h1>
-  <p>{% if doctor %}With {{ doctor.name }}{% endif %}</p></div></div>
+  <p>{% if staff_for %}For {{ staff_for.name }} · {% endif %}{% if doctor %}With {{ doctor.name }}{% endif %}</p></div></div>
 
 {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
 {% if reschedule_of %}<div class="alert"><svg class="ic sm"><use href="#i-calendar"/></svg><span>Current appointment: <b>{{ fmt_long(reschedule_of.start_ts) }} at {{ fmt_clock(reschedule_of.start_ts) }}</b>. It stays booked until you confirm a new time.</span></div>{% endif %}
@@ -30,6 +32,9 @@
             {% for s in group %}<label class="slot"><input type="radio" name="start_ts" value="{{ s.start_ts }}" required data-label="{{ sel.strftime('%a %d %b') }}, {{ s.label }}" data-room="{{ s.room or clinic }}"><span>{{ s.label }}</span></label>{% endfor %}
           </div>
         {% endfor %}
+        {% if staff_for %}
+        <label class="field">Booked via<select name="channel"><option value="phone">Phone call</option><option value="in_person">At the desk</option></select></label>
+        {% endif %}
         {% if not reschedule_of %}
         <label class="field">Reason for the visit <span class="hint">Optional</span>
           <textarea name="reason" rows="2" maxlength="500" placeholder="e.g. Discuss the report and next steps"></textarea></label>
@@ -41,5 +46,6 @@
       </form>
     {% endif %}
   </section>
-
-{% endblock %}
+{% endmacro %}
+{% block pcontent %}{{ body() }}{% endblock %}
+{% block content %}{{ body() }}{% endblock %}

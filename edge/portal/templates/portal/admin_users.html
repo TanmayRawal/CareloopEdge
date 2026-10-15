@@ -2,7 +2,22 @@
 {% block title %}Users{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Users</h1><p>{{ users|length }} accounts</p></div>
-  <div class="seg nav-seg">{% for r, label in (('', 'All'), ('doctor', 'Radiologists'), ('patient', 'Patients'), ('admin', 'Admins')) %}<a class="{{ 'on' if role == r }}" href="?role={{ r }}">{{ label }}</a>{% endfor %}</div></div>
+  <div class="seg nav-seg">{% for r, label in (('', 'All'), ('doctor', 'Radiologists'), ('patient', 'Patients'), ('admin', 'Coordinators')) %}<a class="{{ 'on' if role == r }}" href="?role={{ r }}">{{ label }}</a>{% endfor %}</div></div>
+{% if requests %}
+<section class="card attention">
+  <div class="card-h"><h2><svg class="ic sm"><use href="#i-alert"/></svg> Account deletion requests ({{ requests|length }})</h2></div>
+  {% for r in requests %}
+    <div class="appt-row">
+      <div class="grow"><b>{{ r.name }}</b><div class="small muted">{{ mrn(r.user_id) }} · {{ r.email or '' }} · requested {{ fmt_date(r.created) }}{% if r.note %} · “{{ r.note }}”{% endif %}</div></div>
+      <form method="post" action="{{ url_for('admin.data_request', rid=r.id) }}" class="row-actions" data-confirm="Close this patient's account? Sign-in and messages stop; clinical records are retained as required by law.">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn sm danger" name="decision" value="done" type="submit">Close account</button>
+        <button class="btn sm" name="decision" value="reject" type="submit" formnovalidate>Decline</button>
+      </form>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
 <div class="grid g-side">
   <section class="card">
     <table class="table responsive">
@@ -10,8 +25,8 @@
       <tbody>
       {% for u in users %}
         <tr class="{{ 'dim' if not u.active }}">
-          <td><div class="cell-main">{{ u.name }}</div><div class="cell-sub">{{ u.email }}{% if u.role == 'patient' %} · {{ mrn(u.id) }}{% endif %}</div></td>
-          <td><span class="tag {{ 'brand' if u.role != 'patient' }}">{{ {'doctor': 'Radiologist', 'admin': 'Administrator', 'patient': 'Patient'}[u.role] }}</span></td>
+          <td><div class="cell-main">{{ u.name }}</div><div class="cell-sub">{{ u.email or 'No e-mail' }}{% if u.role == 'patient' %} · {{ mrn(u.id) }}{% endif %}</div></td>
+          <td><span class="tag {{ 'brand' if u.role != 'patient' }}">{{ role_text[u.role] }}</span></td>
           <td class="num">{{ u.n_cases if u.role == 'patient' else '—' }}</td>
           <td>{% if not u.active %}<span class="pill">Disabled</span>{% elif u.locked_until and u.locked_until > 0 %}<span class="pill s-reupload_requested">Locked</span>{% else %}<span class="pill s-finalized">Active</span>{% endif %}</td>
           <td class="right">{% if u.id != me.id %}
@@ -32,7 +47,7 @@
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <label class="field">Full name<input name="name" required maxlength="120" placeholder="Dr. A. Sharma"></label>
         <label class="field">E-mail address<input type="email" name="email" required maxlength="200"></label>
-        <label class="field">Role<select name="role"><option value="doctor">Radiologist</option><option value="admin">Administrator</option></select></label>
+        <label class="field">Role<select name="role"><option value="doctor">Radiologist</option><option value="admin">Care coordinator (administrator)</option></select></label>
         <label class="field">Initial password<input type="password" name="password" required minlength="10" autocomplete="new-password"><span class="hint">At least 10 characters</span></label>
         <button class="btn primary block" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Create account</button>
       </form>

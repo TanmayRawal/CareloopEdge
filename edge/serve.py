@@ -1,4 +1,4 @@
-"""Start the NeuroEdge clinical portal.
+"""Start the CareLoop-Edge clinical portal.
 
 Production (Pi, systemd + gunicorn): model decrypted in RAM from the enrolled device's verified bundle
   gunicorn -w 1 --threads 4 -b 127.0.0.1:8080 "edge.serve:wsgi()"      (Caddy serves HTTPS on :443 in front)
@@ -73,6 +73,49 @@ def seed_dev_accounts(app, data_dir: Path) -> None:
     print(f"created test accounts: {data_dir / 'DEV_ACCOUNTS.txt'}")
 
 
+DEMO_PATIENTS = [  # name, dob, sex, phone, district, km, plan kind, due offset (days), plan status, contact outcomes
+    ("Sunita Devi", "1968-04-12", "Female", "98xxxx1201", "Barabanki", 64, "repeat_scan", -21, "approved", ["no_answer", "no_answer"]),
+    ("Mohammed Irfan", "1975-09-30", "Male", "98xxxx4410", "Lucknow", 8, "consultation", 3, "approved", []),
+    ("Kavita Sharma", "1990-01-05", "Female", "97xxxx7781", "Sitapur", 88, "referral", -9, "approved", ["wrong_number"]),
+    ("Ramesh Yadav", "1959-11-17", "Male", "99xxxx2093", "Unnao", 52, "consultation", 10, "proposed", []),
+    ("Anjali Gupta", "1983-06-22", "Female", "96xxxx3307", "Lucknow", 5, "repeat_scan", 45, "approved", ["reached_confirmed"]),
+]
+
+
+def seed_dev_followup(app) -> None:
+    """Development only: walk-in demo patients with follow-up plans in different states, so the follow-up worklist,
+    risk ranking, approvals and referrals have something to show. Runs once (when no care plan exists yet)."""
+    import datetime as dt
+    import time
+
+    from edge.portal import careplan, outreach, scheduling
+    db = app.extensions["portal"]["db"]
+    store = app.extensions["portal"]["store"]
+    if db.one("SELECT COUNT(*) AS n FROM care_plans")["n"]:
+        return
+    doctor = db.one("SELECT * FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1")
+    admin = db.one("SELECT * FROM users WHERE role = 'admin' ORDER BY id LIMIT 1")
+    if doctor is None or admin is None:
+        return
+    today = scheduling.local(time.time(), scheduling.tz(db)).date()
+    for name, dob, sex, phone, district, km, kind, offset, status, outcomes in DEMO_PATIENTS:
+        uid = db.create_user(None, name, "patient", None, {"dob": dob, "sex": sex, "phone": phone, "district": district,
+                                                           "distance_km": km}, created_by=admin["id"], email_consent=False)
+        due = (today + dt.timedelta(days=offset)).isoformat()
+        pid = careplan.create(db, uid, kind, due, "", doctor if status == "approved" else admin)
+        if kind == "referral":
+            with app.test_request_context():
+                rid = careplan.create_referral(db, uid, "Regional Cancer Centre, Lucknow", "Neurosurgery", "soon",
+                                               "Suspected meningioma on MRI; neurosurgical opinion requested.", doctor,
+                                               plan_id=pid, now=time.time() - 20 * 86400)
+                careplan.sign_referral(db, store, careplan.referral(db, rid), doctor, db.setting("clinic_name"),
+                                       now=time.time() - 20 * 86400)
+            careplan.set_referral_status(db, careplan.referral(db, rid), "sent")
+        for i, outcome in enumerate(outcomes):
+            outreach.log_contact(db, uid, admin, "phone", outcome, "", pid, now=time.time() - (len(outcomes) - i) * 86400)
+    print("seeded demo follow-up patients")
+
+
 def start_dev_reminders(app, every_s: int = 60) -> None:
     """Development only: run the reminder rules + e-mail flush in a background thread (on the Pi this is
     neuroedge-reminders.timer, a separate process)."""
@@ -126,6 +169,7 @@ def main() -> None:
     app = build(args.bundle_dir, args.model, args.threads, args.portal_data, key)
     if args.init_dev and args.portal_data:
         seed_dev_accounts(app, Path(args.portal_data))
+        seed_dev_followup(app)
         start_dev_reminders(app)
     print(json.dumps({"serving": f"http://{args.host}:{args.port}", "bundle": args.bundle_dir or args.model}))
     app.run(host=args.host, port=args.port, threaded=True, debug=False)

@@ -1,0 +1,61 @@
+{% extends "portal/base.html" %}
+{% block title %}Follow-up{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Follow-up worklist</h1><p>Patients ranked by follow-up risk</p></div>
+  <a class="btn primary" href="{{ url_for('care.register') }}"><svg class="ic sm"><use href="#i-plus"/></svg>Register patient</a></div>
+
+
+<div class="chips">
+  {% for k, label in queues %}<a class="chip-f {{ 'on' if queue == k }}" href="?q={{ k }}">{{ label }} <span class="n">{{ counts[k] }}</span></a>{% endfor %}
+</div>
+
+<section class="card">
+  {% for r in rows %}{% set p = r.p %}{% set plan = r.plan %}
+  <div class="fu-row">
+    <div class="fu-risk">{% with rk = r.risk %}{% include "portal/_risk.html" %}{% endwith %}</div>
+    <div class="fu-who">
+      <a class="cell-main" href="{{ url_for('care.patient', uid=p.id) }}">{{ p.name }}</a>
+      <div class="cell-sub">{{ mrn(p.id) }}{% if p.phone %} · {{ p.phone }}{% endif %}{% if p.district %} · {{ p.district }}{% endif %}</div>
+      <div class="why">{% for t, pts in r.risk.factors if pts > 0 %}<span>{{ t }}</span>{% endfor %}</div>
+    </div>
+    <div class="fu-step">
+      {% if plan %}
+        <b>{{ plan_text[plan.kind] }}</b>
+        {% if plan.status == 'proposed' %}<span class="pill pl-proposed">Awaiting approval</span>
+        {% elif r.due.overdue %}<span class="overdue">Overdue {{ -r.due.days }} d</span>
+        {% else %}<span class="cell-sub">Due {{ r.due.due.strftime('%d %b') }}{% if r.due.days == 0 %} · today{% endif %}</span>{% endif %}
+      {% elif r.ref %}<b>Referral</b><span class="cell-sub">{{ r.ref.facility }}</span>{% endif %}
+      {% if r.sig.booked %}<span class="tag ok">Booked</span>{% endif %}
+    </div>
+    <div class="fu-last">
+      {% if r.last %}<span class="cell-sub">Last contact {{ ago(r.last.created) }} ago</span><b class="small">{{ outcome_text[r.last.outcome] }}</b>
+      {% else %}<span class="cell-sub">Not contacted</span>{% endif %}
+    </div>
+    <div class="fu-act">
+      <details class="pop">
+        <summary class="btn sm"><svg class="ic sm"><use href="#i-phone"/></svg>Log contact</summary>
+        <form method="post" action="{{ url_for('care.contact', uid=p.id) }}" class="pop-b form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="worklist"><input type="hidden" name="q" value="{{ queue }}">
+          <div class="row2">
+            <label class="field">How<select name="channel">{% for c in channels if c != 'portal' %}<option value="{{ c }}">{{ channel_text[c] }}</option>{% endfor %}</select></label>
+            <label class="field">Outcome<select name="outcome">{% for o in outcomes if o != 'message_sent' %}<option value="{{ o }}">{{ outcome_text[o] }}</option>{% endfor %}</select></label>
+          </div>
+          <label class="field">Note<input name="note" maxlength="500" placeholder="Optional"></label>
+          <label class="field">Try again on<input type="date" name="next_action" min="{{ today.isoformat() }}"></label>
+          <button class="btn primary sm" type="submit">Save</button>
+        </form>
+      </details>
+      {% if plan and plan.status == 'approved' %}
+      <form method="post" action="{{ url_for('care.remind', pid=plan.id) }}" data-confirm="Send a follow-up reminder to {{ p.name }}?">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="worklist"><input type="hidden" name="q" value="{{ queue }}">
+        <button class="btn sm" type="submit"><svg class="ic sm"><use href="#i-mail"/></svg>Remind</button></form>
+      {% endif %}
+      <a class="btn sm ghost" href="{{ url_for('care.patient', uid=p.id) }}">Open</a>
+    </div>
+  </div>
+  {% else %}
+    <div class="empty"><svg class="ic"><use href="#i-check"/></svg><h2>Nothing to follow up</h2>
+      <p>{{ 'No patients in this list.' if queue != 'all' else 'Patients appear here when a doctor plans a follow-up or signs a referral.' }}</p></div>
+  {% endfor %}
+</section>
+{% endblock %}

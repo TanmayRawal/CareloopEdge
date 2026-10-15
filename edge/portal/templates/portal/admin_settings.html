@@ -9,7 +9,9 @@
     {% for title, keys in (('Department', ('clinic_name', 'base_url', 'timezone')),
                            ('Reporting targets', ('unread_hours', 'unread_hours_urgent', 'unsigned_hours', 'escalate_hours')),
                            ('Reminders', ('remind_before_hours', 'unmarked_after_min', 'agenda_hour')),
-                           ('Booking rules', ('booking_lead_hours', 'booking_horizon_days', 'cancel_cutoff_hours'))) %}
+                           ('Booking rules', ('booking_lead_hours', 'booking_horizon_days', 'cancel_cutoff_hours')),
+                           ('Follow-up', ('followup_due_soon_days', 'referral_stale_days', 'lost_after_days')),
+                           ('Security', ('require_staff_2fa',))) %}
     <section class="card">
       <div class="card-h"><h2>{{ title }}</h2></div>
       <div class="card-b settings-grid">

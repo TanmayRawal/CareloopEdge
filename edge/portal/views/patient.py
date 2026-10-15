@@ -31,7 +31,76 @@ def blueprint(d) -> Blueprint:
     def dashboard():
         cases = db.q("SELECT c.*, (SELECT id FROM appointments a WHERE a.case_id = c.id AND a.status IN ('booked','arrived') "
                      "LIMIT 1) AS appt_id FROM cases c WHERE patient_id = ? ORDER BY created DESC", (g.user["id"],))
-        return render_template("portal/patient_dashboard.html", cases=cases, upcoming=upcoming())
+        plan = db.one("SELECT * FROM care_plans WHERE patient_id = ? AND status = 'approved' ORDER BY due_date LIMIT 1",
+                      (g.user["id"],))
+        ref = db.one("SELECT * FROM referrals WHERE patient_id = ? AND status IN ('signed','sent','appointment_made') "
+                     "ORDER BY signed_at DESC LIMIT 1", (g.user["id"],))
+        up = upcoming()
+        # care journey: 0 scan sent, 1 report ready, 2 consultation, 3 follow-up
+        if not cases:
+            stage = -1
+        elif not any(c["status"] == "finalized" for c in cases):
+            stage = 0
+        elif up or db.one("SELECT 1 FROM appointments WHERE patient_id = ? AND status IN ('arrived','completed')", (g.user["id"],)):
+            stage = 3 if db.one("SELECT 1 FROM appointments WHERE patient_id = ? AND status = 'completed'", (g.user["id"],)) else 2
+        else:
+            stage = 1
+        return render_template("portal/patient_dashboard.html", cases=cases, upcoming=up, plan=plan, ref=ref, stage=stage)
+
+    # ------------------------------------------------------------------ documents, referrals, data export
+    @bp.route("/documents", methods=["GET", "POST"])
+    @auth.require("patient")
+    def records():
+        if request.method == "POST":
+            from edge.portal.views.care import store_document
+            f = request.files.get("file")
+            try:
+                did = store_document(db, d.store, g.user["id"], g.user, request.form.get("kind", "other"),
+                                     request.form.get("title", ""), f.filename if f else "", f.read() if f else b"")
+            except ValueError as e:
+                flash(str(e), "error")
+            else:
+                db.audit(g.user["id"], "document_added", detail={"patient": g.user["id"], "document": did}, ip=d.ip())
+                flash("Document added. Your care team can now see it.")
+            return redirect(url_for("patient.records"))
+        from edge.portal.views.care import DOC_TEXT
+        docs = db.q("SELECT * FROM documents WHERE patient_id = ? ORDER BY created DESC", (g.user["id"],))
+        refs = db.q("SELECT r.*, s.name AS signed_by_name FROM referrals r LEFT JOIN users s ON s.id = r.signed_by "
+                    "WHERE r.patient_id = ? AND r.status != 'draft' ORDER BY r.signed_at DESC", (g.user["id"],))
+        return render_template("portal/patient_records.html", docs=docs, refs=refs, doc_text=DOC_TEXT,
+                               doc_kinds=("prior_report", "biopsy", "referral_letter", "other"))
+
+    @bp.get("/documents/<int:did>")
+    @auth.require("patient")
+    def document(did):
+        from edge.portal.views.care import send_document
+        doc = db.one("SELECT * FROM documents WHERE id = ? AND patient_id = ?", (did, g.user["id"]))
+        if doc is None:
+            abort(404)
+        return send_document(d, doc)
+
+    @bp.get("/referrals/<int:rid>")
+    @auth.require("patient")
+    def referral(rid):
+        from edge.portal import careplan
+        from edge.portal.views.care import send_letter
+        ref = careplan.referral(db, rid)
+        if ref is None or ref["patient_id"] != g.user["id"]:
+            abort(404)
+        db.audit(g.user["id"], "referral_viewed", detail={"referral": rid}, ip=d.ip())
+        return send_letter(d, ref)
+
+    @bp.get("/export")
+    @auth.require("patient")
+    def export():
+        if not d.export_limiter.hit(f"u{g.user['id']}"):
+            abort(429)
+        from edge.portal import dataexport
+        data = dataexport.build(db, d.store, g.user["id"])
+        db.audit(g.user["id"], "data_exported", ip=d.ip())
+        resp = d.app.response_class(data, mimetype="application/zip")
+        resp.headers["Content-Disposition"] = f'attachment; filename="my-health-records-{dt.date.today().isoformat()}.zip"'
+        return resp
 
     @bp.route("/upload", methods=["GET", "POST"])
     @auth.require("patient")

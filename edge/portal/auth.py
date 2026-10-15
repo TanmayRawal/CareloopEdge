@@ -58,7 +58,7 @@ class RateLimiter:
 def check_login(db, email: str, password: str) -> tuple[object | None, str | None]:
     """(user row, None) on success, (None, message) otherwise. Updates lockout counters."""
     user = db.user_by_email(email)
-    if user is None:
+    if user is None or not user["pw_hash"]:            # unknown, or a walk-in patient who has not accepted the invite
         try:
             _ph.verify(_DUMMY, password)
         except (VerificationError, InvalidHashError):

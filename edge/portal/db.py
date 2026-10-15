@@ -11,10 +11,21 @@ Appointment lifecycle (consultation with the reporting radiologist, booked by th
   booked -> arrived -> completed       marked by the doctor
   booked | arrived -> no_show          marked by the doctor (patient gets a "we missed you" message)
   booked -> cancelled                  by the patient (before the cutoff) or the doctor
+
+Follow-up (CareLoop): a care plan is the next step after a report (consultation / repeat scan / referral).
+  proposed -> approved                 the doctor approves every plan (plans made by a doctor start approved)
+  approved -> completed | lost | cancelled
+The administrator acts as the care coordinator: works the follow-up worklist, logs contacts, sends reminders
+(only on approved plans, always triggered by a person), registers walk-in patients and tracks referrals.
+Referral: draft -> signed (doctor) -> sent -> appointment_made -> attended -> closed
+
+Audit log: every row carries hash = SHA-256(previous hash, row), so editing or deleting a past row breaks the
+chain (verify_audit_chain).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import sqlite3
@@ -29,7 +40,7 @@ APPT_ACTIVE = ("booked", "arrived")
 
 # Department policy; editable by the admin (Settings page) and stored in the `settings` table.
 DEFAULT_SETTINGS = {
-    "clinic_name": "NeuroEdge Imaging",
+    "clinic_name": "Radiology Department",
     "base_url": "https://rpi.local",            # used in e-mail links
     "timezone": "Asia/Kolkata",
     "unread_hours": "4",                        # study not opened -> remind doctors
@@ -42,7 +53,20 @@ DEFAULT_SETTINGS = {
     "booking_lead_hours": "2",
     "booking_horizon_days": "21",
     "cancel_cutoff_hours": "2",
+    "followup_due_soon_days": "7",              # follow-up worklist: "due this week"
+    "referral_stale_days": "14",                # referral not closed after N days -> admin digest
+    "lost_after_days": "60",                    # approved plan overdue this long with no contact -> lost
+    "require_staff_2fa": "0",                   # 1 = doctors and admins must set up two-step sign-in
 }
+PLAN_KINDS = ("consultation", "repeat_scan", "referral", "other")
+PLAN_STATUSES = ("proposed", "approved", "completed", "lost", "cancelled")
+PLAN_OPEN = ("proposed", "approved")
+REFERRAL_STATUSES = ("draft", "signed", "sent", "appointment_made", "attended", "closed")
+CONTACT_CHANNELS = ("phone", "in_person", "email", "portal")
+CONTACT_OUTCOMES = ("reached_confirmed", "reached_declined", "no_answer", "wrong_number", "message_sent")
+DOC_KINDS = ("prior_report", "biopsy", "referral_letter", "dicom", "other")
+CONSENT_VERSION = "v1"
+AUDIT_GENESIS = "0" * 64
 DIAGNOSES = ("glioma", "meningioma", "pituitary", "no_tumor", "other", "inconclusive")
 
 MIGRATIONS = [
@@ -161,7 +185,116 @@ MIGRATIONS = [
     CREATE TABLE reminder_log (dedupe_key TEXT PRIMARY KEY, created REAL NOT NULL);
     CREATE INDEX cases_doctor ON cases(doctor_id, status)
     """,
+    # v3: CareLoop follow-up (care plans, referrals, contact log, documents, consents, one-time tokens), walk-in
+    # patients without a sign-in (email / password optional), staff two-step sign-in, hash-chained audit log
+    """
+    CREATE TABLE users_v3 (
+        id INTEGER PRIMARY KEY,
+        email TEXT COLLATE NOCASE,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('patient','doctor','admin')),
+        pw_hash TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
+        failed_logins INTEGER NOT NULL DEFAULT 0,
+        locked_until REAL,
+        created REAL NOT NULL,
+        notify_email INTEGER NOT NULL DEFAULT 1,
+        totp_secret TEXT, totp_on INTEGER NOT NULL DEFAULT 0, totp_last_step INTEGER, recovery_hashes TEXT
+    );
+    INSERT INTO users_v3 (id,email,name,role,pw_hash,active,failed_logins,locked_until,created,notify_email)
+        SELECT id,email,name,role,pw_hash,active,failed_logins,locked_until,created,notify_email FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_v3 RENAME TO users;
+    CREATE UNIQUE INDEX users_email ON users(email) WHERE email IS NOT NULL;
+    CREATE INDEX users_role ON users(role, name);
+    ALTER TABLE patient_profiles ADD COLUMN address TEXT;
+    ALTER TABLE patient_profiles ADD COLUMN district TEXT;
+    ALTER TABLE patient_profiles ADD COLUMN distance_km REAL;
+    ALTER TABLE patient_profiles ADD COLUMN alt_phone TEXT;
+    ALTER TABLE patient_profiles ADD COLUMN contact_status TEXT NOT NULL DEFAULT 'ok';
+    ALTER TABLE patient_profiles ADD COLUMN created_by INTEGER;
+    CREATE TABLE care_plans (
+        id INTEGER PRIMARY KEY,
+        patient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        case_id TEXT REFERENCES cases(id) ON DELETE SET NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('consultation','repeat_scan','referral','other')),
+        due_date TEXT NOT NULL, note TEXT,
+        status TEXT NOT NULL CHECK (status IN ('proposed','approved','completed','lost','cancelled')),
+        proposed_by INTEGER REFERENCES users(id), proposed_at REAL NOT NULL,
+        approved_by INTEGER REFERENCES users(id), approved_at REAL,
+        closed_at REAL, close_reason TEXT, updated REAL NOT NULL
+    );
+    CREATE INDEX plans_patient ON care_plans(patient_id, status);
+    CREATE INDEX plans_status ON care_plans(status, due_date);
+    CREATE TABLE referrals (
+        id INTEGER PRIMARY KEY,
+        patient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        case_id TEXT REFERENCES cases(id) ON DELETE SET NULL,
+        plan_id INTEGER REFERENCES care_plans(id) ON DELETE SET NULL,
+        facility TEXT NOT NULL, specialty TEXT,
+        urgency TEXT NOT NULL DEFAULT 'routine' CHECK (urgency IN ('routine','soon','urgent')),
+        reason TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('draft','signed','sent','appointment_made','attended','closed')),
+        created_by INTEGER REFERENCES users(id), created REAL NOT NULL, updated REAL NOT NULL,
+        signed_by INTEGER REFERENCES users(id), signed_at REAL, letter_sha256 TEXT, status_note TEXT
+    );
+    CREATE INDEX referrals_status ON referrals(status, updated);
+    CREATE INDEX referrals_patient ON referrals(patient_id);
+    CREATE TABLE contacts (
+        id INTEGER PRIMARY KEY,
+        patient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plan_id INTEGER REFERENCES care_plans(id) ON DELETE SET NULL,
+        by_user INTEGER REFERENCES users(id),
+        channel TEXT NOT NULL CHECK (channel IN ('phone','in_person','email','portal')),
+        outcome TEXT NOT NULL CHECK (outcome IN ('reached_confirmed','reached_declined','no_answer','wrong_number','message_sent')),
+        note TEXT, next_action_date TEXT, created REAL NOT NULL
+    );
+    CREATE INDEX contacts_patient ON contacts(patient_id, created);
+    CREATE TABLE documents (
+        id INTEGER PRIMARY KEY,
+        patient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        uploaded_by INTEGER REFERENCES users(id),
+        kind TEXT NOT NULL CHECK (kind IN ('prior_report','biopsy','referral_letter','dicom','other')),
+        title TEXT NOT NULL, filename TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL,
+        created REAL NOT NULL
+    );
+    CREATE INDEX documents_patient ON documents(patient_id, created);
+    CREATE TABLE consents (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        purpose TEXT NOT NULL CHECK (purpose IN ('care','email_reminders')),
+        version TEXT NOT NULL, granted_at REAL NOT NULL, withdrawn_at REAL, recorded_by INTEGER REFERENCES users(id)
+    );
+    CREATE INDEX consents_user ON consents(user_id, purpose);
+    CREATE TABLE tokens (
+        id INTEGER PRIMARY KEY,
+        purpose TEXT NOT NULL CHECK (purpose IN ('invite','reset','appt_yes','appt_no')),
+        token_hash TEXT NOT NULL UNIQUE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ref_id INTEGER, created REAL NOT NULL, expires REAL NOT NULL, used_at REAL
+    );
+    CREATE TABLE data_requests (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK (kind IN ('deletion')),
+        note TEXT, created REAL NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done','rejected')),
+        handled_by INTEGER REFERENCES users(id), handled_at REAL
+    );
+    INSERT INTO consents (user_id, purpose, version, granted_at)
+        SELECT id, 'care', 'v1', created FROM users WHERE role = 'patient';
+    INSERT INTO consents (user_id, purpose, version, granted_at)
+        SELECT id, 'email_reminders', 'v1', created FROM users WHERE role = 'patient' AND notify_email = 1;
+    ALTER TABLE audit ADD COLUMN prev_hash TEXT;
+    ALTER TABLE audit ADD COLUMN hash TEXT
+    """,
 ]
+
+
+def _audit_hash(prev: str, row) -> str:
+    """Chain hash of one audit row (id, ts, user, action, case, detail, ip) on top of the previous row's hash."""
+    payload = json.dumps([prev, *list(row)[:7]], separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class DB:
@@ -182,6 +315,9 @@ class DB:
             self.conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
             row = self.conn.execute("SELECT version FROM schema_version").fetchone()
             v = row[0] if row else 0
+            if v < len(MIGRATIONS):
+                # table rebuilds (v3 users) must not cascade-delete child rows; FKs are re-checked afterwards
+                self.conn.execute("PRAGMA foreign_keys=OFF")
             for i, sql in enumerate(MIGRATIONS[v:], start=v + 1):
                 self.conn.execute("BEGIN")
                 try:
@@ -192,7 +328,30 @@ class DB:
                     self.conn.execute("COMMIT")
                 except Exception:
                     self.conn.execute("ROLLBACK")
+                    self.conn.execute("PRAGMA foreign_keys=ON")
                     raise
+            self.conn.execute("PRAGMA foreign_keys=ON")
+            bad = self.conn.execute("PRAGMA foreign_key_check").fetchall()
+            if bad:
+                raise RuntimeError(f"foreign key check failed after migration: {[tuple(b) for b in bad[:3]]}")
+            self._backfill_audit_chain()
+
+    def _backfill_audit_chain(self) -> None:
+        """Rows written before v3 (or by an older process) get their chain hash, in id order."""
+        if self.conn.execute("SELECT 1 FROM audit WHERE hash IS NULL LIMIT 1").fetchone() is None:
+            return
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            prev = AUDIT_GENESIS
+            for r in self.conn.execute("SELECT id,ts,user_id,action,case_id,detail,ip,hash FROM audit ORDER BY id").fetchall():
+                h = r[7] or _audit_hash(prev, r)
+                if r[7] is None:
+                    self.conn.execute("UPDATE audit SET prev_hash = ?, hash = ? WHERE id = ?", (prev, h, r[0]))
+                prev = h
+            self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
 
     def q(self, sql: str, args: tuple = ()) -> list[sqlite3.Row]:
         with self._lock:
@@ -222,8 +381,31 @@ class DB:
     def audit(self, user_id: int | None, action: str, case_id: str | None = None, detail: dict | None = None,
               ip: str | None = None) -> None:
         with self._lock:
-            self.conn.execute("INSERT INTO audit (ts,user_id,action,case_id,detail,ip) VALUES (?,?,?,?,?,?)",
-                              (time.time(), user_id, action, case_id, json.dumps(detail or {}), ip))
+            own = not self.conn.in_transaction
+            if own:
+                self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                last = self.conn.execute("SELECT hash FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+                prev = (last[0] if last else None) or AUDIT_GENESIS
+                row = [None, time.time(), user_id, action, case_id, json.dumps(detail or {}), ip]
+                row[0] = self.conn.execute("INSERT INTO audit (ts,user_id,action,case_id,detail,ip,prev_hash) "
+                                           "VALUES (?,?,?,?,?,?,?)", (*row[1:], prev)).lastrowid
+                self.conn.execute("UPDATE audit SET hash = ? WHERE id = ?", (_audit_hash(prev, row), row[0]))
+                if own:
+                    self.conn.execute("COMMIT")
+            except Exception:
+                if own:
+                    self.conn.execute("ROLLBACK")
+                raise
+
+    def verify_audit_chain(self) -> dict:
+        """Recompute the chain. ok=False names the first row that was edited, or that follows a deleted row."""
+        prev, n = AUDIT_GENESIS, 0
+        for r in self.q("SELECT id,ts,user_id,action,case_id,detail,ip,prev_hash,hash FROM audit ORDER BY id"):
+            if r["prev_hash"] != prev or r["hash"] != _audit_hash(prev, tuple(r)):
+                return {"ok": False, "n": n, "bad_id": r["id"]}
+            prev, n = r["hash"], n + 1
+        return {"ok": True, "n": n, "bad_id": None}
 
     def backup(self, dest: Path) -> None:
         """Consistent online snapshot (SQLite backup API) — safe while the portal is running."""
@@ -259,21 +441,38 @@ class DB:
             return cur.rowcount == 1
 
     # ------------------------------------------------------------------------------ users
-    def create_user(self, email: str, name: str, role: str, pw_hash: str, profile: dict | None = None) -> int:
+    def create_user(self, email: str | None, name: str, role: str, pw_hash: str | None, profile: dict | None = None,
+                    created_by: int | None = None, email_consent: bool = True) -> int:
+        """Patients also get a profile and consent records. email / pw_hash may be None for a walk-in patient
+        registered at the desk (no sign-in until they accept an invite)."""
         if role not in ROLES:
             raise ValueError(role)
+        email = (email or "").strip().lower() or None
+        now = time.time()
         with self.tx() as c:
-            cur = c.execute("INSERT INTO users (email,name,role,pw_hash,created) VALUES (?,?,?,?,?)",
-                            (email.strip().lower(), name.strip(), role, pw_hash, time.time()))
+            cur = c.execute("INSERT INTO users (email,name,role,pw_hash,created,notify_email) VALUES (?,?,?,?,?,?)",
+                            (email, name.strip(), role, pw_hash, now, int(email_consent)))
             uid = cur.lastrowid
             if role == "patient":
                 p = profile or {}
-                c.execute("INSERT INTO patient_profiles (user_id,dob,sex,phone) VALUES (?,?,?,?)",
-                          (uid, p.get("dob"), p.get("sex"), p.get("phone")))
+                dist = p.get("distance_km")
+                c.execute("INSERT INTO patient_profiles (user_id,dob,sex,phone,address,district,distance_km,alt_phone,"
+                          "created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                          (uid, p.get("dob"), p.get("sex"), p.get("phone"), p.get("address"), p.get("district"),
+                           float(dist) if dist not in (None, "") else None, p.get("alt_phone"), created_by))
+                c.execute("INSERT INTO consents (user_id,purpose,version,granted_at,recorded_by) VALUES (?,?,?,?,?)",
+                          (uid, "care", CONSENT_VERSION, now, created_by))
+                if email_consent:
+                    c.execute("INSERT INTO consents (user_id,purpose,version,granted_at,recorded_by) VALUES (?,?,?,?,?)",
+                              (uid, "email_reminders", CONSENT_VERSION, now, created_by))
         return int(uid)
 
-    def user_by_email(self, email: str):
-        return self.one("SELECT * FROM users WHERE email = ?", (email.strip().lower(),))
+    def user_by_email(self, email: str | None):
+        email = (email or "").strip().lower()
+        return self.one("SELECT * FROM users WHERE email = ?", (email,)) if email else None
+
+    def profile(self, uid: int):
+        return self.one("SELECT * FROM patient_profiles WHERE user_id = ?", (uid,))
 
     def user(self, uid: int):
         return self.one("SELECT * FROM users WHERE id = ?", (uid,))

@@ -1,0 +1,21 @@
+{% extends "portal/base.html" %}
+{% block title %}Your appointment{% endblock %}
+{% macro body() %}
+<div class="narrow-card success-card">
+  <div class="at-date"><span>{{ fmt_day(appt.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(appt.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(appt.start_ts).split(' ')[2] }}</span></div>
+  <h1>{{ 'Confirm your attendance' if answer == 'yes' else 'Can’t make it?' }}</h1>
+  <p class="muted">Consultation with {{ appt.doctor_name }}<br>{{ fmt_long(appt.start_ts) }} at {{ fmt_clock(appt.start_ts) }} · {{ appt.room or clinic }}</p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    {% if answer == 'yes' %}
+      <button class="btn primary lg" type="submit"><svg class="ic sm"><use href="#i-check"/></svg>Yes, I will attend</button>
+    {% else %}
+      <p class="small">We will release this time so another patient can use it, and our team will help you find a new one.</p>
+      <button class="btn danger lg" type="submit">I can’t attend</button>
+    {% endif %}
+  </form>
+</div>
+{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block pcontent %}{{ body() }}{% endblock %}
+{% block content_anon %}{{ body() }}{% endblock %}

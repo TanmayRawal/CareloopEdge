@@ -108,8 +108,7 @@ def main() -> None:
         out = {"rules": reminders.run_once(db), "mail": mailer.flush(db)}
         print(json.dumps(out))
     elif a.cmd == "smtp-config":
-        print("Outgoing e-mail (SMTP). Gmail: host smtp.gmail.com, port 587, starttls, and an App Password
-"
+        print("Outgoing e-mail (SMTP). Gmail: host smtp.gmail.com, port 587, starttls, and an App Password "
               "(Google account -> Security -> App passwords), not your normal password.")
         host = input("SMTP host: ").strip()
         port = input("Port [587]: ").strip() or "587"
@@ -124,10 +123,7 @@ def main() -> None:
         a.file.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(a.file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write("# written by neuroedge-portal smtp-config
-" + "
-".join(lines) + "
-")
+            fh.write("# written by neuroedge-portal smtp-config\n" + "\n".join(lines) + "\n")
         print(f"saved {a.file} (mode 640). Test it: neuroedge-portal smtp-test --to <your address>")
     elif a.cmd == "smtp-test":
         from edge.portal import mailer

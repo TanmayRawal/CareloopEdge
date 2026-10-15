@@ -125,6 +125,30 @@
           <label class="field">Recommendation <span class="hint">Optional</span>
             <textarea name="recommendation" rows="2" maxlength="2000" placeholder="e.g. Neurosurgical referral; contrast-enhanced MRI follow-up.">{{ latest.recommendation if latest else '' }}</textarea></label>
           {% if latest %}<label class="field">Reason for amendment<input name="amendment_reason" required maxlength="500"></label>{% endif %}
+          {% if not plan %}
+          <fieldset class="fu" id="fu">
+            <legend>Follow-up</legend>
+            <div class="row2">
+              <label class="field">Next step
+                <select name="fu_kind" id="fu-kind">
+                  <option value="">None</option>
+                  <option value="consultation" selected>Consultation</option>
+                  <option value="repeat_scan">Repeat MRI</option>
+                  <option value="referral">Referral</option>
+                </select></label>
+              <label class="field">Due within
+                <select name="fu_days">{% for v, t in ((7, '1 week'), (14, '2 weeks'), (30, '1 month'), (90, '3 months'), (180, '6 months'), (365, '1 year')) %}
+                  <option value="{{ v }}" {{ 'selected' if v == 14 }}>{{ t }}</option>{% endfor %}</select></label>
+            </div>
+            <div class="fu-ref" id="fu-ref">
+              <label class="field">Refer to<input name="ref_facility" maxlength="150" placeholder="e.g. Regional Cancer Centre, Neurosurgery OPD"></label>
+              <div class="row2">
+                <label class="field">Specialty<input name="ref_specialty" maxlength="80" placeholder="e.g. Neurosurgery"></label>
+                <label class="field">Urgency<select name="ref_urgency"><option value="routine">Routine</option><option value="soon">Within 2 weeks</option><option value="urgent">Urgent</option></select></label>
+              </div>
+            </div>
+          </fieldset>
+          {% endif %}
           <label class="field">Password <span class="hint">Confirms your electronic signature</span><input type="password" name="password" required autocomplete="current-password"></label>
           <button class="btn primary lg block" type="submit"><svg class="ic sm"><use href="#i-check"/></svg>{{ 'Sign amendment' if latest else 'Sign and release report' }}</button>
         </form>
@@ -143,6 +167,15 @@
       {% endif %}
     </section>
 
+    {% if plan %}
+    <section class="card">
+      <div class="card-h"><h2>Follow-up</h2><span class="pill pl-{{ plan.status }}">{{ plan_status_text[plan.status] }}</span></div>
+      <div class="card-b tight"><b>{{ plan_text[plan.kind] }}</b> · due {{ fmt_iso(plan.due_date) }}
+        {% if plan.note %}<div class="small muted">{{ plan.note }}</div>{% endif %}
+        {% if plan.status == 'proposed' %}<a class="btn sm" href="{{ url_for('care.approvals') }}">Review proposal</a>{% endif %}
+        <a class="small" href="{{ url_for('care.patient', uid=patient.id) }}">Patient record</a></div>
+    </section>
+    {% endif %}
     {% if appt %}
     <section class="card">
       <div class="card-h"><h2>Consultation</h2><span class="pill a-{{ appt.status }}">{{ appt_text[appt.status] }}</span></div>

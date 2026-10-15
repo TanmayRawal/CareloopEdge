@@ -87,6 +87,9 @@ def submit_scan(ctx: Ctx, patient, data: bytes, filename: str, note: str, consen
         ctx.store.delete_case(cid)
         raise
     ctx.db.audit(patient["id"], "case_submitted", cid, {"ai_status": res["status"], "model": ctx.model_version}, ip)
+    from edge.portal import careplan
+    if careplan.complete_matching(ctx.db, patient["id"], ("repeat_scan",), "New scan received"):
+        ctx.db.audit(patient["id"], "plan_completed", cid, {"kind": "repeat_scan"}, ip)
     return cid
 
 

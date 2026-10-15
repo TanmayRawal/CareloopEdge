@@ -31,7 +31,16 @@
         <tr><th>Data storage</th><td>Encrypted</td></tr>
         <tr><th>Connections</th><td>Secure (HTTPS)</td></tr>
         <tr><th>AI model</th><td>Verified</td></tr>
+        <tr><th>Audit log</th><td>{% if info.chain.ok %}Intact · {{ info.chain.n }} entries{% else %}<span class="err-text">Altered at entry {{ info.chain.bad_id }}</span>{% endif %}</td></tr>
         <tr><th>Last sign-in</th><td>{{ fmt_time(info.last_login) }}</td></tr>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Two-step sign-in</h2></div>
+    <div class="card-b">
+      <table class="kv">
+        {% for s in info.staff %}<tr><th>{{ s.name }} <span class="muted small">· {{ role_text[s.role] }}</span></th><td>{{ 'On' if s.totp_on else 'Off' }}</td></tr>{% endfor %}
       </table>
     </div>
   </section>

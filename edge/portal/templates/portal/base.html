@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>{% block title %}{{ clinic }}{% endblock %} · {{ clinic }}</title>
+  <title>{% block title %}{{ brand }}{% endblock %} · {{ brand }}</title>
   <link rel="stylesheet" href="{{ asset('portal.css') }}">
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
 </head>
@@ -47,7 +47,7 @@
 <div class="shell">
   <aside class="sidebar" aria-label="Main navigation">
     <a class="sb-brand" href="{{ url_for('auth.home') }}">{% include "portal/_logo.html" %}
-      <span><span class="name">{{ clinic }}</span><br><span class="sub">Neuroradiology workspace</span></span></a>
+      <span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></a>
     <nav class="sb-nav">
       {% if me.role == 'doctor' %}
         <span class="sb-label">Reading</span>
@@ -55,14 +55,22 @@
           <svg class="ic"><use href="#i-inbox"/></svg><span>Worklist</span>{% if open_count() %}<b class="count">{{ open_count() }}</b>{% endif %}</a>
         <a href="{{ url_for('doctor.worklist', status='finalized') }}" class="{{ 'active' if ep == 'doctor.worklist' and request.args.get('status') == 'finalized' }}">
           <svg class="ic"><use href="#i-file"/></svg><span>Signed reports</span></a>
+        <span class="sb-label">Follow-up</span>
+        <a href="{{ url_for('care.approvals') }}" class="{{ 'active' if ep == 'care.approvals' }}"><svg class="ic"><use href="#i-check"/></svg><span>Approvals</span>{% if approvals_count() %}<b class="count">{{ approvals_count() }}</b>{% endif %}</a>
+        <a href="{{ url_for('care.patients') }}" class="{{ 'active' if ep in ('care.patients', 'care.patient') }}"><svg class="ic"><use href="#i-users"/></svg><span>Patients</span></a>
+        <a href="{{ url_for('care.referrals') }}" class="{{ 'active' if ep == 'care.referrals' }}"><svg class="ic"><use href="#i-send"/></svg><span>Referrals</span></a>
         <span class="sb-label">Consultations</span>
         <a href="{{ url_for('doctor.schedule') }}" class="{{ 'active' if ep == 'doctor.schedule' }}"><svg class="ic"><use href="#i-calendar"/></svg><span>Schedule</span></a>
         <a href="{{ url_for('doctor.availability') }}" class="{{ 'active' if ep == 'doctor.availability' }}"><svg class="ic"><use href="#i-clock"/></svg><span>Availability</span></a>
         <span class="sb-label">Insights</span>
         <a href="{{ url_for('doctor.stats') }}" class="{{ 'active' if ep == 'doctor.stats' }}"><svg class="ic"><use href="#i-chart"/></svg><span>Analytics</span></a>
       {% else %}
+        <span class="sb-label">Care coordination</span>
+        <a href="{{ url_for('care.followup') }}" class="{{ 'active' if ep == 'care.followup' }}"><svg class="ic"><use href="#i-inbox"/></svg><span>Follow-up</span></a>
+        <a href="{{ url_for('care.patients') }}" class="{{ 'active' if ep in ('care.patients', 'care.patient', 'care.register', 'care.book') }}"><svg class="ic"><use href="#i-users"/></svg><span>Patients</span></a>
+        <a href="{{ url_for('care.referrals') }}" class="{{ 'active' if ep == 'care.referrals' }}"><svg class="ic"><use href="#i-send"/></svg><span>Referrals</span></a>
         <span class="sb-label">Administration</span>
-        <a href="{{ url_for('admin.users') }}" class="{{ 'active' if ep == 'admin.users' }}"><svg class="ic"><use href="#i-users"/></svg><span>Users</span></a>
+        <a href="{{ url_for('admin.users') }}" class="{{ 'active' if ep == 'admin.users' }}"><svg class="ic"><use href="#i-lock"/></svg><span>Users</span></a>
         <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep == 'admin.settings' }}"><svg class="ic"><use href="#i-settings"/></svg><span>Settings</span></a>
         <a href="{{ url_for('admin.outbox') }}" class="{{ 'active' if ep == 'admin.outbox' }}"><svg class="ic"><use href="#i-mail"/></svg><span>E-mail</span></a>
         <a href="{{ url_for('admin.audit') }}" class="{{ 'active' if ep == 'admin.audit' }}"><svg class="ic"><use href="#i-list"/></svg><span>Audit log</span></a>
@@ -80,8 +88,12 @@
     <nav class="mobile-nav" aria-label="Main navigation (mobile)">
       {% if me.role == 'doctor' %}<a href="{{ url_for('doctor.worklist') }}" class="{{ 'active' if ep in ('doctor.worklist', 'doctor.case_review') }}">Worklist</a>
         <a href="{{ url_for('doctor.schedule') }}" class="{{ 'active' if ep == 'doctor.schedule' }}">Schedule</a>
-        <a href="{{ url_for('doctor.availability') }}" class="{{ 'active' if ep == 'doctor.availability' }}">Availability</a>
-      {% else %}<a href="{{ url_for('admin.users') }}">Users</a><a href="{{ url_for('admin.settings') }}">Settings</a>
+        <a href="{{ url_for('care.approvals') }}" class="{{ 'active' if ep == 'care.approvals' }}">Approvals</a>
+        <a href="{{ url_for('care.patients') }}" class="{{ 'active' if ep in ('care.patients', 'care.patient') }}">Patients</a>
+      {% else %}<a href="{{ url_for('care.followup') }}" class="{{ 'active' if ep == 'care.followup' }}">Follow-up</a>
+        <a href="{{ url_for('care.patients') }}" class="{{ 'active' if ep in ('care.patients', 'care.patient') }}">Patients</a>
+        <a href="{{ url_for('care.referrals') }}" class="{{ 'active' if ep == 'care.referrals' }}">Referrals</a>
+        <a href="{{ url_for('admin.users') }}">Users</a><a href="{{ url_for('admin.settings') }}">Settings</a>
         <a href="{{ url_for('admin.outbox') }}">E-mail</a><a href="{{ url_for('admin.audit') }}">Audit</a><a href="{{ url_for('admin.system') }}">System</a>{% endif %}
       <a href="{{ url_for('doctor.stats') }}" class="{{ 'active' if ep == 'doctor.stats' }}">Analytics</a>
     </nav>
@@ -97,10 +109,11 @@
   <header class="ptop">
     <div class="ptop-in">
       <a class="pbrand" href="{{ url_for('patient.dashboard') }}">{% include "portal/_logo.html" %}
-        <span><span class="name">{{ clinic }}</span><br><span class="sub">Patient portal</span></span></a>
+        <span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></a>
       <nav class="pnav" aria-label="Main">
         <a href="{{ url_for('patient.dashboard') }}" class="{{ 'active' if ep in ('patient.dashboard', 'patient.case') }}">My reports</a>
         <a href="{{ url_for('patient.appointments') }}" class="{{ 'active' if ep in ('patient.appointments', 'patient.book', 'patient.reschedule', 'patient.appointment_done') }}">Appointments</a>
+        <a href="{{ url_for('patient.records') }}" class="{{ 'active' if ep in ('patient.records', 'patient.referral') }}">Documents</a>
         <a href="{{ url_for('patient.upload') }}" class="{{ 'active' if ep == 'patient.upload' }}">New scan</a>
       </nav>
       {{ user_menu('') }}
