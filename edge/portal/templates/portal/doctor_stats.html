@@ -43,4 +43,25 @@
   </section>
 </div>
 
+<h2 class="section-h">Follow-up</h2>
+<div class="kpis">
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Follow-up completed</span>
+    <span class="k-val">{{ '%.0f%%'|format(100 * follow.completion) if follow.completion is not none else '—' }}</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Median time to follow-up</span>
+    <span class="k-val">{{ '%.0f'|format(follow.median_days) if follow.median_days is not none else '—' }}<small class="muted"> days</small></span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-alert"/></svg>Overdue now</span><span class="k-val">{{ follow.overdue }}</span>
+    <span class="k-sub">{{ follow.open }} open · {{ follow.lost }} lost</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-send"/></svg>Referrals completed</span>
+    <span class="k-val">{{ '%.0f%%'|format(100 * follow.referral_done) if follow.referral_done is not none else '—' }}</span></div>
+</div>
+<section class="card">
+  <div class="card-h"><h2>Contact outcomes</h2></div>
+  <div class="card-b">
+    {% for k in ('reached_confirmed', 'reached_declined', 'no_answer', 'wrong_number', 'message_sent') %}{% set n = follow.outcomes.get(k, 0) %}
+    <div class="hbar"><span>{{ outcome_text[k] }}</span>
+      <svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="10" rx="5"/>{% if n %}<rect class="fill" width="{{ 100 * n / follow.outcomes_max }}" height="10" rx="5"/>{% endif %}</svg>
+      <span class="right num">{{ n }}</span></div>
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}

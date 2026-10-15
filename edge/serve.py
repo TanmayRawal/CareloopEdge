@@ -101,7 +101,9 @@ def seed_dev_followup(app) -> None:
     for name, dob, sex, phone, district, km, kind, offset, status, outcomes in DEMO_PATIENTS:
         uid = db.create_user(None, name, "patient", None, {"dob": dob, "sex": sex, "phone": phone, "district": district,
                                                            "distance_km": km}, created_by=admin["id"], email_consent=False)
-        due = (today + dt.timedelta(days=offset)).isoformat()
+        with db.tx() as c:                               # registered at the desk some weeks ago
+            c.execute("UPDATE users SET created = ? WHERE id = ?", (time.time() - 40 * 86400, uid))
+        due =(today + dt.timedelta(days=offset)).isoformat()
         pid = careplan.create(db, uid, kind, due, "", doctor if status == "approved" else admin)
         if kind == "referral":
             with app.test_request_context():

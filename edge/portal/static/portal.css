@@ -524,3 +524,13 @@ fieldset.fu legend { font-size: 11px; font-weight: 700; letter-spacing: .06em; t
   .journey li { flex-direction: column; text-align: center; gap: 4px; font-size: 11px; } .journey li:not(:last-child)::after { display: none; }
   .codes { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tl .ev { grid-template-columns: 74px 8px minmax(0, 1fr); } .tl .ev-who { display: none; }
 }
+.section-h { font-size: 15px; font-weight: 650; margin: 26px 0 12px; color: var(--text); }
+@media (max-width: 860px) {
+  /* patient header: brand + account on the first row, the section tabs scroll on a second row */
+  .ptop-in { height: auto; flex-wrap: wrap; row-gap: 0; padding-top: 10px; }
+  .ptop-in .user-menu { margin-left: auto; }
+  .pnav { order: 3; flex: 1 0 100%; overflow-x: auto; scrollbar-width: none; margin: 6px -16px 0; padding: 0 12px 8px; }
+  .pnav::-webkit-scrollbar { display: none; }
+  .pnav a { white-space: nowrap; padding: 7px 11px; font-size: 13.5px; }
+  .pbrand .name { white-space: nowrap; }
+}

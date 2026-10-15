@@ -75,6 +75,21 @@
 * **Consultations:** after the report, the patient books a follow-up with the reporting radiologist. The
   radiologist records attendance. Reminders are delivered in-app and by e-mail, and the e-mails never contain
   clinical content.
+* **Follow-up risk score (CareLoop):** this is not a learned model. It is a fixed, documented weighted sum of
+  operational signals, used only to order the coordinator's follow-up worklist:
+  * days overdue (1.5 points per day, at most 35), or due within the "due soon" window with nothing booked (6);
+  * overdue with no contact attempt yet (5);
+  * missed appointments (15 each, at most 30);
+  * unanswered contact attempts (8 each, at most 24);
+  * contact details not working (15);
+  * a referral not completed (15);
+  * travel distance over 20 km (5) or over 50 km (10);
+  * an appointment booked (−20).
+
+  Bands: High is 60 or more, Medium 30 or more. It never uses the diagnosis, the report or any AI output, so it
+  cannot encode clinical bias from the classifier. It decides nothing: every follow-up plan is approved by a
+  doctor and every reminder is sent by a person. A learned model (for example gradient boosting) would need real
+  follow-up outcomes from a deployment, and is future work.
 
 ## Intended use and out-of-scope use
 * **Intended:** research, teaching and demonstrations of explainable, secure edge AI on public data.
