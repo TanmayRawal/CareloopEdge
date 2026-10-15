@@ -148,6 +148,34 @@ sudo neuroedge-portal smtp-test --to you@hospital.org
 * The radiologist marks **Arrived / Completed / No-show** on the **Schedule**. A no-show sends the patient a
   rebooking invitation.
 
+### Follow-up (CareLoop)
+* While signing a report, the radiologist chooses the **next step**: consultation, repeat MRI or referral, and
+  when it is due. A referral letter is signed with the same password and shared with the patient.
+* The **administrator is the care coordinator**. **Follow-up** lists every patient with an open plan or
+  referral, ranked by the risk score, with the reasons shown. The coordinator can:
+  * log calls;
+  * send reminders (only for plans a doctor approved);
+  * book consultations for the patient;
+  * track referrals.
+* Plans the coordinator proposes wait under the doctor's **Approvals** until a doctor approves them.
+* Plans close automatically when the consultation is completed, a new scan arrives or the referral is attended.
+  Approved plans overdue for `lost_after_days` with no contact are marked **lost to follow-up**.
+* **Walk-in patients:** Patients → Register patient. An e-mail is optional. With an e-mail, the patient gets an
+  invitation link to set a password.
+* Reminder e-mails carry **I'll be there / I can't make it** links (single use). "Can't make it" frees the slot
+  (if still before the cutoff) and alerts the coordinator.
+
+### Staff sign-in and audit
+* Each doctor or administrator can turn on **two-step sign-in** under Account, using any authenticator app.
+  To make it mandatory, set **Admin → Settings → Require two-step sign-in = 1**.
+* If a staff member loses their phone and their recovery codes, reset it from the console:
+  `sudo neuroedge-portal reset-2fa --email <their address>`.
+* The audit log is hash-chained. **Admin → Audit log** and **System** show whether it is intact. From the console:
+  `sudo neuroedge-portal verify-audit` (exits with an error if any entry was altered or removed).
+* Patients can download their data (Account → Download my data) and request account deletion. The request
+  appears on **Admin → Users**. Closing the account stops sign-in and messages; clinical records are kept as
+  the law requires.
+
 ## 6. Benchmark (results go into docs/FINDINGS.md)
 ```bash
 cd /opt/neuroedge/src
@@ -171,6 +199,8 @@ It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, S
 | Reminders / e-mail | `systemctl list-timers neuroedge-reminders.timer`, `journalctl -u neuroedge-reminders`, `sudo neuroedge-portal smtp-test --to ...` |
 | Back up patient data | `sudo neuroedge-portal backup --dest /media/usb/neuroedge-backups` (database + encrypted files; **back up `/etc/neuroedge/portal.key` separately**) |
 | Restore | stop `neuroedge-web`, then `sudo neuroedge-portal restore --src <backup dir>` |
+| Audit log integrity | `sudo neuroedge-portal verify-audit` |
+| Staff lost their authenticator | `sudo neuroedge-portal reset-2fa --email ...` |
 | Portal CA fingerprint | `sudo neuroedge-ca` |
 | Firewall rules | `sudo nft list table inet neuroedge` |
 

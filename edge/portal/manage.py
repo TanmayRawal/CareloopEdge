@@ -9,6 +9,8 @@
   python -m edge.portal.manage smtp-config  [--file /etc/neuroedge/smtp.env]   interactive; password via getpass
   python -m edge.portal.manage smtp-test    --data ... --to you@hospital.org
   python -m edge.portal.manage set-setting  --data ... KEY VALUE   (e.g. base_url https://rpi.local)
+  python -m edge.portal.manage verify-audit --data ...       check the tamper-evident audit chain (exit 1 if altered)
+  python -m edge.portal.manage reset-2fa    --data ... --email dr@clinic.org   (staff member lost their phone)
 
 Backups contain the SQLite database (consistent online snapshot) and the encrypted blobs. They are only
 readable with the key file, which is NOT included: keep a copy of the key somewhere safe and separate.
@@ -60,6 +62,11 @@ def main() -> None:
     p.add_argument("--data", required=True, type=Path)
     p.add_argument("key")
     p.add_argument("value")
+    p = sub.add_parser("verify-audit")
+    p.add_argument("--data", required=True, type=Path)
+    p = sub.add_parser("reset-2fa")
+    p.add_argument("--data", required=True, type=Path)
+    p.add_argument("--email", required=True)
     a = ap.parse_args()
 
     if a.cmd == "init":
@@ -139,6 +146,21 @@ def main() -> None:
         db = DB(a.data / "portal.db")
         db.set_setting(a.key, a.value)
         print(f"{a.key} = {db.setting(a.key)}")
+    elif a.cmd == "verify-audit":
+        res = DB(a.data / "portal.db").verify_audit_chain()
+        print(json.dumps(res))
+        if not res["ok"]:
+            sys.exit(f"audit log altered at entry {res['bad_id']}")
+    elif a.cmd == "reset-2fa":
+        db = DB(a.data / "portal.db")
+        u = db.user_by_email(a.email)
+        if u is None or u["role"] == "patient":
+            sys.exit("no staff account with that e-mail")
+        with db.tx() as c:
+            c.execute("UPDATE users SET totp_on = 0, totp_secret = NULL, totp_last_step = NULL, recovery_hashes = NULL "
+                      "WHERE id = ?", (u["id"],))
+        db.audit(None, "two_step_disabled", detail={"user": u["id"], "by": "console"})
+        print(f"two-step sign-in reset for {u['name']}; they can set it up again under Account")
 
 
 if __name__ == "__main__":

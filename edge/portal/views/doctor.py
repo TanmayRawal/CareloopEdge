@@ -300,7 +300,20 @@ def blueprint(d) -> Blueprint:
         appts = {r["status"]: r["n"] for r in db.q("SELECT status, COUNT(*) AS n FROM appointments GROUP BY status")}
         attended = appts.get("completed", 0) + appts.get("arrived", 0)
         no_show_rate = appts.get("no_show", 0) / (attended + appts.get("no_show", 0)) if attended + appts.get("no_show", 0) else None
-        return render_template("portal/doctor_stats.html", n_reports=len(rows), n_pairs=len(pairs),
+        plans = {r["status"]: r["n"] for r in db.q("SELECT status, COUNT(*) AS n FROM care_plans GROUP BY status")}
+        closed = plans.get("completed", 0) + plans.get("lost", 0)
+        took = sorted((r["closed_at"] - r["proposed_at"]) / 86400 for r in db.q(
+            "SELECT proposed_at, closed_at FROM care_plans WHERE status = 'completed'"))
+        refs = {r["status"]: r["n"] for r in db.q("SELECT status, COUNT(*) AS n FROM referrals WHERE status != 'draft' GROUP BY status")}
+        outcomes = {r["outcome"]: r["n"] for r in db.q("SELECT outcome, COUNT(*) AS n FROM contacts GROUP BY outcome")}
+        follow = {"completion": plans.get("completed", 0) / closed if closed else None,
+                  "median_days": took[len(took) // 2] if took else None,
+                  "overdue": db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'approved' AND due_date < ?",
+                                    (today.isoformat(),))["n"],
+                  "lost": plans.get("lost", 0), "open": plans.get("approved", 0) + plans.get("proposed", 0),
+                  "referral_done": (refs.get("attended", 0) + refs.get("closed", 0)) / sum(refs.values()) if refs else None,
+                  "outcomes": outcomes, "outcomes_max": max([1] + list(outcomes.values()))}
+        return render_template("portal/doctor_stats.html", follow=follow, n_reports=len(rows), n_pairs=len(pairs),
                                agreement=(agree / len(pairs)) if pairs else None, confusion=confusion,
                                classes=classes, counts=status_counts(), median_turnaround_h=med, daily=daily,
                                daily_max=max([1] + [max(x["received"], x["signed"]) for x in daily]),
