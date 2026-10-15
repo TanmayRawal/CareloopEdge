@@ -117,7 +117,9 @@ def main() -> None:
     elif a.cmd == "smtp-config":
         print("Outgoing e-mail (SMTP). Gmail: host smtp.gmail.com, port 587, starttls, and an App Password "
               "(Google account -> Security -> App passwords), not your normal password.")
-        host = input("SMTP host: ").strip()
+        host = input("SMTP server [smtp.gmail.com]: ").strip() or "smtp.gmail.com"
+        if "@" in host:
+            sys.exit("That is an e-mail address; the SMTP server is a host name such as smtp.gmail.com. Nothing saved.")
         port = input("Port [587]: ").strip() or "587"
         sec = (input("Security starttls/ssl/none [starttls]: ").strip() or "starttls").lower()
         user = input("Username (e-mail address): ").strip()
