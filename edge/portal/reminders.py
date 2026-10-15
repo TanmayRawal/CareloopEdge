@@ -32,14 +32,16 @@ def unread_studies(db, now: float) -> int:
         return 0
     bucket = int(now // 86400)
     oldest = min(r["created"] for r in late)
-    ctx = {"n": len(late), "hours": db.setting("unread_hours"), "oldest": notify.fmt_when(db, oldest)}
+    ctx = {"studies": notify.plural(len(late), "study", "studies"), "hours": db.setting("unread_hours"),
+           "oldest": notify.fmt_when(db, oldest)}
     sent = 0
     for d in db.q("SELECT * FROM users WHERE role = 'doctor' AND active = 1"):
         sent += notify.notify(db, d, "doc_unread", ctx, "/doctor/", dedupe=f"unread:{bucket}", now=now)
     very = [r for r in rows if now - r["created"] >= esc]
     if very:
         for a in db.q("SELECT * FROM users WHERE role = 'admin' AND active = 1"):
-            sent += notify.notify(db, a, "admin_escalation", {"n": len(very), "hours": db.setting("escalate_hours")},
+            sent += notify.notify(db, a, "admin_escalation", {"studies": notify.plural(len(very), "study", "studies"),
+                                                                    "hours": db.setting("escalate_hours")},
                                   "/doctor/stats", dedupe=f"escalate:{bucket}", now=now)
     return sent
 
@@ -101,7 +103,8 @@ def daily_agenda(db, now: float) -> int:
                     (d["id"], max(start, now - 3600), start + 86400))
         if rows:
             agenda = "\n".join(f"{scheduling.local(r['start_ts'], zone):%H:%M}  {r['name']}  ({r['room'] or 'clinic'})" for r in rows)
-            sent += notify.notify(db, d, "doc_agenda", {"n": len(rows), "agenda": agenda}, "/doctor/schedule",
+            sent += notify.notify(db, d, "doc_agenda", {"consultations": notify.plural(len(rows), "consultation"),
+                                                         "agenda": agenda}, "/doctor/schedule",
                                   dedupe=f"agenda:{t.date().isoformat()}", now=now)
     return sent
 
@@ -140,7 +143,8 @@ def plans_awaiting_approval(db, now: float) -> int:
         return 0
     sent = 0
     for d in db.q("SELECT * FROM users WHERE role = 'doctor' AND active = 1"):
-        sent += notify.notify(db, d, "doc_approvals", {"n": n}, "/care/approvals", dedupe=f"approvals:{int(now // 86400)}", now=now)
+        sent += notify.notify(db, d, "doc_approvals", {"plans": notify.plural(n, "follow-up plan")}, "/care/approvals",
+                              dedupe=f"approvals:{int(now // 86400)}", now=now)
     return sent
 
 
@@ -161,7 +165,11 @@ def followup_digest(db, now: float) -> int:
     lost = db.one("SELECT COUNT(*) AS n FROM care_plans WHERE status = 'lost' AND closed_at >= ?", (now - 86400,))["n"]
     if not (overdue or soon or stale or lost):
         return 0
-    ctx = {"n": overdue + soon + stale, "overdue": overdue, "soon": soon, "soon_days": soon_days, "stale": stale, "lost": lost}
+    lines = [t for n, t in ((overdue, notify.plural(overdue, "follow-up") + " overdue"),
+                            (soon, notify.plural(soon, "follow-up") + f" due in the next {soon_days} days"),
+                            (stale, notify.plural(stale, "referral") + " not completed"),
+                            (lost, notify.plural(lost, "patient") + " marked lost to follow-up today")) if n]
+    ctx = {"patients": notify.plural(overdue + soon + stale, "patient"), "summary": "\n".join("• " + x for x in lines)}
     sent = 0
     for a in db.q("SELECT * FROM users WHERE role = 'admin' AND active = 1"):
         sent += notify.notify(db, a, "admin_digest", ctx, "/care/", dedupe=f"digest:{today.isoformat()}", now=now)

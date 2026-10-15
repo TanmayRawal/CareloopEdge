@@ -470,7 +470,7 @@ details.panel .panel-b { padding: 0 18px 16px; }
 .narrow-card { max-width: 640px; margin-left: auto; margin-right: auto; } .narrow-card.wide { max-width: 860px; }
 
 /* ---------------------------------------------------------------- CareLoop follow-up */
-.risk { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 4px; border-radius: 13px; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: help; }
+.risk { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-radius: 13px; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: help; }
 .risk b { min-width: 22px; height: 20px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; color: #fff; font-size: 11.5px; }
 .risk.r-high { background: var(--err-soft); color: var(--err); } .risk.r-high b { background: var(--err); }
 .risk.r-medium { background: var(--warn-soft); color: var(--warn); } .risk.r-medium b { background: var(--warn); }

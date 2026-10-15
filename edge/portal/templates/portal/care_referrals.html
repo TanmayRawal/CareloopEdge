@@ -16,7 +16,7 @@
         <td><div class="cell-main">{{ r.facility }}</div><div class="cell-sub">{{ r.specialty or '' }}{% if r.urgency != 'routine' %} <span class="tag {{ 'err' if r.urgency == 'urgent' else 'warn' }}">{{ 'Urgent' if r.urgency == 'urgent' else 'Soon' }}</span>{% endif %}</div></td>
         <td class="nowrap"><div class="cell-main num">{{ fmt_date(r.signed_at or r.created) }}</div><div class="cell-sub">{{ r.signed_by_name or '' }}</div></td>
         <td><span class="pill rf-{{ r.status }}">{{ referral_text[r.status] }}</span>
-          {% if r.status in ('signed', 'sent', 'appointment_made') and (r.signed_at or r.created) < stale %}<div class="cell-sub"><span class="overdue">Not completed · {{ ago(r.signed_at or r.created) }}</span></div>{% endif %}</td>
+          {% if r.status in ('signed', 'sent', 'appointment_made') and (r.signed_at or r.created) < stale %}<div class="cell-sub"><span class="overdue">Open for {{ ((now - (r.signed_at or r.created)) / 86400)|int }} days</span></div>{% endif %}</td>
         <td class="right"><div class="row-actions">
           {% if r.status != 'draft' %}<a class="btn sm ghost" href="{{ url_for('care.letter', rid=r.id) }}" target="_blank" rel="noopener">Letter</a>{% endif %}
           {% if me.role == 'admin' and next_states.get(r.status) %}

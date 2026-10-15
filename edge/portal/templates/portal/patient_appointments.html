@@ -2,7 +2,7 @@
 {% block title %}Appointments{% endblock %}
 {% block pcontent %}
 <div class="page-head"><div><h1>Appointments</h1></div>
-  {% if bookable %}<a class="btn primary" href="{{ url_for('patient.book', cid=bookable[0].id) }}"><svg class="ic sm"><use href="#i-plus"/></svg>Book a consultation</a>{% endif %}</div>
+  {% if bookable and upcoming %}<a class="btn primary" href="{{ url_for('patient.book', cid=bookable[0].id) }}"><svg class="ic sm"><use href="#i-plus"/></svg>Book a consultation</a>{% endif %}</div>
 
 <section class="card">
   <div class="card-h"><h2>Upcoming</h2></div>
@@ -30,13 +30,13 @@
 
 {% if past %}
 <section class="card">
-  <div class="card-h"><h2>Past and cancelled</h2></div>
+  <div class="card-h"><h2>Past</h2></div>
   <table class="table responsive">
     <thead><tr><th>Date</th><th>Radiologist</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for a in past %}
       <tr><td class="num nowrap">{{ fmt_time(a.start_ts) }}</td><td>{{ a.doctor_name }}</td>
-        <td><span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span></td>
+        <td>{% if a.status in ('booked', 'arrived') %}<span class="pill">Awaiting update</span>{% else %}<span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span>{% endif %}</td>
         <td class="right">{% if a.status == 'no_show' %}<a class="btn sm" href="{{ url_for('patient.book', cid=a.case_id) }}">Book again</a>{% endif %}</td></tr>
     {% endfor %}
     </tbody>

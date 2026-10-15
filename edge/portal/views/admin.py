@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import socket
 import time
@@ -32,7 +33,7 @@ SETTING_FORM = [  # key, label, hint, kind
     ("followup_due_soon_days", "Follow-up due-soon window (days)", "", "number"),
     ("referral_stale_days", "Referral not completed after (days)", "", "number"),
     ("lost_after_days", "Lost to follow-up after (days overdue)", "", "number"),
-    ("require_staff_2fa", "Require two-step sign-in for staff", "1 = yes, 0 = no", "flag"),
+    ("require_staff_2fa", "Two-step sign-in for staff", "", "flag"),
 ]
 
 
@@ -94,8 +95,9 @@ def blueprint(d) -> Blueprint:
                 db.audit(g.user["id"], "user_created", detail={"user": uid, "role": role}, ip=d.ip())
                 flash(f"Account created for {name}.")
                 return redirect(url_for("admin.users"))
-        role = request.args.get("role", "")
-        where, args = ("WHERE u.role = ?", (role,)) if role in ("patient", "doctor", "admin") else ("", ())
+        role = request.args.get("role", "staff")
+        where, args = (("WHERE u.role = ?", (role,)) if role in ("patient", "doctor", "admin")
+                       else ("WHERE u.role != 'patient'", ()))
         rows = db.q(f"SELECT u.*, (SELECT COUNT(*) FROM cases WHERE patient_id = u.id) AS n_cases FROM users u {where} "
                     f"ORDER BY u.role, u.name", args)
         requests_ = db.q("SELECT r.*, u.name, u.email FROM data_requests r JOIN users u ON u.id = r.user_id "
@@ -154,12 +156,21 @@ def blueprint(d) -> Blueprint:
         zone = scheduling.tz(db)
         today = scheduling.local(time.time(), zone).date()
         days: list[tuple[str, list]] = []
+        # who the event was about: the study's patient, or the patient / account named in the detail
+        about_ids = set()
         for r in rows[:PAGE_SIZE]:
+            dd = json.loads(r["detail"] or "{}")
+            about_ids.update(int(dd[k]) for k in ("patient", "user") if isinstance(dd.get(k), int))
+        names = {u["id"]: u["name"] for u in db.q(
+            f"SELECT id, name FROM users WHERE id IN ({','.join('?' * len(about_ids))})", tuple(about_ids))} if about_ids else {}
+        for r in rows[:PAGE_SIZE]:
+            dd = json.loads(r["detail"] or "{}")
+            about = r["patient_name"] or names.get(dd.get("patient")) or names.get(dd.get("user"))
             dday = scheduling.local(r["ts"], zone).date()
             name = "Today" if dday == today else "Yesterday" if (today - dday).days == 1 else dday.strftime("%A %d %B %Y")
             if not days or days[-1][0] != name:
                 days.append((name, []))
-            days[-1][1].append({"r": r, "label": audit_text.label(r["action"]), "cat": audit_text.category(r["action"]),
+            days[-1][1].append({"r": r, "about": about, "label": audit_text.label(r["action"]), "cat": audit_text.category(r["action"]),
                                 "text": audit_text.describe(r["action"], r["detail"])})
         return render_template("portal/admin_audit.html", days=days, more=len(rows) > PAGE_SIZE, page=page,
                                categories=audit_text.CATEGORIES, cat=cat, who=who, chain=db.verify_audit_chain())

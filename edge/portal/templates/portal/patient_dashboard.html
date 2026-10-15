@@ -46,11 +46,6 @@
   </section>
   {% endif %}
 {% endif %}
-<div class="grid g3 kpis">
-  <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ cases|length }}</span></div>
-  <div class="kpi"><span class="k-label">Reports ready</span><span class="k-val">{{ ready|length }}</span></div>
-  <div class="kpi"><span class="k-label">Under review</span><span class="k-val">{{ cases|length - ready|length }}</span></div>
-</div>
 <section class="card">
   <div class="card-h"><h2>My studies</h2></div>
   {% if not cases %}

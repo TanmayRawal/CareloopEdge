@@ -33,12 +33,12 @@ TEMPLATES = {
                      "see you.\n\nPlease book a new appointment in the patient portal at a time that suits you."),
     "doc_booking": ("New appointment: {patient}, {when}", "{patient} booked a consultation with you.\n\nWhen: {when}\nWhere: {room}"),
     "doc_cancel": ("Appointment cancelled: {patient}, {when}", "{patient} cancelled the consultation on {when}."),
-    "doc_unread": ("{n} studies waiting for review", "{n} studies have been waiting longer than the department target "
-                   "({hours} h). The oldest arrived {oldest}.\n\nOpen the worklist to review them."),
-    "doc_unsigned": ("Study in review for {hours} h", "A study you opened {age} ago has not been signed yet (patient {patient})."),
-    "admin_escalation": ("Escalation: {n} studies unread for {hours} h", "{n} studies have not been opened by any radiologist "
+    "doc_unread": ("{studies} waiting for review", "{studies} have been waiting longer than the department target "
+                   "({hours} hours). The oldest arrived {oldest}.\n\nOpen the worklist to review them."),
+    "doc_unsigned": ("Report not signed after {hours} hours", "A study you opened {age} ago has not been signed yet (patient {patient})."),
+    "admin_escalation": ("{studies} unread for over {hours} hours", "{studies} have not been opened by any radiologist "
                          "for more than {hours} hours."),
-    "doc_agenda": ("Today: {n} consultations", "Your consultations today:\n\n{agenda}"),
+    "doc_agenda": ("Today: {consultations}", "Your consultations today:\n\n{agenda}"),
     "doc_unmarked": ("Please record attendance: {patient}", "The consultation with {patient} at {when} has ended but attendance "
                      "was not recorded. Please mark it as completed or no-show."),
     # CareLoop follow-up
@@ -50,15 +50,19 @@ TEMPLATES = {
                "your reports, appointments and next steps online.\n\nThis link works once and expires in 7 days."),
     "password_reset": ("Reset your password", "We received a request to reset the password for your account.\n\nThe link "
                        "works once and expires in 1 hour. If you did not ask for this, you can ignore this e-mail."),
-    "doc_approvals": ("{n} follow-up plans waiting for approval", "{n} follow-up plans proposed by the care coordinator are "
-                      "waiting for your approval. Outreach to these patients starts only after a doctor approves."),
+    "doc_approvals": ("{plans} waiting for your approval", "The care coordinator proposed {plans} that need a doctor's "
+                      "approval. Patients are contacted only after a doctor approves."),
     "doc_plan_proposed": ("Follow-up plan to approve: {patient}", "A {step} for {patient} (due {due}) was proposed and needs "
                           "a doctor's approval."),
-    "admin_digest": ("Follow-up today: {n} patients need attention", "{overdue} overdue follow-ups, {soon} due within "
-                     "{soon_days} days, {stale} referrals not completed and {lost} plans now marked lost to follow-up."),
+    "admin_digest": ("Follow-up today: {patients} need attention", "{summary}\n\nOpen the follow-up list to contact them."),
     "admin_appt_declined": ("Patient cannot attend: {patient}", "{patient} replied that they cannot attend the consultation "
                             "on {when} with {doctor}.{extra}"),
 }
+
+
+def plural(n: int, one: str, many: str | None = None) -> str:
+    """plural(1, 'study', 'studies') -> '1 study'; plural(3, 'study', 'studies') -> '3 studies'."""
+    return f"{n} {one if n == 1 else (many or one + 's')}"
 
 
 def fmt_when(db, ts: float) -> str:

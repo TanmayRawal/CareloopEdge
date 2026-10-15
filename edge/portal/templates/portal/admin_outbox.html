@@ -7,7 +7,7 @@
 
 <div class="kpis">
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-server"/></svg>Mail server</span>
-    <span class="k-val sm-val">{{ 'Connected' if mail.configured else 'Not configured' }}</span>{% if mail.configured %}<span class="k-sub">{{ mail.detail }}</span>{% endif %}</div>
+    <span class="k-val sm-val">{{ 'Demo mode' if mail.mode == 'file' else 'Connected' if mail.configured else 'Not set up' }}</span>{% if mail.configured %}<span class="k-sub">{{ mail.detail }}</span>{% endif %}</div>
   <a class="kpi {{ 'on' if status == 'queued' }}" href="?status=queued"><span class="k-label">Queued</span><span class="k-val">{{ counts.get('queued', 0) }}</span></a>
   <a class="kpi {{ 'on' if status == 'sent' }}" href="?status=sent"><span class="k-label">Sent</span><span class="k-val">{{ counts.get('sent', 0) }}</span></a>
   <a class="kpi {{ 'on' if status == 'failed' }}" href="?status=failed"><span class="k-label">Failed</span><span class="k-val">{{ counts.get('failed', 0) }}</span></a>
