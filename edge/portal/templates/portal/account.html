@@ -84,11 +84,11 @@
     <div class="card-b">
       <table class="kv">
         {% for c in consents %}
-          <tr><th>{{ {'care': 'Storage and care', 'email_reminders': 'E-mail reminders'}[c.purpose] }}</th>
-            <td>{% if c.withdrawn_at %}Withdrawn {{ fmt_date(c.withdrawn_at) }}{% else %}Given {{ fmt_date(c.granted_at) }}{% endif %}</td></tr>
+          <tr><th>{{ {'care': 'Keeping my scans and records', 'email_reminders': 'Reminders by e-mail'}[c.purpose] }}</th>
+            <td>{% if c.withdrawn_at %}Withdrawn on {{ fmt_date(c.withdrawn_at) }}{% else %}Agreed on {{ fmt_date(c.granted_at) }}{% endif %}</td></tr>
         {% endfor %}
       </table>
-      <p class="small muted">You can switch e-mail reminders off above at any time. Your records stay encrypted at this hospital and are seen only by its care team.</p>
+      <p class="small muted">Your records stay at this hospital, encrypted, and only its care team can see them.</p>
       {% if deletion %}
         <div class="alert"><svg class="ic sm"><use href="#i-clock"/></svg><span>Deletion requested on {{ fmt_date(deletion.created) }}. The department will contact you.</span></div>
       {% else %}

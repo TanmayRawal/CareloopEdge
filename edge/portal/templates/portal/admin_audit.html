@@ -21,7 +21,7 @@
         <span class="ev-time num">{{ fmt_clock(r.ts) }}</span>
         <span class="ev-dot c-{{ it.cat }}"></span>
         <div class="ev-main">
-          <div><b>{{ it.label }}</b>{% if r.case_id %} <span class="muted">· {{ r.patient_name or 'Study' }} <span class="mono xs">{{ r.case_id[:8]|upper }}</span></span>{% endif %}</div>
+          <div><b>{{ it.label }}</b>{% if it.about and it.about != r.user_name %} <span class="muted">· {{ it.about }}</span>{% endif %}</div>
           {% if it.text %}<div class="ev-sub">{{ it.text }}</div>{% endif %}
         </div>
         <div class="ev-who"><b>{{ r.user_name or 'System' }}</b><span>{{ role_text.get(r.user_role, '') }}{% if r.ip %} · {{ r.ip }}{% endif %}</span></div>

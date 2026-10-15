@@ -79,17 +79,15 @@ def describe(action: str, detail: str | None) -> str:
     if action == "assistant_narrative":
         return "Local language model" if d.get("llm_used") else "Standard summary"
     if action in ("user_created", "user_created_cli"):
-        return ROLE_TEXT.get(d.get("role"), "") + (f" · account #{d['user']}" if d.get("user") else "")
-    if action in ("user_disabled", "user_enabled"):
-        return f"Account #{d.get('user')}"
+        return ROLE_TEXT.get(d.get("role"), "")
     if action == "settings_updated":
         return ", ".join(k.replace("_", " ") for k in d.get("changed", [])) or "No changes"
     if action == "hours_updated":
         return f"{d.get('blocks', 0)} time blocks"
     if action == "appointment_rescheduled":
-        return f"Appointment #{d.get('from')} → #{d.get('to')}"
+        return "New time booked"
     if action.startswith("appointment_") and d.get("appointment"):
-        return f"Appointment #{d['appointment']}" + (" · by doctor" if d.get("by") == "doctor" else "")
+        return {"doctor": "By the doctor", "coordinator": "By the care coordinator"}.get(d.get("by"), "")
     if action in ("plan_created", "plan_proposed") and d.get("kind"):
         from edge.portal.careplan import PLAN_TEXT
         return PLAN_TEXT.get(d["kind"], d["kind"]) + (f" · due {d['due']}" if d.get("due") else "")
@@ -104,7 +102,7 @@ def describe(action: str, detail: str | None) -> str:
     if d.get("patient") and action in ("patient_registered", "patient_record_viewed", "patient_updated", "invite_sent",
                                        "document_added", "plan_approved", "plan_rejected", "plan_completed", "plan_lost",
                                        "plan_cancelled", "referral_signed"):
-        return f"Patient NE-{int(d['patient']):05d}"
+        return ""
     if action == "email_test":
         return f"{d.get('sent', 0)} sent" if "sent" in d else ""
-    return ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in d.items())
+    return ""

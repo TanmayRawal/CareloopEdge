@@ -1,12 +1,12 @@
 {% extends "portal/base.html" %}
 {% block title %}Follow-up{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Follow-up worklist</h1><p>Patients ranked by follow-up risk</p></div>
+<div class="page-head"><div><h1>Follow-up worklist</h1><p>Patients who need a follow-up, most urgent first</p></div>
   <a class="btn primary" href="{{ url_for('care.register') }}"><svg class="ic sm"><use href="#i-plus"/></svg>Register patient</a></div>
 
 
 <div class="chips">
-  {% for k, label in queues %}<a class="chip-f {{ 'on' if queue == k }}" href="?q={{ k }}">{{ label }} <span class="n">{{ counts[k] }}</span></a>{% endfor %}
+  {% for k, label in queues if counts[k] or k in ('all', queue) %}<a class="chip-f {{ 'on' if queue == k }}" href="?q={{ k }}">{{ label }} <span class="n">{{ counts[k] }}</span></a>{% endfor %}
 </div>
 
 <section class="card">
@@ -16,20 +16,20 @@
     <div class="fu-who">
       <a class="cell-main" href="{{ url_for('care.patient', uid=p.id) }}">{{ p.name }}</a>
       <div class="cell-sub">{{ mrn(p.id) }}{% if p.phone %} · {{ p.phone }}{% endif %}{% if p.district %} · {{ p.district }}{% endif %}</div>
-      <div class="why">{% for t, pts in r.risk.factors if pts > 0 %}<span>{{ t }}</span>{% endfor %}</div>
+      <div class="why">{% for t, pts in r.risk.factors if pts > 0 and not t.startswith(('Overdue by', 'Due soon')) %}<span>{{ t }}</span>{% endfor %}</div>
     </div>
     <div class="fu-step">
       {% if plan %}
         <b>{{ plan_text[plan.kind] }}</b>
         {% if plan.status == 'proposed' %}<span class="pill pl-proposed">Awaiting approval</span>
-        {% elif r.due.overdue %}<span class="overdue">Overdue {{ -r.due.days }} d</span>
-        {% else %}<span class="cell-sub">Due {{ r.due.due.strftime('%d %b') }}{% if r.due.days == 0 %} · today{% endif %}</span>{% endif %}
+        {% elif r.due.overdue %}<span class="overdue">{{ -r.due.days }} day{{ 's' if -r.due.days != 1 }} overdue</span>
+        {% else %}<span class="cell-sub">{{ 'Due today' if r.due.days == 0 else 'Due ' ~ r.due.due.strftime('%d %b') }}</span>{% endif %}
       {% elif r.ref %}<b>Referral</b><span class="cell-sub">{{ r.ref.facility }}</span>{% endif %}
       {% if r.sig.booked %}<span class="tag ok">Booked</span>{% endif %}
     </div>
     <div class="fu-last">
-      {% if r.last %}<span class="cell-sub">Last contact {{ ago(r.last.created) }} ago</span><b class="small">{{ outcome_text[r.last.outcome] }}</b>
-      {% else %}<span class="cell-sub">Not contacted</span>{% endif %}
+      {% if r.last %}<span class="cell-sub">Last contact · {{ fmt_date(r.last.created) }}</span><b class="small">{{ outcome_text[r.last.outcome] }}</b>
+      {% else %}<span class="cell-sub">Not contacted yet</span>{% endif %}
     </div>
     <div class="fu-act">
       <details class="pop">

@@ -12,7 +12,7 @@
     <div><span>Phone</span><b>{{ prof.phone if prof and prof.phone else '—' }}</b></div>
     <div><span>District</span><b>{{ prof.district if prof and prof.district else '—' }}</b></div>
     {% if prof and prof.distance_km %}<div><span>Distance</span><b>{{ prof.distance_km|round|int }} km</b></div>{% endif %}
-    <div><span>Contact</span><b class="{{ 'err-text' if prof and prof.contact_status != 'ok' }}">{{ contact_status_text[prof.contact_status if prof else 'ok'] }}</b></div>
+    <div><span>Phone status</span><b class="{{ 'err-text' if prof and prof.contact_status != 'ok' }}">{{ contact_status_text[prof.contact_status if prof else 'ok'] }}</b></div>
   </div>
   <div class="actions">
     {% with rk = risk %}{% include "portal/_risk.html" %}{% endwith %}
@@ -24,7 +24,7 @@
 
 <div class="grid g-side">
   <section class="card">
-    <div class="card-h"><h2>Timeline</h2><span class="small muted">{{ events|length }} events</span></div>
+    <div class="card-h"><h2>Timeline</h2></div>
     <div class="tl">
     {% for ts, cat, title, sub, cid in events %}
       <div class="ev">
@@ -58,7 +58,7 @@
           {% if admin %}
           <form method="post" action="{{ url_for('care.remind', pid=plan.id) }}" class="form" data-confirm="Send a follow-up reminder to {{ p.name }}?">
             <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-            <label class="field">Message <span class="hint">Optional</span><input name="message" maxlength="500" placeholder="e.g. Please call us to fix a date."></label>
+            <label class="field">Message to the patient <span class="hint">Optional</span><input name="message" maxlength="500" placeholder="e.g. Please call us to fix a date."></label>
             <button class="btn sm" type="submit"><svg class="ic sm"><use href="#i-mail"/></svg>Send reminder</button>
           </form>
           {% endif %}

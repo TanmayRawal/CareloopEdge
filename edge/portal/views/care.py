@@ -265,7 +265,7 @@ def blueprint(d) -> Blueprint:
                     f"ORDER BY u.created DESC LIMIT ? OFFSET ?", tuple(args) + (PAGE_SIZE + 1, offset))
         ids = [r["id"] for r in rows[:PAGE_SIZE]]
         return render_template("portal/care_patients.html", rows=rows[:PAGE_SIZE], more=len(rows) > PAGE_SIZE, page=page,
-                               q=search, risk=risk.scores(db, ids) if ids else {})
+                               q=search, risk=risk.scores(db) if ids else {})
 
     @bp.route("/patients/new", methods=["GET", "POST"])
     @auth.require("admin")
@@ -468,7 +468,7 @@ def blueprint(d) -> Blueprint:
                     f"ORDER BY CASE r.urgency WHEN 'urgent' THEN 0 WHEN 'soon' THEN 1 ELSE 2 END, r.updated DESC", args)
         counts = {r["status"]: r["n"] for r in db.q("SELECT status, COUNT(*) AS n FROM referrals GROUP BY status")}
         stale = time.time() - float(db.setting("referral_stale_days")) * 86400
-        return render_template("portal/care_referrals.html", rows=rows, status=status, counts=counts, stale=stale,
+        return render_template("portal/care_referrals.html", rows=rows, status=status, counts=counts, stale=stale, now=time.time(),
                                next_states=careplan.REFERRAL_NEXT)
 
     @bp.post("/referrals/<int:rid>/status")

@@ -5,9 +5,9 @@
 <div class="kpis">
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-image"/></svg>Studies received</span><span class="k-val">{{ n_cases }}</span></div>
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-file"/></svg>Reports signed</span><span class="k-val">{{ n_reports }}</span><span class="k-sub">{{ counts.awaiting_review + counts.in_review }} open</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Median turnaround</span>
-    <span class="k-val">{{ '%.1f'|format(median_turnaround_h) if median_turnaround_h is not none else '—' }}<small class="muted"> h</small></span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>AI concordance</span>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Time to report (median)</span>
+    <span class="k-val">{% if median_turnaround_h is not none %}{{ '%.1f'|format(median_turnaround_h) }}<small class="muted"> hours</small>{% else %}—{% endif %}</span></div>
+  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Agreement with AI</span>
     <span class="k-val">{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</span></div>
 </div>
 
@@ -48,7 +48,7 @@
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Follow-up completed</span>
     <span class="k-val">{{ '%.0f%%'|format(100 * follow.completion) if follow.completion is not none else '—' }}</span></div>
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Median time to follow-up</span>
-    <span class="k-val">{{ '%.0f'|format(follow.median_days) if follow.median_days is not none else '—' }}<small class="muted"> days</small></span></div>
+    <span class="k-val">{% if follow.median_days is not none %}{{ '%.0f'|format(follow.median_days) }}<small class="muted"> days</small>{% else %}—{% endif %}</span></div>
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-alert"/></svg>Overdue now</span><span class="k-val">{{ follow.overdue }}</span>
     <span class="k-sub">{{ follow.open }} open · {{ follow.lost }} lost</span></div>
   <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-send"/></svg>Referrals completed</span>

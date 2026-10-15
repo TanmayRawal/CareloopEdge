@@ -17,7 +17,8 @@
       <div class="card-b settings-grid">
         {% for k, label, hint, kind in fields if k in keys %}
           <label class="field {{ 'invalid' if errors.get(k) }}">{{ label }}
-            <input name="{{ k }}" value="{{ current[k] }}" {{ 'inputmode=decimal' if kind == 'number' }} required maxlength="120">
+            {% if kind == 'flag' %}<select name="{{ k }}"><option value="0" {{ 'selected' if current[k] == '0' }}>Optional</option><option value="1" {{ 'selected' if current[k] == '1' }}>Required</option></select>
+            {% else %}<input name="{{ k }}" value="{{ current[k] }}" {{ 'inputmode=decimal' if kind == 'number' }} required maxlength="120">{% endif %}
             {% if errors.get(k) or hint %}<span class="hint">{{ errors[k] if errors.get(k) else hint }}</span>{% endif %}</label>
         {% endfor %}
       </div>

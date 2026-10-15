@@ -43,7 +43,7 @@ def load_config() -> dict:
 def status(cfg: dict | None = None) -> dict:
     cfg = load_config() if cfg is None else cfg
     if cfg.get("NEUROEDGE_SMTP", "").startswith("file:"):
-        return {"configured": True, "mode": "file", "detail": "Demo mode · e-mails saved as files", "path": cfg["NEUROEDGE_SMTP"][5:]}
+        return {"configured": True, "mode": "file", "detail": "E-mails are saved as files, not sent", "path": cfg["NEUROEDGE_SMTP"][5:]}
     if cfg.get("NEUROEDGE_SMTP_HOST"):
         return {"configured": True, "mode": "smtp",
                 "detail": f"{cfg['NEUROEDGE_SMTP_HOST']}:{cfg.get('NEUROEDGE_SMTP_PORT', '587')} as "

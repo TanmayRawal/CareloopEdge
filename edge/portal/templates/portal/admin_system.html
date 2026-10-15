@@ -6,9 +6,9 @@
   <div class="kpi"><span class="k-label">AI model</span><span class="k-val sm-val">{{ info.model_version }}</span><span class="k-sub">Verified</span></div>
   <div class="kpi"><span class="k-label">Studies</span><span class="k-val">{{ info.cases }}</span><span class="k-sub">{{ info.reports }} report versions · {{ info.appointments }} consultations</span></div>
   <div class="kpi"><span class="k-label">Users</span><span class="k-val">{{ info.roles.values()|sum }}</span>
-    <span class="k-sub">{{ info.roles.get('doctor', 0) }} radiologists · {{ info.roles.get('patient', 0) }} patients</span></div>
+    <span class="k-sub">{{ info.roles.get('doctor', 0) }} radiologist{{ 's' if info.roles.get('doctor', 0) != 1 }} · {{ info.roles.get('patient', 0) }} patient{{ 's' if info.roles.get('patient', 0) != 1 }}</span></div>
   <div class="kpi"><span class="k-label">Assistant</span><span class="k-val">{{ info.llm }}</span></div>
-  <a class="kpi" href="{{ url_for('admin.outbox') }}"><span class="k-label">E-mail</span><span class="k-val sm-val">{{ 'Connected' if info.mail.configured else 'Not configured' }}</span>
+  <a class="kpi" href="{{ url_for('admin.outbox') }}"><span class="k-label">E-mail</span><span class="k-val sm-val">{{ 'Demo mode' if info.mail.mode == 'file' else 'Connected' if info.mail.configured else 'Not set up' }}</span>
     <span class="k-sub">{{ info.outbox.get('queued', 0) }} queued · {{ info.outbox.get('failed', 0) }} failed</span></a>
 </div>
 <div class="grid g2">
