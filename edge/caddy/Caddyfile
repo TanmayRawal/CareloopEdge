@@ -25,7 +25,18 @@ https:// {
 		X-Content-Type-Options nosniff
 		-Server
 	}
-	reverse_proxy 127.0.0.1:8080
+	# Internet access through Tailscale Funnel arrives from tailscaled on this machine (a loopback peer): pass on only
+	# the visitor address it reports, so rate limits and the audit log see the real visitor. LAN clients connect
+	# directly and get the normal header (their own address).
+	@tunnel remote_ip 127.0.0.1/32 ::1/128
+	handle @tunnel {
+		reverse_proxy 127.0.0.1:8080 {
+			header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
 }
 
 # Plain HTTP: only the CA certificate (so devices can install it) and a redirect to HTTPS.
