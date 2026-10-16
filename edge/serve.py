@@ -41,6 +41,8 @@ def build(bundle_dir: str | None = None, model: str = "mri", threads: int = 4,
             "metrics": meta.get("metrics", {})}
     data_dir = data_dir or os.environ.get("NEUROEDGE_PORTAL_DATA", PI_DATA)
     key_file = key_file or os.environ.get("NEUROEDGE_PORTAL_KEY", PI_KEY)
+    from edge.portal import mailer, notify
+    notify.ON_QUEUED = mailer.send_soon                  # e-mail goes out immediately; the timer retries failures
     return create_app(engine, info, data_dir, key_file, secret_key=os.environ.get("NEUROEDGE_SECRET"),
                       behind_proxy=os.environ.get("NEUROEDGE_BEHIND_PROXY") == "1")
 
