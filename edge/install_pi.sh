@@ -167,6 +167,13 @@ systemctl enable neuroedge-firewall.service
 systemctl restart neuroedge-firewall.service
 
 say "HTTPS: Caddy with its local CA in front of the portal"
+# If Tailscale Funnel is used for internet access, tailscaled also listens on :443 (its own addresses);
+# Caddy binds all addresses, so it must start first or it fails at boot.
+mkdir -p /etc/systemd/system/caddy.service.d
+printf '[Unit]
+Before=tailscaled.service
+' > /etc/systemd/system/caddy.service.d/before-tailscale.conf
+systemctl daemon-reload
 install -m 644 "$APP/src/edge/caddy/Caddyfile" /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 systemctl enable caddy
