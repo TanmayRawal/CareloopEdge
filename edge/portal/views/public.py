@@ -7,8 +7,6 @@ cancel or reset anything.
 
 from __future__ import annotations
 
-import time
-
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
 from edge.portal import auth, notify, outreach, scheduling, tokens
@@ -98,8 +96,7 @@ def blueprint(d) -> Blueprint:
         user = db.user_by_email(request.form.get("email", ""))
         if user is not None and user["active"] and user["pw_hash"]:
             raw = tokens.issue(db, "reset", user["id"])
-            when = scheduling.local(time.time(), scheduling.tz(db)).strftime("%H:%M")   # each request is its own e-mail
-            notify.notify(db, user, "password_reset", {"time": when}, None, in_app=False, force_email=True,
+            notify.notify(db, user, "password_reset", {}, None, in_app=False, force_email=True,
                           actions=[("Choose a new password", f"/reset/{raw}")])
             db.audit(user["id"], "password_reset_requested", ip=d.ip())
         # same answer whether or not the account exists
