@@ -50,7 +50,7 @@ TEMPLATES = {
                        "print the letter in the patient portal and take it to your appointment there."),
     "invite": ("Set up your patient portal account", "{clinic} has registered you for follow-up care. Set a password to see "
                "your reports, appointments and next steps online.\n\nThis link works once and expires in 7 days."),
-    "password_reset": ("Reset your password · {time}", "We received a request to reset the password for your account.\n\nThe link "
+    "password_reset": ("Reset your password", "We received a request to reset the password for your account.\n\nThe link "
                        "works once and expires in 1 hour. If you did not ask for this, you can ignore this e-mail."),
     "doc_approvals": ("{plans} waiting for your approval", "The care coordinator proposed {plans} that need a doctor's "
                       "approval. Patients are contacted only after a doctor approves."),
