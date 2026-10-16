@@ -14,6 +14,7 @@ import os
 import smtplib
 import socket
 import ssl
+import threading
 import time
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -149,3 +150,25 @@ def retry(db, outbox_id: int, now: float | None = None) -> None:
     with db.tx() as c:
         c.execute("UPDATE outbox SET status='queued', next_try=?, attempts=0, last_error=NULL WHERE id=? AND status IN ('failed','queued')",
                   (time.time() if now is None else now, outbox_id))
+
+
+_flush_lock = threading.Lock()
+
+
+def send_soon(db) -> None:
+    """Deliver queued e-mail now, in the background, so the web request does not wait for the mail server.
+    If one delivery is already running it picks the new row up; failures stay queued for the timer to retry."""
+    def run():
+        if not _flush_lock.acquire(blocking=False):
+            return
+        try:
+            time.sleep(0.5)                              # let the request's other messages queue first
+            for _ in range(5):                           # pick up rows queued while this run was sending
+                res = flush(db)
+                if not res["sent"]:
+                    break
+        except Exception as e:                           # never break the portal over e-mail
+            print(f"mail: {e}")
+        finally:
+            _flush_lock.release()
+    threading.Thread(target=run, name="mail-send", daemon=True).start()

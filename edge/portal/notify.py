@@ -62,6 +62,10 @@ TEMPLATES = {
 }
 
 
+# Set by the web server (edge.serve) to send queued e-mail right away instead of waiting for the 5-minute timer.
+ON_QUEUED = None
+
+
 def plural(n: int, one: str, many: str | None = None) -> str:
     """plural(1, 'study', 'studies') -> '1 study'; plural(3, 'study', 'studies') -> '3 studies'."""
     return f"{n} {one if n == 1 else (many or one + 's')}"
@@ -132,6 +136,9 @@ def notify(db, user, kind: str, ctx: dict | None = None, link: str | None = None
                            f"{dedupe}:{user['id']}" if dedupe else None))
         except sqlite3.IntegrityError:
             pass
+        else:
+            if ON_QUEUED:
+                ON_QUEUED(db)
     return True
 
 
