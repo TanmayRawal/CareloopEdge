@@ -173,6 +173,13 @@ mkdir -p /etc/systemd/system/caddy.service.d
 printf '[Unit]
 Before=tailscaled.service
 ' > /etc/systemd/system/caddy.service.d/before-tailscale.conf
+# No RTC on the Pi: tailscaled must wait for NTP, or Funnel's TLS breaks when the clock jumps after boot.
+mkdir -p /etc/systemd/system/tailscaled.service.d
+printf '[Unit]
+Wants=time-sync.target
+After=time-sync.target
+' > /etc/systemd/system/tailscaled.service.d/after-time-sync.conf
+systemctl enable systemd-time-wait-sync.service >/dev/null 2>&1 || true
 systemctl daemon-reload
 install -m 644 "$APP/src/edge/caddy/Caddyfile" /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
