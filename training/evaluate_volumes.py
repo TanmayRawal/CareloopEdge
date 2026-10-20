@@ -41,13 +41,21 @@ def is_cal(study_id: str) -> bool:
     return int(hashlib.sha256(study_id.encode()).hexdigest(), 16) % 10 < 3
 
 
+def split_of(row) -> str:
+    """The manifest's fixed split; older manifests without one fall back to the hash rule (30% cal)."""
+    sp = getattr(row, "split", "")
+    if isinstance(sp, str) and sp:
+        return sp
+    return "cal" if row.role in ("dev", "dev_normal") and is_cal(row.study_id) else "test"
+
+
 def run_study(engine: Engine, row, per_plane: int) -> dict:
     vol = volume.load_volume(row.t1c_path)
     mask = None
     if isinstance(row.seg_path, str) and row.seg_path:
         try:
-            mask = volume.load_mask(row.seg_path, like=vol)
-        except ValueError:            # mask stored on a different grid (e.g. the pituitary "_f" masks): patient label only
+            mask = volume.load_mask(row.seg_path, like=vol, image_path=row.t1c_path)
+        except ValueError:            # mask cannot be aligned with the image: patient label only
             mask = None
     slices = volume.select_slices(vol, per_plane=per_plane, mask=mask)
     probs, lesion, rejected, planes, truth = [], [], [], [], []
@@ -97,7 +105,7 @@ def patient_table(rows: pd.DataFrame, cache: Path, classes: list[str], rule: str
         z = np.load(f)
         p = aggregate.aggregate(z["probs"], rule, nt, k=k, lesion_area=z["lesion"], ok=~z["rejected"])
         recs.append({"study_id": row.study_id, "dataset": row.dataset, "label": row.label, "role": row.role,
-                     "cal": row.role in ("dev", "dev_normal") and is_cal(row.study_id), **{c: float(v) for c, v in zip(classes, p)},
+                     "split": split_of(row), **{c: float(v) for c, v in zip(classes, p)},
                      "rejected_frac": float(z["rejected"].mean())})
     return pd.DataFrame(recs)
 
@@ -109,7 +117,9 @@ def metrics_for(df: pd.DataFrame, classes: list[str]) -> dict:
     P = df[classes].to_numpy()
     m = classification_metrics(y, P, classes)
     pred = P.argmax(1)
-    tumour_types = [classes.index(c) for c in ("glioma", "meningioma", "pituitary")]
+    # average over the tumour types PRESENT in this set (an absent type must not count as F1 = 0); predictions into an
+    # absent type still count as errors through the recall of the true type
+    tumour_types = [classes.index(c) for c in ("glioma", "meningioma", "pituitary") if classes.index(c) in set(y)]
     sel = np.isin(y, tumour_types)
     out = {"n": int(len(df)), "accuracy": float((pred == y).mean()), "macro_f1": m.get("macro_f1"),
            "per_class": m.get("per_class")}
@@ -127,7 +137,7 @@ def slice_auroc(rows: pd.DataFrame, cache: Path, classes: list[str]) -> dict:
     nt = classes.index("no_tumor")
     ys, ps = [], []
     for row in rows.itertuples():
-        if row.role in ("dev", "dev_normal") and is_cal(row.study_id):
+        if split_of(row) != "test":
             continue
         f = cache / f"{row.dataset}__{row.study_id}.npz"
         if not f.exists():
@@ -165,7 +175,7 @@ def main() -> None:
     choice = {}
     for rule in aggregate.RULES:
         t = patient_table(rows, cache, classes, rule, a.k)
-        cal = t[t["cal"]] if not t.empty else t
+        cal = t[t["split"] == "cal"] if not t.empty else t
         choice[rule] = metrics_for(cal, classes).get("macro_f1", float("nan")) if len(cal) else float("nan")
     best = max(choice, key=lambda r: -1 if np.isnan(choice[r]) else choice[r])
 
@@ -173,7 +183,7 @@ def main() -> None:
     t = patient_table(rows, cache, classes, best, a.k)
     report = {"bundle": a.bundle.name, "per_plane": a.per_plane, "k": a.k, "rule_selection_on_cal": choice,
               "rule": best, "targets": TARGETS, "datasets": {}, "pooled": {}}
-    test = t[~t["cal"]] if not t.empty else t
+    test = t[t["split"] == "test"] if not t.empty else t      # train / val patients are never reported
     for ds, g in test.groupby("dataset"):
         report["datasets"][ds] = metrics_for(g, classes)
         if ds == "ixi":
@@ -184,7 +194,7 @@ def main() -> None:
     report["by_rule"] = {}
     for rule in aggregate.RULES:
         tr = patient_table(rows, cache, classes, rule, a.k)
-        tr = tr[~tr["cal"]] if not tr.empty else tr
+        tr = tr[tr["split"] == "test"] if not tr.empty else tr
         entry = {"macro_f1_tumour_types": (metrics_for(tr, classes).get("macro_f1_tumour_types") or {}).get("value")}
         ixi = tr[tr["dataset"] == "ixi"]
         if len(ixi):

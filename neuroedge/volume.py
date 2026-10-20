@@ -246,10 +246,22 @@ def select_slices(vol: Volume, per_plane: int = 12, planes: tuple[str, ...] = PL
     return out
 
 
-def load_mask(path: str | Path, like: Volume | None = None) -> np.ndarray:
-    """Segmentation NIfTI -> binary (X, Y, Z) uint8 in the same RAS+ orientation as `load_nifti`."""
+def load_mask(path: str | Path, like: Volume | None = None, image_path: str | Path | None = None) -> np.ndarray:
+    """Segmentation NIfTI -> binary (X, Y, Z) uint8 in the same RAS+ orientation as `load_nifti`.
+
+    If the mask is stored on a different voxel grid than the image (e.g. the NHNN pituitary masks), it is resampled
+    onto the image grid through the two affines (nearest neighbour), given `image_path`."""
     import nibabel as nib
     img = nib.load(str(path))
+    if image_path is not None:
+        ref = nib.load(str(image_path))
+        if img.shape[:3] != ref.shape[:3] or not np.allclose(img.affine, ref.affine, atol=1e-3):
+            from nibabel.processing import resample_from_to
+            data3 = np.asarray(img.dataobj)
+            if data3.ndim == 4:
+                data3 = data3[..., 0]
+            img = resample_from_to(nib.Nifti1Image((data3 > 0).astype(np.uint8), img.affine), (ref.shape[:3], ref.affine),
+                                   order=0)
     arr = np.asarray(img.dataobj)
     if arr.ndim == 4:
         arr = arr[..., 0]
