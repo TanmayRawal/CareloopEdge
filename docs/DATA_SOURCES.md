@@ -10,7 +10,7 @@ IXI) and the tumour mask are kept for each patient.
 | `brats_africa` | BraTS-Africa 2023 | glioma | all (count recorded on download) | **external test** | Synapse account; accept the terms | Adewole et al. 2023 |
 | `brats_men` | BraTS-MEN 2023 (pre-operative meningioma) | meningioma | about 300 (subset) | development | Synapse account; accept the terms | LaBella et al. 2024, *Sci Data* |
 | `tcia_meningioma` | TCIA Meningioma-SEG-CLASS | meningioma | 96 | **external test** | TCIA Data Retriever; CC BY 4.0; NIH controlled-access policy for face-reconstructable images | Vassantachart et al., TCIA DOI 10.7937/0TKV-1A36 |
-| `pituitary_nhnn` | NHNN pituitary tumour MRI (T1c, tumour + carotid masks) | pituitary | 136 | development (a held-out part is the test) | Per the Scientific Data paper's licence (record on download) | Pandit et al. 2025, *Sci Data*, DOI 10.1038/s41597-024-04218-8 |
+| `pituitary_nhnn` | NHNN pituitary tumour MRI (T1c, tumour + carotid masks) | pituitary | 60 of 136 (patients 1–60) | development (a held-out part is the test) | Open; CC BY (figshare 10.6084/m9.figshare.27894084) | Pandit et al. 2025, *Sci Data*, DOI 10.1038/s41597-024-04218-8 |
 | `ixi` | IXI healthy volunteers (T1, **no contrast**) | no tumour | about 580 | **external test** (reported separately) | Open download; CC BY-SA 3.0 | brain-development.org/ixi-dataset |
 
 **Not used:** UCSF-PDGM (TCIA). Its archive is very large, and BraTS already contains UCSF patients, so using it would
@@ -36,7 +36,7 @@ risk testing on patients the model trained on.
 2. **BraTS:** create a Synapse account, accept the terms for each dataset, run `synapse login`, then for each dataset
    run `python -m training.data.download_3d synapse --id <syn id from the dataset page> --dest brats_gli --limit 300`.
 3. **TCIA meningioma:** download it with the TCIA Data Retriever (T1c + segmentation series) into `raw/tcia_meningioma/`.
-4. **Pituitary:** download the archive again (the copy on disk is truncated) into `raw/pituitary_nhnn/` and extract it.
+4. **Pituitary:** `python -m training.data.remote_zip fetch https://ndownloader.figshare.com/files/50793273 --dest ~/neuroedge_data/raw/pituitary_nhnn/data --match "^([1-9]|[1-5][0-9]|60)_(T1|tumor_f).nii.gz$"` (fetches only those files out of the 47 GB zip).
 5. **Prepare and run:**
    * `python -m training.data.build_volumes`
    * `python -m training.data.check_overlap`
