@@ -32,7 +32,21 @@ DATASETS = {  # folder -> (label, role)
     "ixi": ("no_tumor", "dev_normal"),          # 30% calibration (rule choice), 70% reported
 }
 T1C_WORDS = re.compile(r"(t1.*(post|\+c|gad|gd|ce|contrast|mprage.*c))|(post.*t1)|(t1c)", re.I)
-FIELDS = ("study_id", "dataset", "site", "label", "t1c_path", "seg_path", "role")
+FIELDS = ("study_id", "dataset", "site", "label", "t1c_path", "seg_path", "role", "split")
+
+
+def split_for(study_id: str, role: str) -> str:
+    """Fixed patient-level split from a stable hash of the study id (never changes between runs):
+      dev         50% train, 10% val (early stopping), 20% cal (temperature, conformal, rule choice), 20% test
+      dev_normal  30% cal, 70% test          (healthy volunteers are never trained on)
+      external    100% test"""
+    import hashlib
+    if role == "external":
+        return "test"
+    h = int(hashlib.sha256(study_id.encode()).hexdigest(), 16) % 10
+    if role == "dev_normal":
+        return "cal" if h < 3 else "test"
+    return "train" if h < 5 else "val" if h == 5 else "cal" if h < 8 else "test"
 
 
 def brats(root: Path, dataset: str):
@@ -118,6 +132,8 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=DATA_ROOT / "manifests" / "volumes.csv")
     a = ap.parse_args()
     rows = build(a.raw)
+    for r in rows:
+        r["split"] = split_for(r["study_id"], r["role"])
     a.out.parent.mkdir(parents=True, exist_ok=True)
     with a.out.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, FIELDS)
@@ -126,7 +142,8 @@ def main() -> None:
     from collections import Counter
     print(f"{len(rows)} studies -> {a.out}")
     for (ds, lab), n in sorted(Counter((r["dataset"], r["label"]) for r in rows).items()):
-        print(f"  {ds:<16} {lab:<11} {n}")
+        splits = Counter(r["split"] for r in rows if r["dataset"] == ds)
+        print(f"  {ds:<16} {lab:<11} {n:>4}  " + " ".join(f"{k}={v}" for k, v in sorted(splits.items())))
 
 
 if __name__ == "__main__":

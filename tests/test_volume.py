@@ -159,3 +159,24 @@ def test_rejects_non_volumes():
         volume.load_volume(b"not an image at all", "x.bin")
     with pytest.raises(ValueError):
         volume.load_volume([b"x", b"y"])
+
+
+def test_slice_export_labels_from_masks(tmp_path):
+    """Volume slices for training: slices through the tumour get the patient's tumour type, slices without tumour
+    get no_tumor, slivers are skipped; masks and images are saved side by side."""
+    import cv2
+    import pandas as pd
+    from training.data.export_volume_slices import MIN_TUMOUR_PX, export
+    head, marker = phantom()
+    to_nifti(head, np.eye(4), tmp_path / "t1c.nii.gz")
+    to_nifti(marker, np.eye(4), tmp_path / "seg.nii.gz")
+    rows = pd.DataFrame([dict(study_id="S1", dataset="brats_men", label="meningioma", role="dev", split="train",
+                              t1c_path=str(tmp_path / "t1c.nii.gz"), seg_path=str(tmp_path / "seg.nii.gz"))])
+    recs = export(rows, tmp_path / "out", per_plane=6, tumour_per_plane=4)
+    labels = {r["label"] for r in recs}
+    assert labels == {"meningioma", "no_tumor"} and all(r["split"] == "train" for r in recs)
+    for r in recs:
+        m = cv2.imread(r["mask_path"], cv2.IMREAD_GRAYSCALE)
+        area = int((m > 0).sum())
+        assert (area >= MIN_TUMOUR_PX) == (r["label"] == "meningioma") and (area == 0 or area >= MIN_TUMOUR_PX)
+        assert cv2.imread(r["path"], cv2.IMREAD_GRAYSCALE).shape == m.shape
