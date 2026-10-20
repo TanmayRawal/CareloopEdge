@@ -44,9 +44,13 @@ def _get(url: str, start: int, end: int, tries: int = 8) -> bytes:
                 http.client.IncompleteRead) as e:
             if attempt == tries - 1:
                 raise
-            if isinstance(e, urllib.error.HTTPError) and e.code in (401, 403) and url in _SOURCE:
-                fresh = _resolve(_SOURCE[url])          # the signed link expired: get a new one
-                _SOURCE[fresh] = _SOURCE[url]
+            if isinstance(e, urllib.error.HTTPError) and e.code in (400, 401, 403) and (url in _SOURCE or url in _RENEW):
+                if url in _RENEW:                       # caller-supplied renewal (e.g. Synapse pre-signed links)
+                    fresh = _RENEW[url]()
+                    _RENEW[fresh] = _RENEW[url]
+                else:                                   # the signed link expired: get a new one
+                    fresh = _resolve(_SOURCE[url])
+                    _SOURCE[fresh] = _SOURCE[url]
                 _RENEWED[url] = fresh
                 url = fresh
             time.sleep(2 * (attempt + 1))
@@ -54,6 +58,7 @@ def _get(url: str, start: int, end: int, tries: int = 8) -> bytes:
 
 
 _RENEWED: dict[str, str] = {}
+_RENEW: dict = {}                # signed URL -> function returning a fresh signed URL
 
 
 def current(url: str) -> str:
