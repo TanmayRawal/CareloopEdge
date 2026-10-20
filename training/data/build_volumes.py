@@ -51,26 +51,22 @@ def ixi(root: Path):
                    label=label, t1c_path=str(f), seg_path="", role=role)
 
 
-# The NHNN pituitary release (Scientific Data 2025) names files per patient; image and tumour-mask names are matched
-# by these patterns once the archive is extracted (adjust if the release uses different names).
-PITUITARY_IMAGE = re.compile(r"(t1|image|img|scan)", re.I)
-PITUITARY_MASK = re.compile(r"(tumou?r|seg|mask|label)", re.I)
+# NHNN pituitary release (figshare 10.6084/m9.figshare.27894084, CC BY): per patient N
+#   N_T1.nii.gz (post-contrast T1), N_tumor_f.nii.gz (tumour mask), N_T2_f.nii.gz, N_carotids_f.nii.gz (not used)
+PITUITARY_IMAGE = re.compile(r"^(\d+)_t1\.nii(\.gz)?$", re.I)
+PITUITARY_MASK = re.compile(r"^(\d+)_tumou?r(_f)?\.nii(\.gz)?$", re.I)
 
 
 def pituitary(root: Path):
     label, role = DATASETS["pituitary_nhnn"]
     by_patient: dict[str, dict] = {}
     for f in sorted(root.rglob("*.nii*")):
-        pid = re.match(r"(\d+)", f.name)
-        key = pid.group(1) if pid else f.parent.name
-        slot = by_patient.setdefault(key, {})
-        low = f.name.lower()
-        if "carotid" in low:
-            continue                                  # carotid artery masks are not tumour labels
-        if PITUITARY_MASK.search(low):
-            slot["seg"] = f
-        elif PITUITARY_IMAGE.search(low) or "img" not in slot:
-            slot.setdefault("img", f)
+        if "__MACOSX" in f.parts or f.name.startswith("._"):
+            continue
+        for rx, slot_name in ((PITUITARY_IMAGE, "img"), (PITUITARY_MASK, "seg")):
+            m = rx.match(f.name)
+            if m:
+                by_patient.setdefault(m.group(1), {})[slot_name] = f
     for key, s in sorted(by_patient.items()):
         if "img" in s:
             yield dict(study_id=f"PIT-{key}", dataset="pituitary_nhnn", site="nhnn", label=label,

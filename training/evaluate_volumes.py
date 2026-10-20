@@ -42,7 +42,12 @@ def is_cal(study_id: str) -> bool:
 
 def run_study(engine: Engine, row, per_plane: int) -> dict:
     vol = volume.load_volume(row.t1c_path)
-    mask = volume.load_mask(row.seg_path, like=vol) if isinstance(row.seg_path, str) and row.seg_path else None
+    mask = None
+    if isinstance(row.seg_path, str) and row.seg_path:
+        try:
+            mask = volume.load_mask(row.seg_path, like=vol)
+        except ValueError:            # mask stored on a different grid (e.g. the pituitary "_f" masks): patient label only
+            mask = None
     slices = volume.select_slices(vol, per_plane=per_plane, mask=mask)
     probs, lesion, rejected, planes, truth = [], [], [], [], []
     for s in slices:
