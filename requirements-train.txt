@@ -14,3 +14,5 @@ onnx
 onnxruntime
 cryptography>=41
 pytest
+nibabel>=5.2         # 3D volumes (NIfTI) for patient-level evaluation
+synapseclient>=4.4   # BraTS downloads (user logs in with their own token)
