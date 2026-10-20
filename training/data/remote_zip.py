@@ -26,12 +26,38 @@ def _resolve(url: str) -> str:
         return r.geturl()
 
 
-def _get(url: str, start: int, end: int) -> bytes:
-    req = urllib.request.Request(url, headers={"Range": f"bytes={start}-{end}"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        if r.status != 206:
-            raise IOError("server does not support range requests")
-        return r.read()
+_SOURCE: dict[str, str] = {}     # signed storage URL -> original download link (signed links expire quickly)
+
+
+def _get(url: str, start: int, end: int, tries: int = 4) -> bytes:
+    import time
+    import urllib.error
+    for attempt in range(tries):
+        req = urllib.request.Request(url, headers={"Range": f"bytes={start}-{end}"})
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                if r.status != 206:
+                    raise IOError("server does not support range requests")
+                return r.read()
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+            if attempt == tries - 1:
+                raise
+            if isinstance(e, urllib.error.HTTPError) and e.code in (401, 403) and url in _SOURCE:
+                fresh = _resolve(_SOURCE[url])          # the signed link expired: get a new one
+                _SOURCE[fresh] = _SOURCE[url]
+                _RENEWED[url] = fresh
+                url = fresh
+            time.sleep(2 * (attempt + 1))
+    raise IOError("unreachable")
+
+
+_RENEWED: dict[str, str] = {}
+
+
+def current(url: str) -> str:
+    while url in _RENEWED:
+        url = _RENEWED[url]
+    return url
 
 
 def _size(url: str) -> int:
@@ -89,10 +115,10 @@ def list_members(url: str) -> list[Member]:
 
 
 def fetch(url: str, m: Member, dest: Path) -> Path:
-    head = _get(url, m.offset, m.offset + 29)
+    head = _get(current(url), m.offset, m.offset + 29)
     nlen, elen = struct.unpack("<HH", head[26:30])
     start = m.offset + 30 + nlen + elen
-    data = _get(url, start, start + m.csize - 1) if m.csize else b""
+    data = _get(current(url), start, start + m.csize - 1) if m.csize else b""
     if m.method == 8:
         data = zlib.decompress(data, -15)
     elif m.method != 0:
@@ -114,6 +140,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     a = ap.parse_args()
     url = _resolve(a.url)
+    _SOURCE[url] = a.url
     members = [m for m in list_members(url) if not m.name.endswith("/")]
     if a.cmd == "list":
         for m in members:
