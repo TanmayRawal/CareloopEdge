@@ -65,12 +65,12 @@ def test_volume_manifest_discovers_each_layout(tmp_path):
     (raw / "ixi" / "IXI-T1").mkdir(parents=True)
     (raw / "ixi" / "IXI-T1" / "IXI002-Guys-0828-T1.nii.gz").write_bytes(b"x")
     (raw / "pituitary_nhnn").mkdir(parents=True)
-    for name in ("12_t1c.nii.gz", "12_tumour.nii.gz", "12_carotids_f.nii.gz"):
+    for name in ("12_T1.nii.gz", "12_tumor_f.nii.gz", "12_T2_f.nii.gz", "12_carotids_f.nii.gz"):
         (raw / "pituitary_nhnn" / name).write_bytes(b"x")
     rows = {r["dataset"]: r for r in bv.build(raw)}
     assert rows["brats_gli"]["label"] == "glioma" and rows["brats_gli"]["seg_path"].endswith("-seg.nii.gz")
     assert rows["brats_men"]["label"] == "meningioma" and rows["brats_men"]["role"] == "dev"
     assert rows["ixi"] == {**rows["ixi"], "label": "no_tumor", "site": "Guys", "role": "external", "seg_path": ""}
     pit = rows["pituitary_nhnn"]
-    assert pit["label"] == "pituitary" and pit["seg_path"].endswith("12_tumour.nii.gz")
-    assert pit["t1c_path"].endswith("12_t1c.nii.gz")                                       # carotid mask ignored
+    assert pit["label"] == "pituitary" and pit["seg_path"].endswith("12_tumor_f.nii.gz")
+    assert pit["t1c_path"].endswith("12_T1.nii.gz")                              # T2 and carotid masks ignored
