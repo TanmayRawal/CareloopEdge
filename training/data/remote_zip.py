@@ -29,7 +29,8 @@ def _resolve(url: str) -> str:
 _SOURCE: dict[str, str] = {}     # signed storage URL -> original download link (signed links expire quickly)
 
 
-def _get(url: str, start: int, end: int, tries: int = 4) -> bytes:
+def _get(url: str, start: int, end: int, tries: int = 8) -> bytes:
+    import http.client
     import time
     import urllib.error
     for attempt in range(tries):
@@ -39,7 +40,8 @@ def _get(url: str, start: int, end: int, tries: int = 4) -> bytes:
                 if r.status != 206:
                     raise IOError("server does not support range requests")
                 return r.read()
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ConnectionError, OSError,
+                http.client.IncompleteRead) as e:
             if attempt == tries - 1:
                 raise
             if isinstance(e, urllib.error.HTTPError) and e.code in (401, 403) and url in _SOURCE:
@@ -118,7 +120,9 @@ def fetch(url: str, m: Member, dest: Path) -> Path:
     head = _get(current(url), m.offset, m.offset + 29)
     nlen, elen = struct.unpack("<HH", head[26:30])
     start = m.offset + 30 + nlen + elen
-    data = _get(current(url), start, start + m.csize - 1) if m.csize else b""
+    chunk = 16 << 20                                  # 16 MB ranges: a dropped connection costs one chunk, not the file
+    data = b"".join(_get(current(url), o, min(o + chunk, start + m.csize) - 1)
+                    for o in range(start, start + m.csize, chunk)) if m.csize else b""
     if m.method == 8:
         data = zlib.decompress(data, -15)
     elif m.method != 0:
