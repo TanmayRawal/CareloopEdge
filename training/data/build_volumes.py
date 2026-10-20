@@ -3,8 +3,10 @@
     python -m training.data.build_volumes            # scans ~/neuroedge_data/raw/<dataset>/
 
 Columns: study_id, dataset, site, label, t1c_path, seg_path, role
-  role = "external"  -> test only (never used to choose the aggregation rule or to train)
-         "dev"       -> may be split into calibration / test patients by evaluate_volumes.py
+  role = "external"   -> test only (never used to choose the aggregation rule or to train)
+         "dev"        -> split into calibration / test patients by evaluate_volumes.py
+         "dev_normal" -> healthy volunteers, split the same way (calibration part only counts false alarms in the
+                         rule choice; never used for training)
 Layouts recognised (raw/<folder>):
   brats_gli, brats_africa, brats_men   BraTS 2023 folders: <ID>/<ID>-t1c.nii.gz + <ID>-seg.nii.gz
   ixi                                   IXI-T1/IXI<nnn>-<Site>-<nnnn>-T1.nii.gz (healthy volunteers; non-contrast T1)
@@ -27,7 +29,7 @@ DATASETS = {  # folder -> (label, role)
     "brats_men": ("meningioma", "dev"),
     "tcia_meningioma": ("meningioma", "external"),
     "pituitary_nhnn": ("pituitary", "dev"),
-    "ixi": ("no_tumor", "external"),
+    "ixi": ("no_tumor", "dev_normal"),          # 30% calibration (rule choice), 70% reported
 }
 T1C_WORDS = re.compile(r"(t1.*(post|\+c|gad|gd|ce|contrast|mprage.*c))|(post.*t1)|(t1c)", re.I)
 FIELDS = ("study_id", "dataset", "site", "label", "t1c_path", "seg_path", "role")

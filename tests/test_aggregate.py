@@ -70,7 +70,7 @@ def test_volume_manifest_discovers_each_layout(tmp_path):
     rows = {r["dataset"]: r for r in bv.build(raw)}
     assert rows["brats_gli"]["label"] == "glioma" and rows["brats_gli"]["seg_path"].endswith("-seg.nii.gz")
     assert rows["brats_men"]["label"] == "meningioma" and rows["brats_men"]["role"] == "dev"
-    assert rows["ixi"] == {**rows["ixi"], "label": "no_tumor", "site": "Guys", "role": "external", "seg_path": ""}
+    assert rows["ixi"] == {**rows["ixi"], "label": "no_tumor", "site": "Guys", "role": "dev_normal", "seg_path": ""}
     pit = rows["pituitary_nhnn"]
     assert pit["label"] == "pituitary" and pit["seg_path"].endswith("12_tumor_f.nii.gz")
     assert pit["t1c_path"].endswith("12_T1.nii.gz")                              # T2 and carotid masks ignored
