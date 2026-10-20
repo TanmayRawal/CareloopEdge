@@ -10,7 +10,7 @@ IXI) and the tumour mask are kept for each patient.
 | `brats_africa` | BraTS-Africa (TCIA, BraTS 2023 package; 6 Nigerian centres, 1.5T) | glioma | 146 | **external test** | Open, CC BY 4.0 (Aspera download from the TCIA collection page) | Adewole et al. 2023; TCIA DOI 10.7937/v8h6-8x67 |
 | `brats_men` | BraTS-MEN 2023 (pre-operative meningioma, training v3) | meningioma | 300 (random, seed 0) | development | Synapse `syn51514055`; BraTS post-challenge terms (CC BY-NC) | LaBella et al. 2024, *Sci Data* |
 | `pituitary_nhnn` | NHNN pituitary tumour MRI (T1c, tumour + carotid masks) | pituitary | 60 of 136 (patients 1–60) | development (a held-out part is the test) | Open; CC BY (figshare 10.6084/m9.figshare.27894084) | Pandit et al. 2025, *Sci Data*, DOI 10.1038/s41597-024-04218-8 |
-| `ixi` | IXI healthy volunteers (T1, **no contrast**) | no tumour | about 580 | **external test** (reported separately) | Open download; CC BY-SA 3.0 | brain-development.org/ixi-dataset |
+| `ixi` | IXI healthy volunteers (T1, **no contrast**) | no tumour | 581 | 30% calibration (false alarms count in the rule choice), 70% reported; never used for training | Open download; CC BY-SA 3.0 | brain-development.org/ixi-dataset |
 
 **Not used:**
 * TCIA Meningioma-SEG-CLASS: download needs NIH controlled-access approval (dbGaP phs004225, a CRDC credentials file; weeks). Instead, meningioma patients from held-out BraTS-MEN contributing sites serve as the unseen-hospital test.

@@ -10,8 +10,8 @@ Honesty rules
   * Pre-registered targets (fixed before any result was seen): patient macro-F1 >= 0.85 over the three tumour types,
     slice-level tumour/no-tumour AUROC >= 0.90 (slices with a ground-truth mask), IXI false-positive rate <= 10%.
   * The aggregation rule is chosen on CALIBRATION patients only (30% of the "dev" studies, chosen by a hash of the
-    study id); every number in the report is computed on the remaining patients and on the "external" datasets,
-    which are never used for any choice.
+    study id, including 30% of the IXI volunteers so that false alarms count in the choice); every number in the
+    report is computed on the remaining patients and on the "external" datasets, which are never used for any choice.
   * Results are reported per dataset as well as pooled, because each dataset is a different hospital/scanner and a
     pooled number can hide a dataset shortcut.
 """
@@ -37,6 +37,7 @@ MIN_MASK_PX = 30           # a slice "has tumour" in the ground truth if the mas
 
 
 def is_cal(study_id: str) -> bool:
+    """30% of "dev" patients (stable hash of the id) are calibration patients: used only to choose the rule."""
     return int(hashlib.sha256(study_id.encode()).hexdigest(), 16) % 10 < 3
 
 
@@ -96,7 +97,7 @@ def patient_table(rows: pd.DataFrame, cache: Path, classes: list[str], rule: str
         z = np.load(f)
         p = aggregate.aggregate(z["probs"], rule, nt, k=k, lesion_area=z["lesion"], ok=~z["rejected"])
         recs.append({"study_id": row.study_id, "dataset": row.dataset, "label": row.label, "role": row.role,
-                     "cal": row.role == "dev" and is_cal(row.study_id), **{c: float(v) for c, v in zip(classes, p)},
+                     "cal": row.role in ("dev", "dev_normal") and is_cal(row.study_id), **{c: float(v) for c, v in zip(classes, p)},
                      "rejected_frac": float(z["rejected"].mean())})
     return pd.DataFrame(recs)
 
@@ -126,7 +127,7 @@ def slice_auroc(rows: pd.DataFrame, cache: Path, classes: list[str]) -> dict:
     nt = classes.index("no_tumor")
     ys, ps = [], []
     for row in rows.itertuples():
-        if row.role == "dev" and is_cal(row.study_id):
+        if row.role in ("dev", "dev_normal") and is_cal(row.study_id):
             continue
         f = cache / f"{row.dataset}__{row.study_id}.npz"
         if not f.exists():
@@ -135,7 +136,7 @@ def slice_auroc(rows: pd.DataFrame, cache: Path, classes: list[str]) -> dict:
         keep = z["truth"] >= 0
         ys.append(z["truth"][keep])
         ps.append(1.0 - z["probs"][keep, nt])
-    if not ys:
+    if not ys or sum(len(v) for v in ys) == 0:          # no study with a ground-truth mask (e.g. IXI only)
         return {}
     y, p = np.concatenate(ys), np.concatenate(ps)
     if y.min() == y.max():
@@ -159,13 +160,13 @@ def main() -> None:
     rows = collect(a.bundle, a.manifest, cache, a.per_plane, a.limit)
     classes = json.loads((a.bundle / "bundle.json").read_text())["class_names"]
 
-    # 1. choose the rule on calibration patients only (tumour-type macro-F1, then tumour/no-tumour accuracy)
+    # 1. choose the rule on calibration patients only: macro-F1 over all four classes, so that catching small
+    #    tumours (favours top-k) and not raising false alarms on healthy volunteers (favours the mean) both count
     choice = {}
     for rule in aggregate.RULES:
         t = patient_table(rows, cache, classes, rule, a.k)
         cal = t[t["cal"]] if not t.empty else t
-        mm = metrics_for(cal, classes)
-        choice[rule] = (mm.get("macro_f1_tumour_types") or {}).get("value", float("nan"))
+        choice[rule] = metrics_for(cal, classes).get("macro_f1", float("nan")) if len(cal) else float("nan")
     best = max(choice, key=lambda r: -1 if np.isnan(choice[r]) else choice[r])
 
     # 2. report on everything that was not used for the choice
@@ -179,6 +180,16 @@ def main() -> None:
             report["datasets"][ds]["false_positive_rate"] = float((g[classes].to_numpy().argmax(1)
                                                                    != classes.index("no_tumor")).mean())
     report["pooled"] = metrics_for(test, classes)
+    # every rule on the test patients (descriptive; the rule above was fixed before looking at these)
+    report["by_rule"] = {}
+    for rule in aggregate.RULES:
+        tr = patient_table(rows, cache, classes, rule, a.k)
+        tr = tr[~tr["cal"]] if not tr.empty else tr
+        entry = {"macro_f1_tumour_types": (metrics_for(tr, classes).get("macro_f1_tumour_types") or {}).get("value")}
+        ixi = tr[tr["dataset"] == "ixi"]
+        if len(ixi):
+            entry["ixi_false_positive_rate"] = float((ixi[classes].to_numpy().argmax(1) != classes.index("no_tumor")).mean())
+        report["by_rule"][rule] = entry
     report["slice_auroc_tumour"] = slice_auroc(rows, cache, classes)
 
     f1 = (report["pooled"].get("macro_f1_tumour_types") or {}).get("value")
