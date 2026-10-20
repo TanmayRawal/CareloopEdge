@@ -9,8 +9,10 @@ training must never be counted as a test patient.
 How: each study becomes thumbnails of a few evenly spaced slices per plane (the same flip-aware NCC on 64x64
 thumbnails as training/data/dedupe.py, with the thresholds calibrated there).
   * study vs study (different datasets): the median over the first study's slices of the best NCC to any slice of the
-    other study. A median >= t_patient means "same scan" (one matching slice could be chance; most slices matching
-    cannot).
+    other study. A median >= t_dup means "same scan" (one matching slice could be chance; most slices matching
+    cannot). t_patient is NOT used here: BraTS volumes are skull-stripped and registered to one template, so
+    different patients already reach ~0.94-0.96 (measured on BraTS-GLI vs BraTS-MEN), while a copy of the same scan
+    is ~0.99.
   * study vs 2D training images: any slice >= t_dup, or at least 3 slices >= t_patient.
 Matched studies are marked `overlap` in volumes.csv; evaluate_volumes.py excludes them from every test set.
 """
@@ -66,7 +68,7 @@ def check(rows: pd.DataFrame, t_dup: float, t_patient: float, train_paths: list[
             if ka[0] == kb[0]:
                 continue
             s = max(study_match(thumbs[ka], thumbs[kb]), study_match(thumbs[kb], thumbs[ka]))
-            if s >= t_patient:
+            if s >= t_dup:                    # same scan; see the module note on why not t_patient here
                 cross.append({"a": list(ka), "b": list(kb), "ncc_median": round(s, 4)})
     vs_train = {}
     if train_paths:
