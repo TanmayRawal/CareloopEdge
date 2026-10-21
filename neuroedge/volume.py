@@ -113,14 +113,21 @@ def load_dicom_series(files: list[bytes]) -> Volume:
     dss = _dicom_datasets(files)
     if len(dss) < 3:
         raise ValueError("A series needs at least 3 DICOM slices with position information.")
-    # keep the most common series (a zip may contain several)
-    from collections import Counter
-    uid = Counter(str(getattr(d, "SeriesInstanceUID", "")) for d in dss).most_common(1)[0][0]
-    dss = [d for d in dss if str(getattr(d, "SeriesInstanceUID", "")) == uid]
+    # One study = one patient, one series. Mixed uploads are refused rather than silently reduced to one series:
+    # the doctor must know that every slice shown belongs to the same scan.
+    for tag, what in (("PatientID", "patients"), ("StudyInstanceUID", "studies"), ("SeriesInstanceUID", "series")):
+        vals = {str(getattr(d, tag, "")) for d in dss} - {""}
+        if len(vals) > 1:
+            raise ValueError(f"The upload mixes {len(vals)} different {what}; upload the files of one series only.")
     iop = np.asarray(dss[0].ImageOrientationPatient, dtype=np.float64)
     row, col = iop[:3], iop[3:]
     normal = np.cross(row, col)
+    if any(not np.allclose(np.asarray(d.ImageOrientationPatient, dtype=np.float64), iop, atol=1e-3) for d in dss):
+        raise ValueError("The slices have different orientations; upload one series only.")
     dss.sort(key=lambda d: float(np.dot(normal, np.asarray(d.ImagePositionPatient, dtype=np.float64))))
+    pos = np.array([np.dot(normal, np.asarray(d.ImagePositionPatient, dtype=np.float64)) for d in dss])
+    if np.any(np.diff(pos) < 1e-3):
+        raise ValueError("Some slices are duplicated (same position); upload each slice of the series once.")
     rows, cols = int(dss[0].Rows), int(dss[0].Columns)
     if rows * cols * len(dss) > MAX_VOXELS:
         raise ValueError("volume too large")

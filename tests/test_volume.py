@@ -124,6 +124,17 @@ def test_dicom_series_matches_nifti_and_hides_identity(tmp_path):
     assert np.allclose(vz.data, vol.data)
 
 
+def test_dicom_upload_mixing_series_or_duplicates_is_refused():
+    """Every slice shown to the doctor must come from the same scan: two series (e.g. two patients) uploaded
+    together, or the same slice twice, are refused instead of being silently reduced to one series."""
+    head, _ = phantom()
+    a, b = dicom_series(head), dicom_series(head * 0.5)          # each call is a new series
+    with pytest.raises(ValueError, match="different series"):
+        volume.load_volume(a + b[:5])
+    with pytest.raises(ValueError, match="duplicated"):
+        volume.load_volume(a + a[:2])
+
+
 def test_mask_aligned_with_volume_and_slices(tmp_path):
     head, marker = phantom()
     to_nifti(head, np.eye(4), tmp_path / "t1c.nii.gz")
