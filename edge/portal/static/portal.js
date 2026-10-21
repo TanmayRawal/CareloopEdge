@@ -131,7 +131,7 @@
 
   const modes = $$(".v-modes button");
   const imgUrl = kind => overlay.dataset.base.replace(/X\.png$/, kind + ".png");
-  // whole series: one slice at a time; overlays for every slice (older cases: key slices only)
+  // whole series: one slice at a time; Grad-CAM / lesion overlays exist for the key slices only
   const series = $("#series"), base = $("#base"), slider = $("#slice");
   const sKeys = series ? JSON.parse(series.dataset.keys) : [], sInfo = series ? JSON.parse(series.dataset.slices) : [];
   let slice = series ? +series.dataset.start : null, mode = modes.find(m => m.classList.contains("on")) || modes[0];
@@ -147,7 +147,9 @@
     $$("#slice-bars span").forEach(b => b.classList.toggle("on", +b.dataset.i === slice));
     // each slice's Grad-CAM explains that slice's own prediction, not the study's answer
     const labels = JSON.parse(series.dataset.labels);
-    $("#cam-class").textContent = (labels[s.prediction] || s.prediction) + (s.prediction !== sInfo[sKeys[0]].prediction ? " (this slice)" : "");
+    const hasMap = isKey || series.dataset.all === "1";
+    $("#cam-class").textContent = !hasMap ? "— (key slices only)"
+      : (labels[s.prediction] || s.prediction) + (s.prediction !== sInfo[sKeys[0]].prediction ? " (this slice)" : "");
   };
   const setSlice = i => { slice = Math.max(0, Math.min(sInfo.length - 1, i)); render(); };
   slider?.addEventListener("input", () => setSlice(+slider.value));

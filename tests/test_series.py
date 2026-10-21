@@ -62,9 +62,10 @@ def test_series_aggregates_slices_into_one_answer(tmp_path):
     assert len(sr["key_slices"]) == 3 and all(sr["slices"][k]["tumour_prob"] > 0.5 for k in sr["key_slices"])
     ov = res["overlays"]
     assert all(f"s{i}_original" in ov for i in range(sr["n_slices"]))
-    assert all(f"s{i}_{k}" in ov for i in range(sr["n_slices"]) for k in ("cam", "lesion", "cam_lesion"))
-    assert {"original", "cam"} <= set(ov) and sr["overlays"] == "all"
-    assert eng.calls == sr["n_slices"]                     # each slice is run through the model once
+    assert all(f"s{k}_{m}" in ov for k in sr["key_slices"] for m in ("cam", "lesion", "cam_lesion"))
+    assert {"original", "cam"} <= set(ov) and sr["overlays"] == "key"
+    non_key = [i for i in range(sr["n_slices"]) if i not in sr["key_slices"]]
+    assert non_key and not any(f"s{i}_cam" in ov for i in non_key)         # Grad-CAM only for the 3 key slices
 
 
 def test_series_without_tumour_and_mostly_rejected(tmp_path):
