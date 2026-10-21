@@ -131,7 +131,7 @@
 
   const modes = $$(".v-modes button");
   const imgUrl = kind => overlay.dataset.base.replace(/X\.png$/, kind + ".png");
-  // whole series: one slice at a time; overlays exist only for the key slices (services.py)
+  // whole series: one slice at a time; overlays for every slice (older cases: key slices only)
   const series = $("#series"), base = $("#base"), slider = $("#slice");
   const sKeys = series ? JSON.parse(series.dataset.keys) : [], sInfo = series ? JSON.parse(series.dataset.slices) : [];
   let slice = series ? +series.dataset.start : null, mode = modes.find(m => m.classList.contains("on")) || modes[0];
@@ -139,12 +139,15 @@
     if (slice === null) { overlay.src = imgUrl(mode.dataset.kind); return; }
     const att = series.dataset.att, isKey = sKeys.includes(slice), kind = mode.dataset.kind;
     base.src = imgUrl(`s${slice}_original_${att}`);
-    overlay.src = imgUrl(isKey ? `s${slice}_${kind}` : `s${slice}_original_${att}`);
+    overlay.src = imgUrl(isKey || series.dataset.all === "1" ? `s${slice}_${kind}` : `s${slice}_original_${att}`);
     slider.value = slice;
     const s = sInfo[slice];
     $("#slice-label").textContent = `${slice + 1}/${sInfo.length} · ${s.plane} ${s.index} · tumour ${Math.round(100 * s.tumour_prob)}%` +
       (isKey ? ` · key slice ${sKeys.indexOf(slice) + 1}` : "") + (s.ok ? "" : " · not usable");
     $$("#slice-bars span").forEach(b => b.classList.toggle("on", +b.dataset.i === slice));
+    // each slice's Grad-CAM explains that slice's own prediction, not the study's answer
+    const labels = JSON.parse(series.dataset.labels);
+    $("#cam-class").textContent = (labels[s.prediction] || s.prediction) + (s.prediction !== sInfo[sKeys[0]].prediction ? " (this slice)" : "");
   };
   const setSlice = i => { slice = Math.max(0, Math.min(sInfo.length - 1, i)); render(); };
   slider?.addEventListener("input", () => setSlice(+slider.value));

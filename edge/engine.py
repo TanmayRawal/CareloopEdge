@@ -178,7 +178,7 @@ class Engine:
         (neuroedge/aggregate.py; chosen on calibration patients). The returned fields are those of analyze() for
         the key slice (the slice that most supports "tumour"), with the patient-level probabilities, prediction and
         prediction set in place of the slice's, plus result["series"]. Overlays: the key slice under the usual names,
-        "s{i}_original" for every slice, and "s{i}_{cam,lesion,cam_lesion}" for the key slices."""
+        and "s{i}_{original,cam,lesion,cam_lesion}" for every slice (the doctor scrolls through all of them)."""
         from neuroedge import aggregate, volume
         cfg = {"rule": "topk", "k": 5, "per_plane": 12, "key_slices": 3} | self.meta.get("series", {})
         t0 = time.perf_counter()
@@ -188,7 +188,7 @@ class Engine:
             raise ValueError("no brain slices found in this series")
         load_ms = (time.perf_counter() - t0) * 1000
         t0 = time.perf_counter()
-        per = [self.analyze(s.raw, with_overlays=False) for s in slices]
+        per = [self.analyze(s.raw, with_overlays=with_overlays) for s in slices]
         model_ms = (time.perf_counter() - t0) * 1000
         probs = np.array([[r["probabilities"][c] for c in self.class_names] for r in per])
         lesion = np.array([r["lesion"]["area_px_model"] if r["lesion"]["present"] else 0 for r in per], np.float64)
@@ -200,7 +200,7 @@ class Engine:
         keys = [int(usable[i]) for i in order]
         pred = int(np.argmax(p))
 
-        result = self.analyze(slices[keys[0]].raw, with_overlays=with_overlays)
+        result = dict(per[keys[0]])
         result.pop("_state", None)
         flags = [f for f in result["flags"] if f not in ("uncertain_prediction_set", "empty_prediction_set")]
         pset = self.conformal.predict_sets(p[None])[0]
@@ -229,20 +229,14 @@ class Engine:
                         "prediction": self.class_names[int(np.argmax(probs[i]))], "ok": bool(ok[i])}
                        for i, s in enumerate(slices)],
             "slices_rejected": int((~ok).sum()),
+            "overlays": "all" if with_overlays else "none",
         }
         result["timings_ms"] = {"load_ms": round(load_ms, 1), "model_ms": round(model_ms, 1),
                                 "per_slice_ms": round(model_ms / len(slices), 1)}
         if with_overlays:
-            t0 = time.perf_counter()
-            ov = {}
-            for i, s in enumerate(slices):
-                ov[f"s{i}_original"] = _png(np.repeat(per[i]["_state"]["pre"].original[..., None], 3, -1))
-            ov |= {f"s{keys[0]}_{k}": v for k, v in result["overlays"].items() if k != "original"}
-            for i in keys[1:]:
-                o = self.analyze(slices[i].raw)["overlays"]
-                ov |= {f"s{i}_{k}": v for k, v in o.items() if k != "original"}
-            result["overlays"] |= ov
-            result["timings_ms"]["render_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            result["overlays"] = dict(per[keys[0]]["overlays"])
+            result["overlays"] |= {f"s{i}_{k}": v for i, r in enumerate(per) for k, v in r["overlays"].items()}
+            result["timings_ms"]["render_ms"] = round(sum(r.get("timings_ms", {}).get("render_ms", 0) for r in per), 1)
         return result
 
     # ------------------------------------------------------------------------------- helpers
