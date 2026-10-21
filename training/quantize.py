@@ -148,14 +148,25 @@ def main() -> None:
     report = {"fp32_nodes": keep, "size_mb": {k: round(p.stat().st_size / 1e6, 1) for k, p in (("fp32", fp32), ("int8", int8))}}
     for split in ("val", "test"):
         x, y, _ = split_arrays(bundle, split)
-        o = {k: run(s, x) for k, s in sess.items()}
+        # batch by batch: the (N, 2048, 28, 28) feature maps of a large split do not fit in RAM (v2: 3652 val images
+        # = 22 GB), so the CAM comparison is done per batch and only logits are kept
+        logits = {"fp32": [], "int8": []}
+        drift, decomp = [], []
+        for s0 in range(0, len(x), 32):
+            ob = {k: dict(zip(OUTPUTS, sess_k.run(OUTPUTS, {"image": x[s0:s0 + 32]}))) for k, sess_k in sess.items()}
+            pf = ob["fp32"]["logits"].argmax(1)
+            for i in range(len(pf)):
+                drift.append(map_similarity(exact_cam(ob["fp32"]["features"][i], w, pf[i], ob["fp32"]["attention"][i]),
+                                            exact_cam(ob["int8"]["features"][i], w, pf[i], ob["int8"]["attention"][i])))
+                decomp.append(decomposition_error(ob["int8"]["features"][i], w, b, ob["int8"]["logits"][i],
+                                                  ob["int8"]["attention"][i]))
+            for k in logits:
+                logits[k].append(ob[k]["logits"])
+        o = {k: {"logits": np.concatenate(v)} for k, v in logits.items()}
         probs = {k: np.exp(v["logits"] - v["logits"].max(1, keepdims=True)) for k, v in o.items()}
         probs = {k: p / p.sum(1, keepdims=True) for k, p in probs.items()}
         m = {k: classification_metrics(y, p, bundle["class_names"]) for k, p in probs.items()}
         pred = {k: p.argmax(1) for k, p in probs.items()}
-        drift = [map_similarity(exact_cam(o["fp32"]["features"][i], w, pred["fp32"][i], o["fp32"]["attention"][i]),
-                                exact_cam(o["int8"]["features"][i], w, pred["fp32"][i], o["int8"]["attention"][i]))
-                 for i in range(len(y))]
         report[split] = {
             "n": len(y),
             "fp32": {k: m["fp32"][k] for k in ("accuracy", "macro_f1", "macro_auroc")},
@@ -163,9 +174,7 @@ def main() -> None:
             "prediction_agreement": float((pred["fp32"] == pred["int8"]).mean()),
             "mcnemar": mcnemar_exact(pred["fp32"] == y, pred["int8"] == y),
             "cam_drift": {k: float(np.nanmean([d[k] for d in drift])) for k in drift[0]},
-            "int8_cam_decomposition_error": max(decomposition_error(o["int8"]["features"][i], w, b, o["int8"]["logits"][i],
-                                                                     o["int8"]["attention"][i])
-                                                for i in range(len(y))),
+            "int8_cam_decomposition_error": max(decomp),
         }
         r = report[split]
         print(f"{split}: F1 fp32={r['fp32']['macro_f1']:.4f} int8={r['int8']['macro_f1']:.4f} "
