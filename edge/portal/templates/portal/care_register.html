@@ -28,7 +28,7 @@
   <section class="card">
     <div class="card-h"><h2>First scan</h2><span class="hint">Optional</span></div>
     <div class="card-b form">
-      <label class="field">MRI image<input type="file" name="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom"><span class="hint">PNG, JPG or DICOM · up to 20 MB</span></label>
+      <label class="field">MRI image<input type="file" name="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom,.zip,.nii,.gz" multiple><span class="hint">One image (PNG, JPG, DICOM · 20 MB) or a series (DICOM files, .zip, .nii.gz · 200 MB)</span></label>
       <label class="field">Note for the radiologist<input name="note" maxlength="1000" value="{{ form.note or '' }}"></label>
     </div>
   </section>

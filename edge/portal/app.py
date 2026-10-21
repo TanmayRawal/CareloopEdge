@@ -39,7 +39,8 @@ TWO_STEP_EXEMPT = {"auth.account", "auth.logout", "static"}
 def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | Path,
                secret_key: str | None = None, assistant=None, behind_proxy: bool = False) -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="/static")
-    app.config.update(SECRET_KEY=secret_key or secrets.token_hex(32), MAX_CONTENT_LENGTH=21 * 1024 * 1024,
+    app.config.update(SECRET_KEY=secret_key or secrets.token_hex(32), MAX_CONTENT_LENGTH=205 * 1024 * 1024,   # a whole series (services.MAX_SERIES)
+                      MAX_FORM_PARTS=2100,                        # up to services.MAX_SERIES_FILES DICOM files
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict",
                       # __Host- prefix: the browser only accepts it over HTTPS, host-only, path /
                       SESSION_COOKIE_SECURE=behind_proxy,
@@ -141,7 +142,7 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
 
     @app.errorhandler(413)
     def too_large(_):
-        return render_template("portal/error.html", code=413, message="File too large (max 20 MB)."), 413
+        return render_template("portal/error.html", code=413, message="File too large (max 20 MB for an image, 200 MB for a series)."), 413
 
     for code in (400, 403, 404, 429):
         app.register_error_handler(code, lambda e, c=code: (render_template(

@@ -3,12 +3,16 @@
 Upload -> AI analysis -> doctor worklist -> doctor review -> signed report -> patient sees the report.
 Every scan attempt n of a case is stored as blobs  scan_n, original_n, cam_n, lesion_n, cam_lesion_n
 and one ai_results row; earlier attempts are kept (medical records are append-only).
+A whole series (several DICOM files, a .zip, or NIfTI) is analysed as one study (Engine.analyze_series); it adds
+s{i}_original_n for every analysed slice and s{i}_{cam,lesion,cam_lesion}_n for the key slices.
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import time
+import zipfile
 from dataclasses import dataclass
 
 from flask import render_template
@@ -16,7 +20,10 @@ from flask import render_template
 from edge.portal import notify
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".dcm", ".dicom"}
+SERIES_EXT = (".zip", ".nii", ".nii.gz")
 MAX_UPLOAD = 20 * 1024 * 1024
+MAX_SERIES = 200 * 1024 * 1024
+MAX_SERIES_FILES = 2000
 REVIEW_FLAGS = {"unusual_image", "uncertain_prediction_set", "empty_prediction_set",
                 "explanation_outside_lesion", "classifier_segmenter_disagree"}
 
@@ -42,11 +49,21 @@ def priority(result: dict) -> int:
     return 1
 
 
+def is_series_name(name: str) -> bool:
+    return (name or "").strip().lower().endswith(SERIES_EXT)
+
+
 def _validate(filename: str, data: bytes) -> str:
     name = (filename or "").strip()
+    if is_series_name(name):
+        if not data:
+            raise UploadError("The file is empty.")
+        if len(data) > MAX_SERIES:
+            raise UploadError("Series too large (max 200 MB).")
+        return name
     ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
     if ext not in ALLOWED_EXT:
-        raise UploadError(f"Unsupported file type '{ext or '?'}'. Use PNG, JPG or DICOM.")
+        raise UploadError(f"Unsupported file type '{ext or '?'}'. Use PNG, JPG, DICOM, or a series (.zip, .nii.gz).")
     if not data:
         raise UploadError("The file is empty.")
     if len(data) > MAX_UPLOAD:
@@ -54,12 +71,35 @@ def _validate(filename: str, data: bytes) -> str:
     return name
 
 
+def combine_files(files: list[tuple[str, bytes]]) -> tuple[str, bytes]:
+    """Upload form -> (filename, bytes). Several files are the slices of one DICOM series: they are packed into one
+    .zip (stored, not compressed), which is what is archived and analysed."""
+    files = [(n or "", d) for n, d in files if n or d]
+    if len(files) <= 1:
+        return files[0] if files else ("", b"")
+    if len(files) > MAX_SERIES_FILES:
+        raise UploadError(f"Too many files (max {MAX_SERIES_FILES} slices).")
+    if any(is_series_name(n) for n, _ in files):
+        raise UploadError("Upload one series at a time: either one .zip / NIfTI file, or the DICOM files of one series.")
+    if sum(len(d) for _, d in files) > MAX_SERIES:
+        raise UploadError("Series too large (max 200 MB).")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        for i, (_, d) in enumerate(files):
+            z.writestr(f"IM{i:05d}.dcm", d)          # original names are not kept (they can carry identity)
+    return f"series_{len(files)}_files.zip", buf.getvalue()
+
+
 def _analyse_into(ctx: Ctx, cid: str, attempt: int, data: bytes, filename: str) -> dict:
     """Run the AI on an attempt, store the scan + overlays encrypted, record the result."""
     try:
-        res = ctx.engine.analyze(data, filename=filename)
+        if is_series_name(filename):
+            res = ctx.engine.analyze_series(data, filename=filename)
+        else:
+            res = ctx.engine.analyze(data, filename=filename)
     except ValueError as e:                          # undecodable / unsupported content
-        raise UploadError(f"Could not read this file as an image: {e}") from e
+        what = "a scan series" if is_series_name(filename) else "an image"
+        raise UploadError(f"Could not read this file as {what}: {e}") from e
     overlays = res.pop("overlays")
     res.pop("_state", None)
     kinds = []

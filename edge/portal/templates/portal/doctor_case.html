@@ -39,7 +39,7 @@
     </div>
     <div class="v-stage" id="stage">
       <div class="v-canvas" id="canvas">
-        <img class="base" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ att) }}" alt="Original scan" draggable="false">
+        <img class="base" id="base" src="{{ url_for('case.image', cid=case.id, kind='original_' ~ att) }}" alt="Original scan" draggable="false">
         <img id="overlay" src="{{ url_for('case.image', cid=case.id, kind='cam_' ~ att) }}" data-base="{{ url_for('case.image', cid=case.id, kind='X') }}" alt="Overlay" draggable="false">
       </div>
     </div>
@@ -48,6 +48,18 @@
       <span><span class="swatch-green"></span>Detected lesion</span>
       <span class="v-zoom" id="zoom-label">100%</span>
     </div>
+    {% if r and r.series %}{% set sr = r.series %}
+    <div class="v-series" id="series" data-att="{{ att }}" data-keys="{{ sr.key_slices|tojson|forceescape }}"
+         data-slices="{{ sr.slices|tojson|forceescape }}" data-start="{{ sr.key_slices[0] }}">
+      <div class="vs-row">
+        <label class="vs-range">Slice <input type="range" id="slice" min="0" max="{{ sr.n_slices - 1 }}" value="{{ sr.key_slices[0] }}" aria-label="Slice (↑/↓)"></label>
+        <span class="vs-label num" id="slice-label"></span>
+      </div>
+      <div class="vs-bars" id="slice-bars" aria-hidden="true">{% for s in sr.slices %}<span data-i="{{ loop.index0 }}" class="{{ 'key' if loop.index0 in sr.key_slices }}{{ ' rej' if not s.ok }}" data-h="{{ '%.0f'|format(4 + 96 * s.tumour_prob) }}" title="{{ s.plane }} {{ s.index }} · {{ '%.0f'|format(100 * s.tumour_prob) }}%"></span>{% endfor %}</div>
+      <div class="vs-keys">Key slices {% for k in sr.key_slices %}<button type="button" class="btn sm" data-slice="{{ k }}">{{ loop.index }} · {{ sr.slices[k].plane }} {{ sr.slices[k].index }}</button>{% endfor %}
+        <span class="small muted">Bars: tumour likelihood per slice. Overlays exist for key slices only.</span></div>
+    </div>
+    {% endif %}
   </section>
 
   <!-- ====================================================== side panel -->
@@ -69,6 +81,7 @@
             <meter min="0" max="1" value="{{ '%.4f'|format(p) }}"></meter><span class="right num">{{ '%.1f'|format(100 * p) }}%</span></div>
           {% endfor %}
         </div>
+        {% if r.series %}<p class="small muted">Whole study: {{ r.series.n_slices }} slices in 3 planes{% if r.series.slices_rejected %}, {{ r.series.slices_rejected }} not usable{% endif %}. Lesion details below are for key slice 1.</p>{% endif %}
         <div class="section-label">95% confidence set</div>
         <div>{% for c in r.prediction_set %}<span class="tag brand">{{ class_text.get(c, c) }}</span>{% else %}<span class="tag warn">No class reached 95%</span>{% endfor %}</div>
         {% if r.flags %}

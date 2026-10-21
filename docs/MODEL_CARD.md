@@ -104,7 +104,17 @@
 * **Sequence shortcut:** BRISC's "no tumor" class mixes CT, FLAIR, T2 and non-contrast T1, while all tumor
   classes are T1 contrast-enhanced. A fix is planned with BraTS data.
 * **Coverage below target** on the test release (see above).
-* **Single 2D slice:** a "no tumor" output cannot exclude a lesion elsewhere in the brain.
+* **Single 2D slice:** a "no tumor" output cannot exclude a lesion elsewhere in the brain. Upload the whole series
+  instead (below).
+* **Whole-study mode** (`Engine.analyze_series`; NIfTI, a .zip of a series, or all DICOM files of one series):
+  36 slices in 3 planes, combined with the top-5-slices rule (chosen on calibration patients). On held-out patients
+  (BraTS-GLI 76, BraTS-MEN 68, NHNN pituitary 15, IXI healthy 380):
+  * this model (`mri/0.2.0`): tumour-type macro-F1 0.71, slice AUROC 0.72, healthy false-alarm rate 23%. **It misses
+    all three pre-registered targets; do not use whole-study mode with it.**
+  * the retrained candidate (`mri_v2vol`, seed 0; not yet released): macro-F1 0.98, slice AUROC 0.95, false-alarm rate
+    5% (all targets met). These test patients come from the same datasets as its training patients; the external
+    BraTS-Africa test and two more seeds are still to come.
+  * The 95% confidence set is calibrated on slices, so its coverage at patient level is not guaranteed.
 * **Image orientation:** PNG/JPG files carry no orientation, so image left/right is not the patient's left/right.
 * **Distribution shift:** accuracy drops on other hospitals' data (external macro-F1 0.84). Pituitary is the
   weakest external class.

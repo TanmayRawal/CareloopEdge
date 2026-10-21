@@ -10,9 +10,9 @@
         <label class="dropzone" id="dropzone">
           <svg class="ic"><use href="#i-upload"/></svg>
           <span class="dz-title">Drag your scan here or browse</span>
-          <span class="muted small">PNG, JPG or DICOM · up to 20 MB · one image</span>
+          <span class="muted small">One image (PNG, JPG, DICOM · 20 MB) or a whole series: all DICOM files of it, a .zip, or .nii.gz (200 MB)</span>
           <span class="dz-file" id="dz-file"></span>
-          <input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required>
+          <input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom,.zip,.nii,.gz" multiple required>
         </label>
         <label class="field">Note for the radiologist <span class="hint">Optional</span>
           <textarea name="note" rows="3" maxlength="1000"></textarea></label>

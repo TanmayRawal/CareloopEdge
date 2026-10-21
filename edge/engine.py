@@ -169,6 +169,82 @@ class Engine:
         result["_state"] = {"pre": pre, "features": feats, "pred": pred, "runner_up": runner_up, "attention": att}
         return result
 
+    # ------------------------------------------------------------------------------ whole series
+    def analyze_series(self, source, filename: str | None = None, with_overlays: bool = True) -> dict:
+        """A whole study (NIfTI, a .zip of a DICOM series or NIfTI, or a list of DICOM file bytes) -> one answer.
+
+        Slices are chosen as in training/evaluate_volumes.py (evenly spaced, three planes), each goes through
+        analyze(), and the per-slice calibrated probabilities are combined with the bundle's aggregation rule
+        (neuroedge/aggregate.py; chosen on calibration patients). The returned fields are those of analyze() for
+        the key slice (the slice that most supports "tumour"), with the patient-level probabilities, prediction and
+        prediction set in place of the slice's, plus result["series"]. Overlays: the key slice under the usual names,
+        "s{i}_original" for every slice, and "s{i}_{cam,lesion,cam_lesion}" for the key slices."""
+        from neuroedge import aggregate, volume
+        cfg = {"rule": "topk", "k": 5, "per_plane": 12, "key_slices": 3} | self.meta.get("series", {})
+        t0 = time.perf_counter()
+        vol = volume.load_volume(source, filename)
+        slices = volume.select_slices(vol, per_plane=int(cfg["per_plane"]))
+        if not slices:
+            raise ValueError("no brain slices found in this series")
+        load_ms = (time.perf_counter() - t0) * 1000
+        t0 = time.perf_counter()
+        per = [self.analyze(s.raw, with_overlays=False) for s in slices]
+        model_ms = (time.perf_counter() - t0) * 1000
+        probs = np.array([[r["probabilities"][c] for c in self.class_names] for r in per])
+        lesion = np.array([r["lesion"]["area_px_model"] if r["lesion"]["present"] else 0 for r in per], np.float64)
+        ok = np.array([r["status"] == "ok" for r in per])
+        nt = self.class_names.index("no_tumor")
+        p = aggregate.aggregate(probs, cfg["rule"], nt, k=int(cfg["k"]), lesion_area=lesion, ok=ok)
+        usable = np.flatnonzero(ok) if ok.any() else np.arange(len(per))
+        order = aggregate.key_slices(probs[usable], nt, n=int(cfg["key_slices"]))
+        keys = [int(usable[i]) for i in order]
+        pred = int(np.argmax(p))
+
+        result = self.analyze(slices[keys[0]].raw, with_overlays=with_overlays)
+        result.pop("_state", None)
+        flags = [f for f in result["flags"] if f not in ("uncertain_prediction_set", "empty_prediction_set")]
+        pset = self.conformal.predict_sets(p[None])[0]
+        if pset.sum() != 1:
+            flags.append("uncertain_prediction_set" if pset.sum() > 1 else "empty_prediction_set")
+        rejected = []
+        if ok.mean() < 0.5:           # most of the study is outside what the model was validated on
+            rejected = sorted({f for r in per for f in r["reject_reasons"]})
+        flags = sorted(set(flags) | set(rejected))
+        result.update({
+            "status": "rejected" if rejected else "ok",
+            "reject_reasons": rejected,
+            "prediction": None if rejected else self.class_names[pred],
+            "raw_argmax": self.class_names[pred],
+            "probabilities": {c: float(v) for c, v in zip(self.class_names, p)},
+            "prediction_set": [c for c, m in zip(self.class_names, pset) if m],
+            "flags": flags,
+            "needs_expert_review": bool(set(flags) & {"out_of_distribution", "unusual_image", "uncertain_prediction_set",
+                                                       "empty_prediction_set", "explanation_outside_lesion",
+                                                       "classifier_segmenter_disagree"}),
+        })
+        result["series"] = {
+            "n_slices": len(slices), "source": vol.source, "spacing_mm": [round(float(v), 3) for v in vol.spacing_mm],
+            "rule": cfg["rule"], "k": int(cfg["k"]), "key_slices": keys,
+            "slices": [{"plane": s.plane, "index": s.index, "tumour_prob": round(float(1 - probs[i, nt]), 4),
+                        "prediction": self.class_names[int(np.argmax(probs[i]))], "ok": bool(ok[i])}
+                       for i, s in enumerate(slices)],
+            "slices_rejected": int((~ok).sum()),
+        }
+        result["timings_ms"] = {"load_ms": round(load_ms, 1), "model_ms": round(model_ms, 1),
+                                "per_slice_ms": round(model_ms / len(slices), 1)}
+        if with_overlays:
+            t0 = time.perf_counter()
+            ov = {}
+            for i, s in enumerate(slices):
+                ov[f"s{i}_original"] = _png(np.repeat(per[i]["_state"]["pre"].original[..., None], 3, -1))
+            ov |= {f"s{keys[0]}_{k}": v for k, v in result["overlays"].items() if k != "original"}
+            for i in keys[1:]:
+                o = self.analyze(slices[i].raw)["overlays"]
+                ov |= {f"s{i}_{k}": v for k, v in o.items() if k != "original"}
+            result["overlays"] |= ov
+            result["timings_ms"]["render_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        return result
+
     # ------------------------------------------------------------------------------- helpers
     def _lesion_stats(self, lesion: np.ndarray, mm_per_px: float | None) -> dict:
         area = int(lesion.sum())
@@ -202,8 +278,10 @@ class Engine:
         cv2.drawContours(seg_rgb, cnts, -1, (0, 230, 0), thick)
         cv2.drawContours(both_rgb, cnts, -1, (0, 230, 0), thick)
 
-        def png(rgb):
-            ok, buf = cv2.imencode(".png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-            return buf.tobytes()
-        return {"original": png(np.repeat(orig[..., None], 3, -1)), "cam": png(cam_rgb),
-                "lesion": png(seg_rgb), "cam_lesion": png(both_rgb)}
+        return {"original": _png(np.repeat(orig[..., None], 3, -1)), "cam": _png(cam_rgb),
+                "lesion": _png(seg_rgb), "cam_lesion": _png(both_rgb)}
+
+
+def _png(rgb: np.ndarray) -> bytes:
+    ok, buf = cv2.imencode(".png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+    return buf.tobytes()
