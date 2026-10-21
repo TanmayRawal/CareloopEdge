@@ -298,10 +298,11 @@ def blueprint(d) -> Blueprint:
                              email_consent=bool(email) and f.get("email_consent") == "yes")
         db.audit(g.user["id"], "patient_registered", detail={"patient": uid, "walk_in": True}, ip=d.ip())
         msg = f"{name} registered."
-        scan = request.files.get("scan")
-        if scan and scan.filename:
+        scans = [s for s in request.files.getlist("scan") if s.filename]
+        if scans:
             try:
-                cid = services.submit_scan(d.ctx, db.user(uid), scan.read(), scan.filename, f.get("note", ""), True, d.ip())
+                name, data = services.combine_files([(s.filename, s.read()) for s in scans])
+                cid = services.submit_scan(d.ctx, db.user(uid), data, name, f.get("note", ""), True, d.ip())
                 msg += " The scan was sent to the radiologists' worklist."
                 db.audit(g.user["id"], "scan_uploaded_for_patient", cid, {"patient": uid}, d.ip())
             except services.UploadError as e:

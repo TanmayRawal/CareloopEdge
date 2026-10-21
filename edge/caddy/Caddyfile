@@ -19,7 +19,7 @@ https:// {
 	}
 	encode gzip
 	request_body {
-		max_size 22MB
+		max_size 210MB
 	}
 	header {
 		X-Content-Type-Options nosniff

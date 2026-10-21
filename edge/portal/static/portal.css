@@ -215,6 +215,17 @@ a.kpi.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset;
 .v-canvas { position: absolute; inset: 0; transform-origin: 0 0; }
 .v-canvas img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
 .v-foot { display: flex; align-items: center; gap: 14px; padding: 8px 12px; background: #0c141c; border-top: 1px solid #16232f; color: #8fa3b3; font-size: 12px; flex-wrap: wrap; }
+.v-series { padding: 8px 12px 10px; background: #0c141c; border-top: 1px solid #16232f; color: #8fa3b3; font-size: 12px; display: grid; gap: 6px; }
+.vs-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.vs-range { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; }
+.vs-range input { flex: 1; accent-color: #43b6dc; }
+.vs-label { color: #d5e1ea; }
+.vs-bars { display: flex; align-items: flex-end; gap: 1px; height: 28px; }
+.vs-bars span { flex: 1; height: 4%; min-height: 2px; background: #2c4a5e; cursor: pointer; border-radius: 1px; }
+.vs-bars span.key { background: #e0a43a; }
+.vs-bars span.rej { background: #5a2b2b; }
+.vs-bars span.on { outline: 2px solid #43b6dc; outline-offset: 0; }
+.vs-keys { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .v-foot b { color: #e2eaf0; font-weight: 600; }
 .cbar { display: inline-block; width: 110px; height: 8px; border-radius: 4px; vertical-align: middle; margin: 0 6px;
   background: linear-gradient(90deg, #30123b, #4662d7, #36aaf9, #1ae4b6, #72fe5e, #c8ef34, #faba39, #f66b19, #ca2a04, #7a0403); }

@@ -64,7 +64,7 @@
         <form method="post" enctype="multipart/form-data" class="form">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <label class="dropzone" id="dropzone"><svg class="ic"><use href="#i-upload"/></svg><span class="dz-title">Choose the new image</span>
-            <span class="dz-file" id="dz-file"></span><input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom" required></label>
+            <span class="dz-file" id="dz-file"></span><input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom,.zip,.nii,.gz" multiple required></label>
           <button class="btn primary" type="submit">Send new image</button>
         </form>
       {% else %}

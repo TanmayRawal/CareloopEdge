@@ -38,7 +38,7 @@
     const label = $("#dz-file");
     const show = () => {
       if (!input.files.length) return;
-      label.textContent = "✓ " + input.files[0].name;
+      label.textContent = "✓ " + (input.files.length > 1 ? `${input.files.length} files (one series)` : input.files[0].name);
       $("#st1")?.classList.remove("on"); $("#st2")?.classList.add("on");
     };
     input.addEventListener("change", show);
@@ -130,10 +130,32 @@
   stage.addEventListener("dblclick", reset);
 
   const modes = $$(".v-modes button");
-  const setMode = btn => {
-    modes.forEach(m => m.classList.toggle("on", m === btn));
-    overlay.src = overlay.dataset.base.replace(/X\.png$/, btn.dataset.kind + ".png");
+  const imgUrl = kind => overlay.dataset.base.replace(/X\.png$/, kind + ".png");
+  // whole series: one slice at a time; overlays exist only for the key slices (services.py)
+  const series = $("#series"), base = $("#base"), slider = $("#slice");
+  const sKeys = series ? JSON.parse(series.dataset.keys) : [], sInfo = series ? JSON.parse(series.dataset.slices) : [];
+  let slice = series ? +series.dataset.start : null, mode = modes.find(m => m.classList.contains("on")) || modes[0];
+  const render = () => {
+    if (slice === null) { overlay.src = imgUrl(mode.dataset.kind); return; }
+    const att = series.dataset.att, isKey = sKeys.includes(slice), kind = mode.dataset.kind;
+    base.src = imgUrl(`s${slice}_original_${att}`);
+    overlay.src = imgUrl(isKey ? `s${slice}_${kind}` : `s${slice}_original_${att}`);
+    slider.value = slice;
+    const s = sInfo[slice];
+    $("#slice-label").textContent = `${slice + 1}/${sInfo.length} · ${s.plane} ${s.index} · tumour ${Math.round(100 * s.tumour_prob)}%` +
+      (isKey ? ` · key slice ${sKeys.indexOf(slice) + 1}` : "") + (s.ok ? "" : " · not usable");
+    $$("#slice-bars span").forEach(b => b.classList.toggle("on", +b.dataset.i === slice));
   };
+  const setSlice = i => { slice = Math.max(0, Math.min(sInfo.length - 1, i)); render(); };
+  slider?.addEventListener("input", () => setSlice(+slider.value));
+  $$("#slice-bars span, .vs-keys button").forEach(b => b.addEventListener("click", () => setSlice(+(b.dataset.i ?? b.dataset.slice))));
+  const setMode = btn => {
+    mode = btn;
+    modes.forEach(m => m.classList.toggle("on", m === btn));
+    render();
+  };
+  $$("#slice-bars span").forEach(b => { b.style.height = b.dataset.h + "%"; });   // CSP: no inline style attributes
+  if (series) render();
   modes.forEach(b => b.addEventListener("click", () => setMode(b)));
   const toggleExpand = () => { review.classList.toggle("expanded"); };
   $$(".v-tool").forEach(b => b.addEventListener("click", () => {
@@ -147,6 +169,7 @@
     else if (ev.key === "-") zoomAt(0.8);
     else if (ev.key === "0") reset();
     else if (ev.key.toLowerCase() === "f") toggleExpand();
+    else if (series && (ev.key === "ArrowUp" || ev.key === "ArrowDown")) setSlice(slice + (ev.key === "ArrowUp" ? -1 : 1));
     else return;
     ev.preventDefault();
   });

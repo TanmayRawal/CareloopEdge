@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import re
+
 from flask import Blueprint, abort, g
 
 from edge.portal import auth
+
+
+# kind_n, or s{slice}_kind_n for the slices of a series (services.py)
+IMAGE_KIND = re.compile(r"(?:s\d{1,3}_)?(original|cam|lesion|cam_lesion)_\d{1,3}")
 
 
 def blueprint(d) -> Blueprint:
@@ -15,10 +21,10 @@ def blueprint(d) -> Blueprint:
     @auth.require("patient", "doctor", "admin")
     def image(cid, kind):
         case = d.get_case_or_404(cid)
-        base = kind.rsplit("_", 1)[0]
-        if g.user["role"] == "patient" and base != "original":      # patients never receive AI overlays
+        m = IMAGE_KIND.fullmatch(kind)
+        if not m or (g.user["role"] == "patient" and m[1] != "original"):   # patients never receive AI overlays
             abort(404)
-        if base not in ("original", "cam", "lesion", "cam_lesion") or not store.exists(case["id"], kind):
+        if not store.exists(case["id"], kind):
             abort(404)
         if g.user["role"] != "patient":
             db.audit(g.user["id"], "image_viewed", cid, {"kind": kind}, d.ip())

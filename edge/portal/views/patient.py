@@ -107,9 +107,9 @@ def blueprint(d) -> Blueprint:
     def upload():
         if request.method == "GET":
             return render_template("portal/patient_upload.html")
-        f = request.files.get("scan")
         try:
-            cid = services.submit_scan(ctx, g.user, f.read() if f else b"", f.filename if f else "",
+            name, data = services.combine_files([(f.filename, f.read()) for f in request.files.getlist("scan")])
+            cid = services.submit_scan(ctx, g.user, data, name,
                                        request.form.get("note", ""), request.form.get("consent") == "yes", d.ip())
         except services.UploadError as e:
             return render_template("portal/patient_upload.html", error=str(e)), 400
@@ -121,9 +121,9 @@ def blueprint(d) -> Blueprint:
     def case(cid):
         c = d.get_case_or_404(cid)
         if request.method == "POST":                        # re-upload requested by the doctor
-            f = request.files.get("scan")
             try:
-                services.resubmit_scan(ctx, g.user, c, f.read() if f else b"", f.filename if f else "", d.ip())
+                name, data = services.combine_files([(f.filename, f.read()) for f in request.files.getlist("scan")])
+                services.resubmit_scan(ctx, g.user, c, data, name, d.ip())
                 flash("Thank you — the new image was sent to your radiologist.")
             except services.UploadError as e:
                 flash(str(e), "error")
