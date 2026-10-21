@@ -58,7 +58,7 @@
       </div>
       <div class="vs-bars" id="slice-bars" aria-hidden="true">{% for s in sr.slices %}<span data-i="{{ loop.index0 }}" class="{{ 'key' if loop.index0 in sr.key_slices }}{{ ' rej' if not s.ok }}" data-h="{{ '%.0f'|format(4 + 96 * s.tumour_prob) }}" title="{{ s.plane }} {{ s.index }} · {{ '%.0f'|format(100 * s.tumour_prob) }}%"></span>{% endfor %}</div>
       <div class="vs-keys">Key slices {% for k in sr.key_slices %}<button type="button" class="btn sm" data-slice="{{ k }}">{{ loop.index }} · {{ sr.slices[k].plane }} {{ sr.slices[k].index }}</button>{% endfor %}
-        <span class="small muted">Bars: tumour likelihood per slice.{% if sr.overlays != 'all' %} Overlays exist for key slices only.{% endif %}</span></div>
+        <span class="small muted">Bars: tumour likelihood per slice.{% if sr.overlays != 'all' %} Grad-CAM and lesion outline are shown for the 3 key slices.{% endif %}</span></div>
     </div>
     {% endif %}
   </section>
