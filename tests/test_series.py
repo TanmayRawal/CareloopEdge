@@ -62,9 +62,9 @@ def test_series_aggregates_slices_into_one_answer(tmp_path):
     assert len(sr["key_slices"]) == 3 and all(sr["slices"][k]["tumour_prob"] > 0.5 for k in sr["key_slices"])
     ov = res["overlays"]
     assert all(f"s{i}_original" in ov for i in range(sr["n_slices"]))
-    assert all(f"s{k}_cam" in ov for k in sr["key_slices"]) and {"original", "cam"} <= set(ov)
-    non_key = next(i for i in range(sr["n_slices"]) if i not in sr["key_slices"])
-    assert f"s{non_key}_cam" not in ov
+    assert all(f"s{i}_{k}" in ov for i in range(sr["n_slices"]) for k in ("cam", "lesion", "cam_lesion"))
+    assert {"original", "cam"} <= set(ov) and sr["overlays"] == "all"
+    assert eng.calls == sr["n_slices"]                     # each slice is run through the model once
 
 
 def test_series_without_tumour_and_mostly_rejected(tmp_path):

@@ -44,20 +44,21 @@
       </div>
     </div>
     <div class="v-foot">
-      <span>Grad-CAM evidence for <b>{{ class_text.get(r.explanation.explained_class, '—') if r and r.explanation else '—' }}</b> low<span class="cbar" aria-hidden="true"></span>high</span>
+      <span>Grad-CAM evidence for <b id="cam-class">{{ class_text.get(r.explanation.explained_class, '—') if r and r.explanation else '—' }}</b> low<span class="cbar" aria-hidden="true"></span>high</span>
       <span><span class="swatch-green"></span>Detected lesion</span>
       <span class="v-zoom" id="zoom-label">100%</span>
     </div>
     {% if r and r.series %}{% set sr = r.series %}
     <div class="v-series" id="series" data-att="{{ att }}" data-keys="{{ sr.key_slices|tojson|forceescape }}"
-         data-slices="{{ sr.slices|tojson|forceescape }}" data-start="{{ sr.key_slices[0] }}">
+         data-slices="{{ sr.slices|tojson|forceescape }}" data-start="{{ sr.key_slices[0] }}" data-all="{{ 1 if sr.overlays == 'all' else 0 }}"
+         data-labels="{{ class_text|tojson|forceescape }}">
       <div class="vs-row">
         <label class="vs-range">Slice <input type="range" id="slice" min="0" max="{{ sr.n_slices - 1 }}" value="{{ sr.key_slices[0] }}" aria-label="Slice (↑/↓)"></label>
         <span class="vs-label num" id="slice-label"></span>
       </div>
       <div class="vs-bars" id="slice-bars" aria-hidden="true">{% for s in sr.slices %}<span data-i="{{ loop.index0 }}" class="{{ 'key' if loop.index0 in sr.key_slices }}{{ ' rej' if not s.ok }}" data-h="{{ '%.0f'|format(4 + 96 * s.tumour_prob) }}" title="{{ s.plane }} {{ s.index }} · {{ '%.0f'|format(100 * s.tumour_prob) }}%"></span>{% endfor %}</div>
       <div class="vs-keys">Key slices {% for k in sr.key_slices %}<button type="button" class="btn sm" data-slice="{{ k }}">{{ loop.index }} · {{ sr.slices[k].plane }} {{ sr.slices[k].index }}</button>{% endfor %}
-        <span class="small muted">Bars: tumour likelihood per slice. Overlays exist for key slices only.</span></div>
+        <span class="small muted">Bars: tumour likelihood per slice.{% if sr.overlays != 'all' %} Overlays exist for key slices only.{% endif %}</span></div>
     </div>
     {% endif %}
   </section>
