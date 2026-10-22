@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="{{ asset('portal.css') }}">
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
 </head>
-<body>
+<body class="theme-dark">
 {% include "portal/_icons.html" %}
 <div class="device" id="device">
   <header class="dv-top">
@@ -24,7 +24,7 @@
           <div class="dv-row"><span class="dv-dot {{ 'ok' if s.verified else 'warn' }}"></span><span class="lbl">Model</span>
             <span class="val">{{ s.model_version }} · {{ 'signature verified' if s.verified else 'unsigned dev bundle' }}</span></div>
           <div class="dv-row"><span class="dv-dot ok"></span><span class="lbl">Analysis</span>
-            <span class="val">{{ 'Whole study + single image' if s.whole_study else 'Single image' }}{% if s.last_analysis %} · last {{ s.last_analysis }} ago{% endif %}</span></div>
+            <span class="val">{{ 'Study + image' if s.whole_study else 'Image' }}{% if s.last_analysis %} · last {{ s.last_analysis }} ago{% endif %}</span></div>
           <div class="dv-row"><span class="dv-dot {{ 'ok' if s.llm else 'warn' }}"></span><span class="lbl">Report assistant</span>
             <span class="val">{{ 'Online' if s.llm else 'Offline' }}</span></div>
           <div class="dv-row"><span class="dv-dot {{ s.temp_level or '' }}"></span><span class="lbl">Temperature{% if s.load is not none %} · load{% endif %}</span>
