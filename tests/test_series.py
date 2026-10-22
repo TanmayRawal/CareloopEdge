@@ -113,3 +113,54 @@ def test_portal_series_upload_scrubber_and_patient_privacy(env):
     page = d.get(f"/doctor/case/{cid}").get_data(as_text=True)
     assert 'id="series"' in page and "Whole study: 4 slices" in page
     assert d.get(f"/case/{cid}/img/s2_cam_1.png").data == b"PNG-c"
+
+
+def test_series_analyses_run_one_at_a_time():
+    """Two whole-study uploads at once must not run the model concurrently (memory on the Pi)."""
+    import threading
+    import time
+
+    state = {"now": 0, "peak": 0}
+
+    class SlowEngine:
+        def analyze_series(self, data, filename=None):
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+            time.sleep(0.05)
+            state["now"] -= 1
+            raise ValueError("stop here")
+
+    ctx = services.Ctx(db=None, store=None, engine=SlowEngine(), model_version="t")
+    def run():
+        with pytest.raises(services.UploadError):
+            services._analyse_into(ctx, "c", 1, b"x", "s.nii.gz")
+    ts = [threading.Thread(target=run) for _ in range(4)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert state["peak"] == 1
+
+
+def test_engine_reads_series_settings_from_the_bundle(tmp_path):
+    eng = SliceEngine()
+    eng.meta = {"series": {"per_plane": 4, "rule": "max", "k": 1, "key_slices": 2}}
+    sr = eng.analyze_series(nifti_bytes(tmp_path), "s.nii.gz", with_overlays=False)["series"]
+    assert sr["rule"] == "max" and len(sr["key_slices"]) == 2 and sr["n_slices"] <= 12
+
+
+def test_make_bundle_records_validated_series_settings(tmp_path, monkeypatch):
+    import json
+    import sys
+
+    from training import make_bundle
+    exp = tmp_path / "run" / "export"
+    (exp / "calib_model_int8").mkdir(parents=True)
+    for f in ("model_int8.onnx", "head.npz", "calib_model_int8/calibration.json", "calib_model_int8/ood.npz"):
+        (exp / f).write_bytes(b"x")
+    (exp / "bundle.json").write_text(json.dumps({"class_names": CLASSES}))
+    rep = tmp_path / "report.json"
+    rep.write_text(json.dumps({"rule": "topk", "k": 5, "per_plane": 12, "bundle": "b", "gate": {"all": True}}))
+    monkeypatch.setattr(sys, "argv", ["make_bundle", "--run", str(tmp_path / "run"), "--out", str(tmp_path / "out"),
+                                      "--no-deep-explain", "--series-report", str(rep)])
+    make_bundle.main()
+    meta = json.loads((tmp_path / "out" / "bundle.json").read_text())
+    assert meta["series"]["rule"] == "topk" and meta["series"]["per_plane"] == 12 and meta["series"]["validated"]
