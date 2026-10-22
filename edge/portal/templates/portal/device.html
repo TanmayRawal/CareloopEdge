@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Device · {{ brand }}</title>
+  <link rel="stylesheet" href="{{ asset('portal.css') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+</head>
+<body>
+{% include "portal/_icons.html" %}
+<div class="device" id="device">
+  <header class="dv-top">
+    <span class="pbrand">{% include "portal/_logo.html" %}
+      <span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
+    <div class="dv-clock"><b id="dv-time">{{ fmt_clock(now) }}</b><span id="dv-date">{{ fmt_long(now) }}</span></div>
+  </header>
+
+  <main class="dv-main">
+    <div class="dv-col">
+      <section class="dv-panel" aria-label="Device status">
+        <h2>Brain MRI AI · on this device</h2>
+        <div class="dv-status">
+          <div class="dv-row"><span class="dv-dot {{ 'ok' if s.verified else 'warn' }}"></span><span class="lbl">Model</span>
+            <span class="val">{{ s.model_version }} · {{ 'signature verified' if s.verified else 'unsigned dev bundle' }}</span></div>
+          <div class="dv-row"><span class="dv-dot ok"></span><span class="lbl">Analysis</span>
+            <span class="val">{{ 'Whole study + single image' if s.whole_study else 'Single image' }}{% if s.last_analysis %} · last {{ s.last_analysis }} ago{% endif %}</span></div>
+          <div class="dv-row"><span class="dv-dot {{ 'ok' if s.llm else 'warn' }}"></span><span class="lbl">Report assistant</span>
+            <span class="val">{{ 'Online' if s.llm else 'Offline' }}</span></div>
+          <div class="dv-row"><span class="dv-dot {{ s.temp_level or '' }}"></span><span class="lbl">Temperature{% if s.load is not none %} · load{% endif %}</span>
+            <span class="val">{{ '%.0f'|format(s.temp_c) ~ ' °C' if s.temp_c is not none else '—' }}{% if s.load is not none %} · {{ s.load }} / {{ s.cpus }}{% endif %}</span></div>
+          <div class="dv-row"><span class="dv-dot {{ 'err' if s.disk_pct_used >= 90 else 'warn' if s.disk_pct_used >= 80 else 'ok' }}"></span><span class="lbl">Storage</span>
+            <span class="val">{{ s.disk_free }} free</span></div>
+        </div>
+      </section>
+      <section class="dv-panel" aria-label="Connect">
+        <h2>Open on a phone or laptop</h2>
+        <div class="dv-connect">
+          {% if s.qr %}<div class="dv-qr" aria-hidden="true">{{ s.qr|safe }}</div>{% endif %}
+          <div class="dv-urls">{% for u in s.urls %}<code>{{ u }}</code>{% else %}<code>https://{{ s.host }}.local</code>{% endfor %}
+            <span>Same Wi-Fi / clinic network. Patients see only their signed reports.</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="dv-col">
+      <nav class="dv-actions" aria-label="Start">
+        <a class="dv-btn" href="{{ url_for('auth.home') if me else url_for('auth.login', **{'as': 'staff'}) }}"><svg class="ic"><use href="#i-steth"/></svg>
+          <span>{{ 'Open worklist' if me and me.role != 'patient' else 'Clinician sign-in' }}<small>Review studies, sign reports</small></span></a>
+        <a class="dv-btn alt" href="{{ url_for('auth.login') }}"><svg class="ic"><use href="#i-upload"/></svg>
+          <span>Patient<small>Upload a scan · see your report</small></span></a>
+      </nav>
+      <p class="dv-note">Decision support for radiologists: scans are analysed here, on this device, with no cloud AI.
+        Every result is reviewed and signed by a doctor.</p>
+    </div>
+  </main>
+
+  <footer class="dv-foot"><span>{{ s.host }}</span><span>Up {{ s.uptime }}</span><span>{{ s.precision|upper }} on CPU</span>
+    <span>Research prototype · not a medical device</span></footer>
+</div>
+<script src="{{ asset('portal.js') }}"></script>
+</body>
+</html>

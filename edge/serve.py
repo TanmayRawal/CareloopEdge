@@ -38,7 +38,8 @@ def build(bundle_dir: str | None = None, model: str = "mri", threads: int = 4,
         engine = Engine(files, threads=threads)
     meta = engine.meta
     info = {"class_names": meta["class_names"], "precision": meta.get("precision"), "version": version,
-            "metrics": meta.get("metrics", {})}
+            "metrics": meta.get("metrics", {}), "whole_study": bool(meta.get("series")),
+            "verified": bundle_dir is None}      # load_bundle() only returns a signature-verified bundle
     data_dir = data_dir or os.environ.get("NEUROEDGE_PORTAL_DATA", PI_DATA)
     key_file = key_file or os.environ.get("NEUROEDGE_PORTAL_KEY", PI_KEY)
     from edge.portal import mailer, notify

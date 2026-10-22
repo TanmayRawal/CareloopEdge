@@ -136,8 +136,8 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
                            login_limiter=auth.RateLimiter(20, 60), register_limiter=auth.RateLimiter(5, 3600),
                            booking_limiter=auth.RateLimiter(20, 3600), reset_limiter=auth.RateLimiter(5, 3600),
                            export_limiter=auth.RateLimiter(3, 3600), token_limiter=auth.RateLimiter(30, 600))
-    from edge.portal.views import admin, auth as auth_views, care, case, doctor, notifications, patient, public
-    for mod in (auth_views, case, patient, doctor, admin, notifications, care, public):
+    from edge.portal.views import admin, auth as auth_views, care, case, device, doctor, notifications, patient, public
+    for mod in (auth_views, case, patient, doctor, admin, notifications, care, public, device):
         app.register_blueprint(mod.blueprint(deps))
 
     @app.errorhandler(413)
