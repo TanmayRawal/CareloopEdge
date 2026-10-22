@@ -22,6 +22,7 @@
     const lead = $("#login-lead");
     if (lead) lead.textContent = staff ? "Radiologists and administrators." : "Access your reports and scans.";
   }));
+  if (new URLSearchParams(location.search).get("as") === "staff") tabs.find(t => t.dataset.role === "staff")?.click();
 
   // ------------------------------------------------------------------ clickable table rows
   $$("tr.link[data-href]").forEach(tr => tr.addEventListener("click", ev => {
@@ -51,6 +52,34 @@
     $("#upload-form")?.addEventListener("submit", () => {
       const b = $("#submit"); b.disabled = true; b.textContent = "Uploading securely…";
     });
+  }
+
+  // ------------------------------------------------------------------ upload progress (a whole study takes 10-30 s)
+  $$('form[enctype="multipart/form-data"]').forEach(f => f.addEventListener("submit", () => {
+    const files = $$('input[type=file][name="scan"]', f).flatMap(i => Array.from(i.files));
+    if (!files.length) return;
+    const series = files.length > 1 || files.some(x => /\.(zip|nii|nii\.gz)$/i.test(x.name));
+    $("#busy-t").textContent = series ? "Uploading and analysing the study…" : "Uploading and analysing the image…";
+    if (!series) $("#busy-d").textContent = "This takes a few seconds. Please keep this page open.";
+    $("#busy")?.classList.add("on");
+  }));
+
+  // ------------------------------------------------------------------ device home + kiosk
+  const clock = $("#dv-time");
+  if (clock) {
+    const tick = () => {
+      const d = new Date();
+      clock.textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      $("#dv-date").textContent = d.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    };
+    tick(); setInterval(tick, 10000);
+    setTimeout(() => location.reload(), 60000);           // status (temperature, last analysis) stays current
+  }
+  if (document.body.classList.contains("kiosk")) {         // the device's own screen: back to device home when idle
+    let idle;
+    const arm = () => { clearTimeout(idle); idle = setTimeout(() => { location.href = "/device"; }, 3 * 60 * 1000); };
+    ["pointerdown", "keydown", "wheel", "touchstart"].forEach(e => document.addEventListener(e, arm, { passive: true }));
+    arm();
   }
 
   // ------------------------------------------------------------------ confirmations for destructive actions
@@ -161,8 +190,42 @@
   };
   $$("#slice-bars span").forEach(b => { b.style.height = b.dataset.h + "%"; });   // CSP: no inline style attributes
   if (series) render();
+
+  // touch: two fingers pinch-zoom; one finger (not zoomed) swipes up/down through the slices of a series
+  const touches = new Map();
+  let pinch = null, swipeY = null;
+  const SWIPE_PX = 24;
+  stage.addEventListener("pointerdown", ev => {
+    if (ev.pointerType === "mouse") return;
+    touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (touches.size === 2) {
+      const [a, b] = [...touches.values()];
+      pinch = Math.hypot(a.x - b.x, a.y - b.y); drag = null; swipeY = null;
+    } else if (scale === 1 && series) swipeY = ev.clientY;
+  });
+  stage.addEventListener("pointermove", ev => {
+    if (!touches.has(ev.pointerId)) return;
+    touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (touches.size === 2 && pinch) {
+      const [a, b] = [...touches.values()], dist = Math.hypot(a.x - b.x, a.y - b.y), r = stage.getBoundingClientRect();
+      zoomAt(dist / pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); pinch = dist;
+    } else if (swipeY !== null && Math.abs(ev.clientY - swipeY) >= SWIPE_PX) {
+      const steps = Math.trunc((ev.clientY - swipeY) / SWIPE_PX);
+      setSlice(slice - steps); swipeY += steps * SWIPE_PX;      // finger up = next slice down the stack
+    }
+  });
+  ["pointerup", "pointercancel"].forEach(e => stage.addEventListener(e, ev => {
+    touches.delete(ev.pointerId);
+    if (touches.size < 2) pinch = null;
+    if (!touches.size) swipeY = null;
+  }));
   modes.forEach(b => b.addEventListener("click", () => setMode(b)));
-  const toggleExpand = () => { review.classList.toggle("expanded"); };
+  const toggleExpand = () => { document.body.classList.toggle("case-expanded", review.classList.toggle("expanded")); };
+  // compact screens: the case page is three tabs (Image | AI findings | Report); on large screens all show at once
+  $$("#case-tabs button").forEach(b => b.addEventListener("click", () => {
+    $$("#case-tabs button").forEach(t => { t.classList.toggle("on", t === b); t.setAttribute("aria-selected", t === b); });
+    review.dataset.tab = b.dataset.tab;
+  }));
   $$(".v-tool").forEach(b => b.addEventListener("click", () => {
     ({ in: () => zoomAt(1.25), out: () => zoomAt(0.8), reset, expand: toggleExpand })[b.dataset.act]?.();
   }));

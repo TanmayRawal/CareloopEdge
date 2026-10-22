@@ -33,6 +33,7 @@ mdurl==0.1.2
 model-signing==1.1.1
 mpmath==1.3.0
 networkx==3.7
+nibabel==5.4.2
 numpy==2.5.3
 onnxruntime==1.30.0
 opencv-python-headless==5.0.0.93
@@ -56,6 +57,7 @@ rich==15.0.0
 safetensors==0.8.0
 scipy==1.18.1
 securesystemslib==1.5.1
+segno==1.6.6
 sigstore==4.5.0
 sigstore-models==0.0.6
 sigstore-rekor-types==0.0.18

@@ -20,9 +20,14 @@
   </div>
 </div>
 
-<div class="review" id="review" data-cid="{{ case.id }}">
+<nav class="case-tabs" id="case-tabs" role="tablist" aria-label="Case sections">
+  <button type="button" class="on" data-tab="image" role="tab"><svg class="ic sm"><use href="#i-image"/></svg>Image</button>
+  <button type="button" data-tab="findings" role="tab"><svg class="ic sm"><use href="#i-chart"/></svg>AI findings</button>
+  <button type="button" data-tab="report" role="tab"><svg class="ic sm"><use href="#i-file"/></svg>Report</button>
+</nav>
+<div class="review" id="review" data-cid="{{ case.id }}" data-tab="image">
   <!-- ====================================================== viewer -->
-  <section class="viewer" aria-label="Image viewer">
+  <section class="viewer" aria-label="Image viewer" data-pane="image">
     <div class="v-bar">
       <div class="v-modes" role="tablist" aria-label="Display">
         <button type="button" class="on" data-kind="cam_{{ att }}" title="Grad-CAM (1)">Grad-CAM</button>
@@ -65,7 +70,7 @@
 
   <!-- ====================================================== side panel -->
   <div class="side">
-    <section class="card">
+    <section class="card" data-pane="findings">
       <div class="card-h"><h2>AI findings</h2></div>
       <div class="card-b">
       {% if not r %}
@@ -114,7 +119,7 @@
       </details>
     </section>
 
-    <section class="card">
+    <section class="card" data-pane="report">
       <div class="card-h"><h2>{{ 'Amend report' if latest else 'Report' }}</h2>{% if latest %}<span class="tag">v{{ latest.version }} signed</span>{% endif %}</div>
       <div class="card-b">
         {% if case.patient_note %}<div class="note-box"><b>Patient's note.</b> {{ case.patient_note }}</div><div class="section-label"></div>{% endif %}
@@ -182,7 +187,7 @@
     </section>
 
     {% if plan %}
-    <section class="card">
+    <section class="card" data-pane="report">
       <div class="card-h"><h2>Follow-up</h2><span class="pill pl-{{ plan.status }}">{{ plan_status_text[plan.status] }}</span></div>
       <div class="card-b tight"><b>{{ plan_text[plan.kind] }}</b> · due {{ fmt_iso(plan.due_date) }}
         {% if plan.note %}<div class="small muted">{{ plan.note }}</div>{% endif %}
@@ -191,7 +196,7 @@
     </section>
     {% endif %}
     {% if appt %}
-    <section class="card">
+    <section class="card" data-pane="report">
       <div class="card-h"><h2>Consultation</h2><span class="pill a-{{ appt.status }}">{{ appt_text[appt.status] }}</span></div>
       <div class="card-b tight"><b>{{ fmt_long(appt.start_ts) }}, {{ fmt_clock(appt.start_ts) }}</b>
         <div class="small muted">with {{ appt.doctor_name }} · {{ appt.room or clinic }}</div>
@@ -200,7 +205,7 @@
     </section>
     {% endif %}
     {% if history or reports|length > 1 %}
-    <section class="card">
+    <section class="card" data-pane="report">
       <div class="card-h"><h2>History</h2></div>
       <div class="card-b tight">
         <ul class="hist">

@@ -32,7 +32,7 @@
   {% if not items %}
     <div class="empty"><svg class="ic"><use href="#i-inbox"/></svg><h2>No studies here</h2><p>{{ 'Nothing matches your search.' if q else 'New uploads will appear automatically.' }}</p></div>
   {% else %}
-  <table class="table responsive">
+  <table class="table responsive worklist">
     <thead><tr><th>Priority</th><th>Patient</th><th>Received</th><th>AI finding</th><th>Flags</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for it in items %}{% set c = it.case %}{% set r = it.ai %}{% set age = age_from_dob(c.patient_dob) %}

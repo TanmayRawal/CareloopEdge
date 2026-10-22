@@ -10,6 +10,8 @@ model-signing        # OpenSSF Model Signing: verifies the publisher signature o
 flask
 argon2-cffi          # portal password hashing (argon2id)
 gunicorn
+nibabel              # whole-study upload: NIfTI volumes (neuroedge/volume.py)
+segno                # device home page: QR code with the portal address (pure Python)
 # Deep Explain mode only (FP32 LayerCAM, implemented in edge/deep_explain.py without pytorch-grad-cam):
 #   torch + torchvision (CPU aarch64 wheels from download.pytorch.org/whl/cpu) and timm
 #   -> install_pi.sh --with-deep-explain
