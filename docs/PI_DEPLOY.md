@@ -205,7 +205,8 @@ sudo reboot
 * After the reboot, the screen logs in as the locked-down user `kiosk` (no password, no sudo, no SSH) and opens
   `https://localhost/device?kiosk=1` full-screen. The portal CA is trusted for that user, so there is no warning.
 * The on-screen keyboard (squeekboard) appears when a text field is tapped; a USB keyboard also works.
-* Settings (URL, rotation) are in `/etc/neuroedge/kiosk.env`; after editing, run `sudo systemctl restart getty@tty1`.
+* Settings (URL, rotation) are in `/etc/neuroedge/kiosk.env`; reboot after editing. On a desktop image the kiosk logs in through LightDM; on Lite, through the console on tty1.
+* Pi 5 + original 7" display: the kit's 15-pin ribbon does not fit the Pi 5; use the Raspberry Pi 5 display cable (22-pin to 15-pin). Power the adapter board from the Pi's 5 V / GND pins (jumper wires in the kit).
 * If the panel stays black, check `kmsprint` and the cable orientation, and that `/boot/firmware/config.txt` has the
   overlay line.
 
