@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="{{ asset('portal.css') }}">
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
 </head>
-<body class="{{ 'kiosk' if request.cookies.get('ne_kiosk') == '1' }}">
+<body class="{{ 'theme-dark' if me and me.role in ('doctor', 'admin') }}{{ ' kiosk' if request.cookies.get('ne_kiosk') == '1' }}">
 {% include "portal/_icons.html" %}
 {% macro flashes() %}
   {% with msgs = get_flashed_messages(with_categories=true) %}

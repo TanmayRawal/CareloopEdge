@@ -1,4 +1,6 @@
-Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+IBM Plex Sans and IBM Plex Mono: Copyright (c) IBM Corp., with Reserved Font Name "Plex". Licensed under the SIL Open Font License 1.1 (below). Files from the Fontsource packages @fontsource-variable/ibm-plex-sans and @fontsource/ibm-plex-mono 5.2.5.
+
+Google Inc.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
