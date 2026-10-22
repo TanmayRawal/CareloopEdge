@@ -2,11 +2,18 @@
 # NeuroEdge installer for Raspberry Pi 5 (Raspberry Pi OS 64-bit, Bookworm or newer). Run from the repo root:
 #
 #   sudo bash edge/install_pi.sh [--with-deep-explain] [--gguf FILE] [--ca-cert FILE] [--dev-bundle DIR]
+#                                [--kiosk] [--display td1|td2|hdmi] [--rotate 0|90|180|270]
 #
 #   --with-deep-explain  also install CPU PyTorch + timm (research tools only; the v1 portal shows Grad-CAM + lesion)
 #   --gguf FILE          use a local copy of Qwen3-1.7B-Q4_K_M.gguf instead of downloading it (fully offline install)
 #   --ca-cert FILE       trust this CA for the model registry (e.g. Caddy's internal root for a LAN server)
 #   --dev-bundle DIR     DEVELOPMENT ONLY: serve a plaintext bundle directory (no server, no encryption at rest)
+#   --kiosk              the Pi's own screen shows the portal full-screen: device home (/device) -> portal, touch
+#                        friendly, on-screen keyboard. Runs as a locked-down user "kiosk" (no password, no sudo).
+#   --display MODEL      enable the panel driver in /boot/firmware/config.txt (reboot needed):
+#                        td1 = original 7" Touch Display (800x480; Pi 5 needs the 22-to-15-pin display cable),
+#                        td2 = Touch Display 2 (720x1280 portrait panel; use --rotate 90 for landscape), hdmi = none
+#   --rotate DEG         rotate the kiosk screen (e.g. 90 for Touch Display 2 in landscape)
 #
 # Layout: code /opt/neuroedge/src, venv /opt/neuroedge/venv, llama.cpp /opt/neuroedge/bin, LLM /opt/neuroedge/llm,
 # device state (keys, encrypted bundles) /var/lib/neuroedge, config /etc/neuroedge. Services run as user "neuroedge".
@@ -23,13 +30,16 @@ GGUF_NAME=Qwen3-1.7B-Q4_K_M.gguf
 GGUF_URL=https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/$GGUF_NAME
 GGUF_SHA256=b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
 
-DEEP=0; GGUF_SRC=""; CA_CERT=""; DEV_BUNDLE=""
+DEEP=0; GGUF_SRC=""; CA_CERT=""; DEV_BUNDLE=""; KIOSK=0; DISPLAY_MODEL=""; ROTATE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-deep-explain) DEEP=1; shift ;;
     --gguf) GGUF_SRC="$2"; shift 2 ;;
     --ca-cert) CA_CERT="$2"; shift 2 ;;
     --dev-bundle) DEV_BUNDLE="$2"; shift 2 ;;
+    --kiosk) KIOSK=1; shift ;;
+    --display) DISPLAY_MODEL="$2"; shift 2 ;;
+    --rotate) ROTATE="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -200,6 +210,100 @@ exec openssl x509 -in /srv/neuroedge-public/neuroedge-ca.crt -noout -subject -fi
 EOF
 chmod 755 /usr/local/bin/neuroedge-ca
 
+if [[ -n "$DISPLAY_MODEL" ]]; then
+  say "Display driver: $DISPLAY_MODEL"
+  CFG=/boot/firmware/config.txt
+  case "$DISPLAY_MODEL" in
+    td1) OVL="dtoverlay=vc4-kms-dsi-7inch" ;;
+    td2) OVL="dtoverlay=vc4-kms-dsi-ili9881-7inch" ;;
+    hdmi) OVL="" ;;
+    *) echo "unknown --display $DISPLAY_MODEL (td1, td2, hdmi)" >&2; exit 2 ;;
+  esac
+  if [[ -n "$OVL" ]] && ! grep -q "^$OVL" "$CFG"; then
+    printf '
+# NeuroEdge kiosk display
+%s
+' "$OVL" >> "$CFG"
+    echo "Added '$OVL' to $CFG: reboot to activate the panel."
+  fi
+fi
+
+if [[ $KIOSK -eq 1 ]]; then
+  say "Kiosk: device screen (labwc + Chromium + on-screen keyboard, user 'kiosk')"
+  # Minimal Wayland session, no desktop. Chromium is 'chromium' on Debian 13 / Pi OS Trixie, 'chromium-browser' before.
+  CHROMIUM_PKG=chromium; apt-cache show chromium >/dev/null 2>&1 || CHROMIUM_PKG=chromium-browser
+  apt-get install -y -qq labwc "$CHROMIUM_PKG" squeekboard wlr-randr libnss3-tools fonts-dejavu-core
+  CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser)"
+  # A user with no password, no sudo and no shell access over SSH; only the physical screen logs it in.
+  id kiosk &>/dev/null || useradd --create-home --shell /bin/bash --groups video,render,input kiosk
+  passwd -l kiosk >/dev/null
+  KH=/home/kiosk
+  install -d -o kiosk -g kiosk -m 700 "$KH/.config" "$KH/.config/labwc" "$KH/.pki" "$KH/.pki/nssdb"
+  # Trust the portal's CA so https://localhost has no warning (cookies stay Secure / __Host-, through Caddy).
+  if [[ -f "$CA_ROOT" ]]; then
+    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -N --empty-password 2>/dev/null || true
+    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -D -n neuroedge-portal 2>/dev/null || true
+    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -A -t "C,," -n neuroedge-portal -i "$CA_ROOT"
+  fi
+  [[ -f "$ETC/kiosk.env" ]] || cat > "$ETC/kiosk.env" <<EOF
+# NeuroEdge kiosk (the Pi's own screen). Edit, then: sudo systemctl restart getty@tty1
+KIOSK_URL=https://localhost/device?kiosk=1
+KIOSK_ROTATE=$ROTATE
+EOF
+  chmod 644 "$ETC/kiosk.env"
+  # labwc: no key bindings (no terminal / menu escape from the kiosk), no window decorations
+  cat > "$KH/.config/labwc/rc.xml" <<'EOF'
+<?xml version="1.0"?>
+<labwc_config>
+  <core><decoration>client</decoration></core>
+  <keyboard></keyboard>
+  <mouse><default/></mouse>
+</labwc_config>
+EOF
+  printf '<?xml version="1.0"?>
+<openbox_menu></openbox_menu>
+' > "$KH/.config/labwc/menu.xml"
+  cat > "$KH/.config/labwc/autostart" <<'EOF'
+. /etc/neuroedge/kiosk.env
+if [ "${KIOSK_ROTATE:-0}" != "0" ]; then
+  for o in $(wlr-randr | awk '/^[^ ]/ {print $1}'); do wlr-randr --output "$o" --transform "$KIOSK_ROTATE"; done
+fi
+squeekboard &                       # on-screen keyboard: appears when a text field is focused (text-input-v3)
+/usr/local/bin/neuroedge-kiosk-browser &
+EOF
+  cat > /usr/local/bin/neuroedge-kiosk-browser <<EOF
+#!/bin/sh
+# Full-screen browser for the device screen; restarted if it ever exits. Waits for the portal first.
+. $ETC/kiosk.env
+until curl -sk -o /dev/null https://localhost/device; do sleep 2; done
+while true; do
+  $CHROMIUM_BIN --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --disable-features=Translate \
+    --overscroll-history-navigation=0 --ozone-platform=wayland \
+    --enable-wayland-ime --wayland-text-input-version=3 --password-store=basic "\$KIOSK_URL"
+  sleep 2
+done
+EOF
+  chmod 755 /usr/local/bin/neuroedge-kiosk-browser
+  # Start labwc on tty1 after autologin
+  cat > "$KH/.bash_profile" <<'EOF'
+if [ "$(tty)" = "/dev/tty1" ] && [ -z "$WAYLAND_DISPLAY" ]; then exec labwc >/tmp/labwc.log 2>&1; fi
+EOF
+  chown -R kiosk:kiosk "$KH/.config" "$KH/.bash_profile"
+  mkdir -p /etc/systemd/system/getty@tty1.service.d
+  printf '[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin kiosk --noclear %%I $TERM
+'     > /etc/systemd/system/getty@tty1.service.d/autologin.conf
+  # No SSH for the kiosk account
+  if [[ -d /etc/ssh/sshd_config.d ]]; then
+    printf 'DenyUsers kiosk
+' > /etc/ssh/sshd_config.d/neuroedge-kiosk.conf
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+  fi
+  systemctl daemon-reload
+  systemctl restart getty@tty1
+fi
+
 IP="$(hostname -I | awk '{print $1}')"
 cat <<EOF
 
@@ -221,4 +325,5 @@ Then on the Pi:
   sudo neuroedge-sync pull --model mri       # downloads, trial-decrypts and verifies; the web app then starts itself
   sudo neuroedge-sync status
 Benchmark:  cd $APP/src && sudo -u neuroedge env NEUROEDGE_HOME=$STATE $APP/venv/bin/python -m edge.bench --images <dir>
+Kiosk:      sudo bash edge/install_pi.sh --kiosk [--display td1|td2] [--rotate 90]   (device screen shows /device)
 EOF

@@ -176,6 +176,65 @@ sudo neuroedge-portal smtp-test --to you@hospital.org
   appears on **Admin → Users**. Closing the account stops sign-in and messages; clinical records are kept as
   the law requires.
 
+## 5b. Showcase kiosk (the Pi's own 7" screen)
+The screen shows a **device home** page (`/device`) with:
+* the model version and signature check, and engine / assistant status;
+* temperature and storage;
+* the portal address with a QR code for phones;
+* two touch buttons, Clinician and Patient.
+
+It shows no patient data. Every portal page gets a "device home" button, and the screen returns home after 3 idle
+minutes. The portal adapts to 800×480, 1024×600 and 1280×720 (tabs on the case page, touch-sized controls).
+
+**Hardware:**
+* a case that fits a Pi 5 **with the Active Cooler**;
+* the 27 W supply (the screen draws from the Pi).
+
+| Screen | Cable on a Pi 5 | Installer option |
+|---|---|---|
+| Original 7" Touch Display (800×480) | Raspberry Pi 5 display cable (22-pin to 15-pin) | `--display td1` |
+| Touch Display 2 (720×1280 portrait panel) | included | `--display td2 --rotate 90` |
+| 7" HDMI (1024×600) | micro-HDMI to HDMI | `--display hdmi` |
+
+```bash
+sudo bash edge/install_pi.sh --kiosk --display td1
+```
+```bash
+sudo reboot
+```
+* After the reboot, the screen logs in as the locked-down user `kiosk` (no password, no sudo, no SSH) and opens
+  `https://localhost/device?kiosk=1` full-screen. The portal CA is trusted for that user, so there is no warning.
+* The on-screen keyboard (squeekboard) appears when a text field is tapped; a USB keyboard also works.
+* Settings (URL, rotation) are in `/etc/neuroedge/kiosk.env`; after editing, run `sudo systemctl restart getty@tty1`.
+* If the panel stays black, check `kmsprint` and the cable orientation, and that `/boot/firmware/config.txt` has the
+  overlay line.
+
+## 5c. Upgrading to `mri/0.3.0` (whole-study upload)
+1. **Back up first:** the portal data, and the installed code for a rollback.
+   ```bash
+   sudo neuroedge-portal backup --dest ~/backup-pre-0.3.0
+   ```
+   ```bash
+   sudo tar -czf ~/backup-pre-0.3.0/code.tgz -C /opt/neuroedge src
+   ```
+   Then copy the backup folder to another machine (the portal backup is encrypted).
+2. Copy the new code (section 2) and re-run the installer, adding `--kiosk` if wanted. This also installs `nibabel`
+   (NIfTI upload) and `segno` (QR code).
+3. Pull and verify the new model:
+   ```bash
+   sudo neuroedge-sync pull --model mri
+   ```
+   ```bash
+   sudo neuroedge-sync status
+   ```
+   Expect `mri: version 0.3.0 verified OK`; the web app restarts by itself.
+4. **Benchmark whole studies** (target under 25 s per study):
+   ```bash
+   cd /opt/neuroedge/src && sudo -u neuroedge env NEUROEDGE_HOME=/var/lib/neuroedge /opt/neuroedge/venv/bin/python -m edge.bench --series ~/test_uploads --llm 0
+   ```
+5. **Rollback:** restore the code with `sudo tar -xzf ~/backup-pre-0.3.0/code.tgz -C /opt/neuroedge`, pull `0.2.0`
+   again with `neuroedge-sync`, and run `sudo systemctl restart neuroedge-web`.
+
 ## 6. Benchmark (results go into docs/FINDINGS.md)
 ```bash
 cd /opt/neuroedge/src

@@ -1,7 +1,31 @@
-# Model card: NeuroEdge MRI v1 (registry version `mri/0.2.0`)
+# Model card: NeuroEdge MRI (current: registry version `mri/0.3.0`)
 
 > Research prototype on public data, not a medical device. In the portal, every result is reviewed and signed
 > by a doctor before a patient sees anything; patients never see AI output.
+
+## `mri/0.3.0` (current): whole-study model
+* **What changed:** same architecture, preprocessing (same fingerprint) and training recipe as `mri/0.2.0` below. The
+  training data adds slices from 3D patient studies (BraTS 2023 GLI and MEN, 300 each; NHNN pituitary, 60), three
+  planes, with tumour-free slices of the same scans as "no tumor". Only train/val/cal patients are used; test patients
+  are held out by patient.
+* **Whole-study mode:** 36 slices (12 per plane) -> per-slice INT8 analysis -> mean of the 5 slices most suggestive
+  of tumour (`topk`, chosen on calibration patients) -> one answer per study; Grad-CAM and the lesion outline for the 3
+  key slices. Single images still work as before.
+* **Held-out patients (pre-registered targets):**
+  * tumour-type macro-F1: 0.98 (target ≥ 0.85; v1: 0.71);
+  * slice tumour AUROC: 0.95 (target ≥ 0.90; v1: 0.72);
+  * IXI healthy false-alarm rate: 5% (target ≤ 10%; v1: 23%);
+  * accuracy per dataset: glioma 100% (76), meningioma 91% (68), pituitary 100% (15), healthy 95% (380).
+* **2D test sets:** BRISC macro-F1 0.919 (v1: 0.944); INT8 vs FP32 within 1 point (McNemar p = 1.0).
+* **Limits:**
+  * one training seed;
+  * the test patients come from the same datasets as the training patients; the external whole-study test
+    (BraTS-Africa) is pending;
+  * IXI is non-contrast T1;
+  * the 95% set is calibrated on slices, not on patients;
+  * BraTS data is CC BY-NC: research and non-commercial use only.
+
+The sections below describe the shared architecture and the single-slice `mri/0.2.0` release.
 
 ## Model
 | | |
