@@ -22,6 +22,9 @@ def main() -> None:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--no-deep-explain", dest="deep_explain", action="store_false",
                     help="omit FP32 weights (smaller bundle; no on-device LayerCAM)")
+    ap.add_argument("--series-report", type=Path,
+                    help="report.json of training/evaluate_volumes.py: the validated whole-study settings "
+                         "(aggregation rule, k, slices per plane) go into bundle.json for Engine.analyze_series")
     args = ap.parse_args()
     exp = args.run / "export"
     args.out.mkdir(parents=True, exist_ok=True)
@@ -40,6 +43,10 @@ def main() -> None:
         torch.save(ckpt["state_dict"], args.out / "model_fp32.pt")
     meta = json.loads((exp / "bundle.json").read_text())
     meta["precision"] = args.precision
+    if args.series_report:
+        rep = json.loads(args.series_report.read_text())
+        meta["series"] = {"rule": rep["rule"], "k": int(rep["k"]), "per_plane": int(rep["per_plane"]), "key_slices": 3,
+                          "validated": {"gate": rep["gate"], "bundle": rep["bundle"]}}
     if (exp / "quant_report.json").exists() and args.precision == "int8":
         q = json.loads((exp / "quant_report.json").read_text())
         meta["quantization"] = {"test": q["test"], "acceptance": q["acceptance"]}

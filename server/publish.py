@@ -58,11 +58,25 @@ def build_payload(bundle_dir: Path, name: str, version: str, signing_key: Path, 
         "card": {"task": meta.get("task"), "classes": meta.get("class_names"), "precision": meta.get("precision"),
                  "metrics": meta.get("metrics"), "quantization": meta.get("quantization", {}).get("acceptance"),
                  "intended_use": "Research and education only. Not a medical device; not for clinical decisions.",
-                 "limitations": ["2D single-slice T1-weighted MRI only", "trained on public data (BRISC 2025)",
-                                 "performance drops under scanner/population shift (see external metrics)"]},
+                 "limitations": _limitations(meta)},
     }
+    if meta.get("series"):
+        manifest["card"]["whole_study"] = meta["series"]
     return {"manifest": _finite(manifest), "signature_b64": base64.b64encode(signature).decode(),
             "wrapped_key": wrapped.to_dict(), "blob_b64": base64.b64encode(blob).decode()}
+
+
+def _limitations(meta: dict) -> list[str]:
+    if not meta.get("series"):                      # single-slice bundles (mri/0.2.0 and earlier)
+        return ["2D single-slice T1-weighted MRI only", "trained on public data (BRISC 2025)",
+                "performance drops under scanner/population shift (see external metrics)"]
+    return ["T1 contrast-enhanced MRI: whole study (NIfTI / DICOM series) or a single 2D slice",
+            "trained on public data (BRISC 2025, BraTS 2023 GLI/MEN, NHNN pituitary); BraTS data is CC BY-NC: "
+            "research and non-commercial use only",
+            "whole-study targets met on held-out patients of the training datasets; one training seed; external "
+            "whole-study test (BraTS-Africa) pending",
+            "healthy-volunteer test set (IXI) is non-contrast T1; the 95% set is calibrated on slices, not patients",
+            "performance drops under scanner/population shift (see external metrics)"]
 
 
 def _request(url: str, payload: dict | None = None, token: str | None = None) -> dict:

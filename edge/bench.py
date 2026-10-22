@@ -1,13 +1,16 @@
 """Edge benchmark: what the Pi actually delivers (plan §6 targets), measured, not assumed.
 
   python -m edge.bench --images DIR [--bundle-dir D | --model mri] [--n 50] [--llm 3] [--out bench.json]
+  python -m edge.bench --series DIR [--bundle-dir D | --model mri] --llm 0      (whole studies)
 
 Measures, after a warm-up:
   analyze      end-to-end engine.analyze() per image (decode, preprocess, INT8 ONNX, exact Grad-CAM, lesion,
                conformal, OOD, overlays): median / p95 wall time and the engine's per-stage timings
   llm          one assistant narrative: tokens/s for prompt and generation from llama-server's own timings
   system       peak RSS, SoC temperature before/after, throttling flags (vcgencmd), CPU model
-Target: the full analysis (classifier + seg INT8, Grad-CAM, lesion, overlays) < 400 ms.
+  series       (--series) engine.analyze_series() per study: .nii/.nii.gz/.zip files and folders of DICOM files
+Targets: the full analysis (classifier + seg INT8, Grad-CAM, lesion, overlays) < 400 ms per image; a whole study
+(36 slices, key-slice overlays) < 25 s.
 Run on the Pi with the active cooler fitted; note the ambient temperature.
 """
 
@@ -114,9 +117,26 @@ def llm_bench(result: dict, url: str, runs: int) -> dict:
             "median_gen_tok_s": statistics.median(o["gen_tok_s"] for o in out)}
 
 
+def series_bench(eng, folder: Path) -> list[dict]:
+    """One timed engine.analyze_series() per study (as uploaded: file bytes, or the list of DICOM files)."""
+    studies = sorted(p for p in folder.iterdir() if (p.is_dir() and any(p.glob("*.dcm")))
+                     or p.name.lower().endswith((".nii", ".nii.gz", ".zip")))
+    out = []
+    for p in studies:
+        src = [f.read_bytes() for f in sorted(p.iterdir()) if f.is_file()] if p.is_dir() else p.read_bytes()
+        t = time.perf_counter()
+        res = eng.analyze_series(src, filename=None if p.is_dir() else p.name)
+        out.append({"study": p.name, "wall_s": round(time.perf_counter() - t, 2), "prediction": res["prediction"],
+                    "n_slices": res["series"]["n_slices"], "timings_ms": res["timings_ms"],
+                    "peak_rss_mb": peak_rss_mb()})
+        print(f"  {p.name}: {out[-1]['wall_s']} s -> {res['prediction']}", flush=True)
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--images", required=True, type=Path)
+    ap.add_argument("--images", type=Path)
+    ap.add_argument("--series", type=Path, help="folder of studies (.nii.gz / .zip files, DICOM sub-folders)")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--bundle-dir", help="plaintext bundle directory (development)")
     src.add_argument("--model", default="mri", help="enrolled model name (decrypted + verified in RAM)")
@@ -130,8 +150,10 @@ def main() -> None:
 
     from edge.engine import Engine
 
-    imgs = sorted(p for p in args.images.rglob("*") if p.suffix.lower() in EXTS)
-    if not imgs:
+    if not (args.images or args.series):
+        sys.exit("give --images and/or --series")
+    imgs = sorted(p for p in args.images.rglob("*") if p.suffix.lower() in EXTS) if args.images else []
+    if args.images and not imgs:
         sys.exit(f"no images in {args.images}")
     report = {"cpu": cpu_model(), "machine": platform.machine(), "python": platform.python_version(),
               "threads": args.threads, "temp_start_c": soc_temp_c(), "throttled_start": throttled()}
@@ -146,6 +168,14 @@ def main() -> None:
         report["model_version"] = version
     report["load_s"] = round(time.perf_counter() - t0, 2)
 
+    if args.series:
+        report["series"] = series_bench(eng, args.series)
+    if not imgs:
+        report.update(peak_rss_mb=peak_rss_mb(), temp_end_c=soc_temp_c(), throttled_end=throttled(),
+                      targets={"series_lt_s": 25})
+        args.out.write_text(json.dumps(report, indent=2))
+        print(json.dumps(report, indent=2))
+        return
     datas = [p.read_bytes() for p in imgs]
     for i in range(args.warmup):
         eng.analyze(datas[i % len(datas)], filename=imgs[i % len(imgs)].name)

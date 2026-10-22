@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import threading
 import time
 import zipfile
 from dataclasses import dataclass
@@ -24,6 +25,9 @@ SERIES_EXT = (".zip", ".nii", ".nii.gz")
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_SERIES = 200 * 1024 * 1024
 MAX_SERIES_FILES = 2000
+# One whole-study analysis at a time: a wide field-of-view volume needs ~1 GB at peak, and the Pi also runs the
+# LLM. A second series upload waits for the first (gunicorn timeout 180 s); single images are not queued.
+SERIES_LOCK = threading.Lock()
 REVIEW_FLAGS = {"unusual_image", "uncertain_prediction_set", "empty_prediction_set",
                 "explanation_outside_lesion", "classifier_segmenter_disagree"}
 
@@ -94,7 +98,8 @@ def _analyse_into(ctx: Ctx, cid: str, attempt: int, data: bytes, filename: str) 
     """Run the AI on an attempt, store the scan + overlays encrypted, record the result."""
     try:
         if is_series_name(filename):
-            res = ctx.engine.analyze_series(data, filename=filename)
+            with SERIES_LOCK:
+                res = ctx.engine.analyze_series(data, filename=filename)
         else:
             res = ctx.engine.analyze(data, filename=filename)
     except ValueError as e:                          # undecodable / unsupported content
