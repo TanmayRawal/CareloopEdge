@@ -219,7 +219,10 @@ if [[ -n "$DISPLAY_MODEL" ]]; then
     hdmi) OVL="" ;;
     *) echo "unknown --display $DISPLAY_MODEL (td1, td2, hdmi)" >&2; exit 2 ;;
   esac
-  if [[ -n "$OVL" ]] && ! grep -q "^$OVL" "$CFG"; then
+  # Raspberry Pi OS detects the official panels by itself (display_auto_detect=1); a second overlay can conflict.
+  if [[ -n "$OVL" ]] && grep -q '^display_auto_detect=1' "$CFG"; then
+    echo "display_auto_detect=1 is set: the official panel is detected automatically, no overlay added."
+  elif [[ -n "$OVL" ]] && ! grep -q "^$OVL" "$CFG"; then
     printf '
 # NeuroEdge kiosk display
 %s
@@ -246,7 +249,7 @@ if [[ $KIOSK -eq 1 ]]; then
     runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -A -t "C,," -n neuroedge-portal -i "$CA_ROOT"
   fi
   [[ -f "$ETC/kiosk.env" ]] || cat > "$ETC/kiosk.env" <<EOF
-# NeuroEdge kiosk (the Pi's own screen). Edit, then: sudo systemctl restart getty@tty1
+# NeuroEdge kiosk (the Pi's own screen). Edit, then reboot (or restart lightdm / getty@tty1).
 KIOSK_URL=https://localhost/device?kiosk=1
 KIOSK_ROTATE=$ROTATE
 EOF
@@ -289,11 +292,24 @@ EOF
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$WAYLAND_DISPLAY" ]; then exec labwc >/tmp/labwc.log 2>&1; fi
 EOF
   chown -R kiosk:kiosk "$KH/.config" "$KH/.bash_profile"
-  mkdir -p /etc/systemd/system/getty@tty1.service.d
-  printf '[Service]
+  if systemctl is-enabled lightdm >/dev/null 2>&1; then
+    # Desktop image (LightDM): log the kiosk user straight into a plain labwc session (our ~/.config/labwc).
+    mkdir -p /etc/lightdm/lightdm.conf.d
+    printf '[Seat:*]
+autologin-user=kiosk
+autologin-user-timeout=0
+autologin-session=labwc
+'       > /etc/lightdm/lightdm.conf.d/50-neuroedge-kiosk.conf
+    KIOSK_RESTART="systemctl restart lightdm"
+  else
+    # Lite image: autologin on tty1, ~/.bash_profile starts labwc
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    printf '[Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin kiosk --noclear %%I $TERM
-'     > /etc/systemd/system/getty@tty1.service.d/autologin.conf
+'       > /etc/systemd/system/getty@tty1.service.d/autologin.conf
+    KIOSK_RESTART="systemctl restart getty@tty1"
+  fi
   # No SSH for the kiosk account
   if [[ -d /etc/ssh/sshd_config.d ]]; then
     printf 'DenyUsers kiosk
@@ -301,7 +317,7 @@ ExecStart=-/sbin/agetty --autologin kiosk --noclear %%I $TERM
     systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
   fi
   systemctl daemon-reload
-  systemctl restart getty@tty1
+  $KIOSK_RESTART
 fi
 
 IP="$(hostname -I | awk '{print $1}')"
