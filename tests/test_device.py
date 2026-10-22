@@ -1,6 +1,8 @@
 """Device home page (the Pi's own screen): open without login, never shows patient data, and the kiosk cookie turns on
 the "device home" button in the portal pages."""
 
+import re
+
 import pytest
 
 pytest.importorskip("flask")
@@ -21,13 +23,17 @@ def test_device_page_is_public_and_has_no_patient_data(env):
     assert "unsigned dev bundle" in page                                             # stub model: not signature-verified
 
 
+def body_classes(page: str) -> set[str]:
+    return set(re.search(r'<body class="([^"]*)"', page).group(1).split())
+
+
 def test_kiosk_cookie_adds_device_home_button(env):
     c = env["app"].test_client()
     login(c, "doc@clinic.test")
-    assert 'class="kiosk"' not in c.get("/doctor/").get_data(as_text=True)
+    assert "kiosk" not in body_classes(c.get("/doctor/").get_data(as_text=True))
     r = c.get("/device?kiosk=1")
     assert "ne_kiosk=1" in r.headers["Set-Cookie"] and "HttpOnly" in r.headers["Set-Cookie"]
     page = c.get("/doctor/").get_data(as_text=True)
-    assert 'class="kiosk"' in page and 'href="/device"' in page
+    assert {"kiosk", "theme-dark"} <= body_classes(page) and 'href="/device"' in page
     c.get("/device?kiosk=0")
-    assert 'class="kiosk"' not in c.get("/doctor/").get_data(as_text=True)
+    assert "kiosk" not in body_classes(c.get("/doctor/").get_data(as_text=True))
