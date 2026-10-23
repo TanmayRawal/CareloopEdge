@@ -1,14 +1,168 @@
 {% extends "portal/base.html" %}
 {% block title %}Analytics{% endblock %}
+{% block content_class %}analytics{% endblock %}
+{% macro rate(r) %}{% if r.p is not none %}{{ '%.0f'|format(100 * r.p) }}%{% else %}—{% endif %}{% endmacro %}
+{% macro frac(r) %}{% if r.d %}<span class="k-sub num">{{ r.n }} of {{ r.d }}</span>{% else %}<span class="k-sub">no data in period</span>{% endif %}{% endmacro %}
+{% macro num(x, unit='', fmt='%.1f') %}{% if x is not none %}{{ fmt|format(x) }}{% if unit %}<small class="unit"> {{ unit }}</small>{% endif %}{% else %}—{% endif %}{% endmacro %}
+{% macro bar(n, max_) %}<svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="10"/>{% if n %}<rect class="fill" width="{{ 100 * n / (max_ or 1) }}" height="10"/>{% endif %}</svg>{% endmacro %}
 {% block content %}
-<div class="page-head"><div><h1>Analytics</h1></div></div>
+<div class="page-head">
+  <div><h1>Analytics</h1>
+    <p>Care-loop closure, reading performance and AI agreement{% if a.days %} · last {{ a.days }} days{% else %} · all time{% endif %}</p></div>
+  <nav class="nav-seg" aria-label="Period">
+    {% for k, label in (('30', '30 days'), ('90', '90 days'), ('365', '12 months'), ('all', 'All time')) %}
+    <a href="{{ url_for('doctor.stats', period=k) }}" class="{{ 'on' if period == k }}">{{ label }}</a>{% endfor %}
+  </nav>
+</div>
+
+{# ================================================================ care loop #}
+<h2 class="section-h">Care loop</h2>
+{% set L = a.loop %}
 <div class="kpis">
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-image"/></svg>Studies received</span><span class="k-val">{{ n_cases }}</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-file"/></svg>Reports signed</span><span class="k-val">{{ n_reports }}</span><span class="k-sub">{{ counts.awaiting_review + counts.in_review }} open</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Time to report (median)</span>
-    <span class="k-val">{% if median_turnaround_h is not none %}{{ '%.1f'|format(median_turnaround_h) }}<small class="muted"> hours</small>{% else %}—{% endif %}</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Agreement with AI</span>
-    <span class="k-val">{{ '%.0f%%'|format(100 * agreement) if agreement is not none else '—' }}</span></div>
+  <div class="kpi"><span class="k-label">Loop closure</span><span class="k-val">{{ rate(L.closure) }}</span>{{ frac(L.closure) }}</div>
+  <div class="kpi"><span class="k-label">Lost to follow-up</span><span class="k-val {{ 'v-err' if L.lost.p and L.lost.p > 0.1 }}">{{ rate(L.lost) }}</span>{{ frac(L.lost) }}</div>
+  <div class="kpi"><span class="k-label">Completed on time</span><span class="k-val">{{ rate(L.on_time) }}</span>{{ frac(L.on_time) }}</div>
+  <div class="kpi"><span class="k-label">Median time to close</span><span class="k-val">{{ num(L.days_to_close, 'days', '%.0f') }}</span><span class="k-sub">from plan to completion</span></div>
+  <div class="kpi"><span class="k-label">Overdue now</span><span class="k-val {{ 'v-err' if L.overdue }}">{{ L.overdue }}</span><span class="k-sub">{{ L.due_soon }} due this week · {{ L.open }} open</span></div>
+  <div class="kpi"><span class="k-label">Unreachable patients</span><span class="k-val {{ 'v-warn' if L.unreachable }}">{{ L.unreachable }}</span><span class="k-sub">contact details not working</span></div>
+</div>
+
+<div class="grid g2">
+  <section class="card">
+    <div class="card-h"><h2>Care-loop funnel</h2><span class="small muted">studies reported in the period</span></div>
+    <div class="card-b">
+      {% set top = a.funnel[0][1] %}
+      <table class="funnel">
+        {% for label, n in a.funnel %}
+        <tr><th>{{ label }}</th><td class="f-bar">{{ bar(n, top) }}</td><td class="num right">{{ n }}</td>
+          <td class="num right muted">{% if top and not loop.first %}{{ '%.0f'|format(100 * n / top) }}%{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      <p class="small muted note">A loop is closed when the next step chosen by the radiologist has happened. Not every
+        report needs a follow-up, so "Follow-up planned" below "Reports signed" is expected.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Follow-up risk now</h2><span class="small muted">{{ a.risk_total }} patients with an open step</span></div>
+    <div class="card-b">
+      <div class="risk-tiles">
+        <a class="rt r-high" href="{{ url_for('care.followup') }}"><b class="num">{{ a.risk.high }}</b><span>High</span></a>
+        <a class="rt r-medium" href="{{ url_for('care.followup') }}"><b class="num">{{ a.risk.medium }}</b><span>Medium</span></a>
+        <a class="rt r-low" href="{{ url_for('care.followup') }}"><b class="num">{{ a.risk.low }}</b><span>Low</span></a>
+      </div>
+      <div class="section-label">Why patients are at risk</div>
+      {% set fmax = a.risk_factors[0][1] if a.risk_factors else 0 %}
+      {% for label, n in a.risk_factors %}
+      <div class="hbar"><span>{{ label }}</span>{{ bar(n, fmax) }}<span class="right num">{{ n }}</span></div>
+      {% endfor %}
+      <p class="small muted note">Operational signals only (overdue days, missed visits, unanswered calls, distance); never the
+        diagnosis or any AI output.</p>
+    </div>
+  </section>
+</div>
+
+<div class="grid g2">
+  <section class="card">
+    <div class="card-h"><h2>Distance to care</h2><span class="small muted">follow-up plans by home distance</span></div>
+    {% if a.distance %}
+    <table class="table">
+      <thead><tr><th>Distance</th><th class="right">Completed</th><th class="right">Lost</th><th class="right">Open</th><th class="right">Closure</th></tr></thead>
+      <tbody>{% for r in a.distance %}
+        <tr><td>{{ r.band }}</td><td class="num right">{{ r.completed }}</td><td class="num right {{ 'c-err' if r.lost }}">{{ r.lost }}</td>
+          <td class="num right">{{ r.open }}</td><td class="num right"><b>{{ rate(r.closure) }}</b></td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="empty slim">No follow-up plans in this period.</div>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>By district</h2><span class="small muted">top {{ a.districts|length }}</span></div>
+    {% if a.districts %}
+    <table class="table">
+      <thead><tr><th>District</th><th class="right">Patients</th><th class="right">Open</th><th class="right">Overdue</th><th class="right">Lost</th><th class="right">Closure</th></tr></thead>
+      <tbody>{% for r in a.districts %}
+        <tr><td>{{ r.district }}</td><td class="num right">{{ r.patients }}</td><td class="num right">{{ r.open }}</td>
+          <td class="num right {{ 'c-err' if r.overdue }}">{{ r.overdue }}</td><td class="num right {{ 'c-err' if r.lost }}">{{ r.lost }}</td>
+          <td class="num right"><b>{{ rate(r.closure) }}</b></td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="empty slim">No follow-up plans in this period.</div>{% endif %}
+  </section>
+</div>
+
+<div class="grid g2">
+  <section class="card">
+    <div class="card-h"><h2>Next step by type</h2><span class="small muted">plans proposed in the period</span></div>
+    {% if a.by_kind %}
+    <table class="table">
+      <thead><tr><th>Next step</th><th class="right">Planned</th><th class="right">Completed</th><th class="right">Lost</th><th class="right">Open</th><th class="right">On time</th><th class="right">Closure</th></tr></thead>
+      <tbody>{% for r in a.by_kind %}
+        <tr><td>{{ plan_text[r.kind] }}</td><td class="num right">{{ r.planned }}</td><td class="num right">{{ r.completed }}</td>
+          <td class="num right {{ 'c-err' if r.lost }}">{{ r.lost }}</td><td class="num right">{{ r.open }}</td>
+          <td class="num right">{{ rate(r.on_time) }}</td><td class="num right"><b>{{ rate(r.closure) }}</b></td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="empty slim">No follow-up plans in this period.</div>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Referrals to other centres</h2><span class="small muted">{{ a.referrals.total }} signed in the period</span></div>
+    <div class="card-b">
+      <ol class="stages">
+        {% for s, n in a.referrals.stages %}<li><b class="num">{{ n }}</b><span>{{ referral_text[s] }}</span></li>{% endfor %}
+      </ol>
+      <table class="kv">
+        <tr><th>Completed (attended or closed)</th><td class="num">{{ rate(a.referrals.completed) }} <span class="muted">· {{ a.referrals.completed.n }} of {{ a.referrals.completed.d }}</span></td></tr>
+        <tr><th>Median time to completion</th><td class="num">{{ num(a.referrals.days_to_complete, 'days', '%.0f') }}</td></tr>
+        <tr><th>Open longer than {{ '%.0f'|format(a.referrals.stale_days) }} days</th><td class="num {{ 'c-err' if a.referrals.stale }}">{{ a.referrals.stale }}</td></tr>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="grid g2">
+  {% set O = a.outreach %}
+  <section class="card">
+    <div class="card-h"><h2>Outreach</h2><span class="small muted">{{ O.contacts }} contacts logged</span></div>
+    <div class="card-b">
+      {% for k in ('reached_confirmed', 'reached_declined', 'no_answer', 'wrong_number', 'message_sent') %}
+      <div class="hbar"><span>{{ outcome_text[k] }}</span>{{ bar(O.outcomes[k], O.outcomes_max) }}<span class="right num">{{ O.outcomes[k] }}</span></div>
+      {% endfor %}
+      <table class="kv">
+        <tr><th>Reach rate (calls and visits)</th><td class="num">{{ rate(O.reach) }} <span class="muted">· {{ O.reach.n }} of {{ O.reach.d }}</span></td></tr>
+        <tr><th>Reached and will come</th><td class="num">{{ rate(O.confirmed) }}</td></tr>
+        <tr><th>E-mail delivered</th><td class="num">{{ rate(O.mail_delivery) }} <span class="muted">· {{ O.mail_sent }} sent, {{ O.mail_failed }} failed, {{ O.mail_queued }} queued</span></td></tr>
+      </table>
+    </div>
+  </section>
+
+  {% set C = a.consult %}
+  <section class="card">
+    <div class="card-h"><h2>Consultations</h2><span class="small muted">{{ C.upcoming }} upcoming</span></div>
+    <div class="card-b">
+      <div class="mini-kpis">
+        <div><span>Attended</span><b class="num">{{ C.attended }}</b></div>
+        <div><span>No-show</span><b class="num {{ 'c-err' if C.no_show }}">{{ C.no_show }}</b></div>
+        <div><span>Not marked</span><b class="num {{ 'v-warn' if C.unmarked }}">{{ C.unmarked }}</b></div>
+        <div><span>Cancelled</span><b class="num">{{ C.cancelled }}</b></div>
+      </div>
+      <table class="kv">
+        <tr><th>Attendance rate</th><td class="num">{{ rate(C.attendance) }} <span class="muted">· {{ C.attendance.n }} of {{ C.attendance.d }}</span></td></tr>
+        <tr><th>Rebooked after a no-show</th><td class="num">{{ rate(C.rebooked) }} <span class="muted">· {{ C.rebooked.n }} of {{ C.rebooked.d }}</span></td></tr>
+        <tr><th>Median booking lead time</th><td class="num">{{ num(C.lead_days, 'days', '%.1f') }}</td></tr>
+      </table>
+    </div>
+  </section>
+</div>
+
+{# ================================================================ reading #}
+<h2 class="section-h">Reading</h2>
+{% set R = a.reading %}
+<div class="kpis">
+  <div class="kpi"><span class="k-label">Studies received</span><span class="k-val">{{ R.received }}</span><span class="k-sub">{{ R.reupload }} new images requested</span></div>
+  <div class="kpi"><span class="k-label">Reports signed</span><span class="k-val">{{ R.reported }}</span><span class="k-sub">{{ R.amended }} amended</span></div>
+  <div class="kpi"><span class="k-label">Report time · median</span><span class="k-val">{{ num(R.tat_median_h, 'h') }}</span><span class="k-sub">urgent / attention: {{ num(R.tat_urgent_median_h, 'h') }}</span></div>
+  <div class="kpi"><span class="k-label">Report time · p90</span><span class="k-val">{{ num(R.tat_p90_h, 'h') }}</span><span class="k-sub">90% signed within this</span></div>
+  <div class="kpi"><span class="k-label">Within {{ '%.0f'|format(R.sla_h) }} h</span><span class="k-val">{{ rate(R.within_sla) }}</span>{{ frac(R.within_sla) }}</div>
+  <div class="kpi"><span class="k-label">Backlog now</span><span class="k-val {{ 'v-warn' if R.backlog_urgent }}">{{ R.backlog }}</span><span class="k-sub">{{ R.backlog_urgent }} urgent / attention</span></div>
 </div>
 
 <div class="grid g-side">
@@ -16,52 +170,60 @@
     <div class="card-h"><h2>Daily volume · last 14 days</h2>
       <div class="legend"><span><i class="l1"></i>Received</span><span><i class="l2"></i>Signed</span></div></div>
     <div class="card-b">
-      {% set W, H, pad = 700, 200, 28 %}{% set bw = (W - pad) / daily|length %}
+      {% set W, H, pad = 700, 190, 28 %}{% set bw = (W - pad) / a.daily|length %}{% set dmax = a.daily_max %}
       <svg class="chart" viewBox="0 0 {{ W }} {{ H + 24 }}" role="img" aria-label="Studies received and reports signed per day">
         {% for k in range(5) %}{% set y = 10 + (H - 10) * k / 4 %}
           <line class="gl" x1="{{ pad }}" x2="{{ W }}" y1="{{ y }}" y2="{{ y }}"/>
-          <text x="{{ pad - 6 }}" y="{{ y + 4 }}" text-anchor="end">{{ ((daily_max * (4 - k) / 4)|round(0, 'ceil'))|int if k < 4 else 0 }}</text>
+          <text x="{{ pad - 6 }}" y="{{ y + 4 }}" text-anchor="end">{{ ((dmax * (4 - k) / 4)|round(0, 'ceil'))|int if k < 4 else 0 }}</text>
         {% endfor %}
-        {% for d in daily %}{% set x = pad + loop.index0 * bw %}
-          {% set h1 = (H - 10) * d.received / daily_max %}{% set h2 = (H - 10) * d.signed / daily_max %}
-          <rect class="b1" x="{{ x + bw * 0.18 }}" y="{{ H - h1 }}" width="{{ bw * 0.3 }}" height="{{ h1 }}" rx="2"><title>{{ d.label }}: {{ d.received }} received</title></rect>
-          <rect class="b2" x="{{ x + bw * 0.52 }}" y="{{ H - h2 }}" width="{{ bw * 0.3 }}" height="{{ h2 }}" rx="2"><title>{{ d.label }}: {{ d.signed }} signed</title></rect>
+        {% for d in a.daily %}{% set x = pad + loop.index0 * bw %}
+          {% set h1 = (H - 10) * d.received / dmax %}{% set h2 = (H - 10) * d.signed / dmax %}
+          <rect class="b1" x="{{ x + bw * 0.18 }}" y="{{ H - h1 }}" width="{{ bw * 0.3 }}" height="{{ h1 }}"><title>{{ d.label }}: {{ d.received }} received</title></rect>
+          <rect class="b2" x="{{ x + bw * 0.52 }}" y="{{ H - h2 }}" width="{{ bw * 0.3 }}" height="{{ h2 }}"><title>{{ d.label }}: {{ d.signed }} signed</title></rect>
           {% if loop.index0 % 2 == 1 or loop.last %}<text x="{{ x + bw / 2 }}" y="{{ H + 18 }}" text-anchor="middle">{{ d.label }}</text>{% endif %}
         {% endfor %}
       </svg>
     </div>
   </section>
   <section class="card">
-    <div class="card-h"><h2>Signed diagnoses</h2></div>
+    <div class="card-h"><h2>Unreported studies by age</h2></div>
     <div class="card-b">
-      {% for d, n in mix.items() %}
-      <div class="hbar"><span>{{ class_text[d].split(' — ')[0] }}</span>
-        <svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="10" rx="5"/>{% if n %}<rect class="fill" width="{{ 100 * n / mix_max }}" height="10" rx="5"/>{% endif %}</svg>
-        <span class="right num">{{ n }}</span></div>
+      {% set bmax = R.backlog_ages|map(attribute='1')|max %}
+      {% for label, n in R.backlog_ages %}
+      <div class="hbar"><span>{{ label }}</span>{{ bar(n, bmax) }}<span class="right num {{ 'c-err' if n and loop.last }}">{{ n }}</span></div>
       {% endfor %}
     </div>
   </section>
 </div>
 
-<h2 class="section-h">Follow-up</h2>
-<div class="kpis">
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-check"/></svg>Follow-up completed</span>
-    <span class="k-val">{{ '%.0f%%'|format(100 * follow.completion) if follow.completion is not none else '—' }}</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-clock"/></svg>Median time to follow-up</span>
-    <span class="k-val">{% if follow.median_days is not none %}{{ '%.0f'|format(follow.median_days) }}<small class="muted"> days</small>{% else %}—{% endif %}</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-alert"/></svg>Overdue now</span><span class="k-val">{{ follow.overdue }}</span>
-    <span class="k-sub">{{ follow.open }} open · {{ follow.lost }} lost</span></div>
-  <div class="kpi"><span class="k-label"><svg class="ic sm"><use href="#i-send"/></svg>Referrals completed</span>
-    <span class="k-val">{{ '%.0f%%'|format(100 * follow.referral_done) if follow.referral_done is not none else '—' }}</span></div>
+{# ================================================================ AI #}
+<h2 class="section-h">AI agreement with the signed report</h2>
+{% set A = a.ai %}
+<div class="grid g2">
+  <section class="card">
+    <div class="card-h"><h2>AI suggestion vs radiologist's diagnosis</h2><span class="small muted">{{ A.agreement.d }} signed studies</span></div>
+    {% if A.agreement.d %}
+    <table class="table confusion">
+      <thead><tr><th>AI (rows) · signed (columns)</th>{% for c in classes %}<th>{{ {'glioma': 'Glioma', 'meningioma': 'Mening.', 'pituitary': 'Pituitary', 'no_tumor': 'No tumour'}[c] }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for r in classes %}<tr><th>{{ class_text[r] }}</th>
+        {% for c in classes %}{% set n = A.confusion[r][c] %}<td class="{{ 'diag' if r == c and n }}{{ ' off' if r != c and n }}">{{ n or '·' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<div class="empty slim">No signed studies with an AI result in this period.</div>{% endif %}
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>AI performance</h2><span class="small muted">{{ A.analysed }} analyses</span></div>
+    <div class="card-b">
+      <table class="kv">
+        <tr><th>Agreement with signed diagnosis</th><td class="num"><b>{{ rate(A.agreement) }}</b> <span class="muted">· {{ A.agreement.n }} of {{ A.agreement.d }}</span></td></tr>
+        <tr><th>Radiologist marked AI as agree / disagree / not used</th><td class="num">{{ A.doctor_said.yes }} / {{ A.doctor_said.no }} / {{ A.doctor_said.na }}</td></tr>
+        <tr><th>Not analysed (outside validated input)</th><td class="num">{{ rate(A.rejected) }} <span class="muted">· {{ A.rejected.n }}</span></td></tr>
+        <tr><th>Flagged for expert review</th><td class="num">{{ rate(A.flagged) }} <span class="muted">· {{ A.flagged.n }}</span></td></tr>
+        <tr><th>Whole-study uploads</th><td class="num">{{ rate(A.whole_study) }} <span class="muted">· {{ A.whole_study.n }}</span></td></tr>
+        <tr><th>Analysis time on device · median</th><td class="num">{{ num(A.t_study_s, 's') }} per study · {{ num(A.t_image_s, 's', '%.2f') }} per image</td></tr>
+      </table>
+      <p class="small muted note">Agreement is a quality signal, not accuracy: the signed report is the reference, and
+        the radiologist saw the AI suggestion before signing.</p>
+    </div>
+  </section>
 </div>
-<section class="card">
-  <div class="card-h"><h2>Contact outcomes</h2></div>
-  <div class="card-b">
-    {% for k in ('reached_confirmed', 'reached_declined', 'no_answer', 'wrong_number', 'message_sent') %}{% set n = follow.outcomes.get(k, 0) %}
-    <div class="hbar"><span>{{ outcome_text[k] }}</span>
-      <svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="10" rx="5"/>{% if n %}<rect class="fill" width="{{ 100 * n / follow.outcomes_max }}" height="10" rx="5"/>{% endif %}</svg>
-      <span class="right num">{{ n }}</span></div>
-    {% endfor %}
-  </div>
-</section>
 {% endblock %}
