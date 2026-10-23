@@ -20,8 +20,8 @@ def blueprint(d) -> Blueprint:
 
     @bp.get("/")
     def home():
-        if g.user is None:
-            return redirect(url_for("auth.login"))
+        if g.user is None:               # the device home is the front door: Clinician / Patient entry points
+            return redirect(url_for("device.home"))
         return redirect(url_for(HOME[g.user["role"]]))
 
     @bp.route("/login", methods=["GET", "POST"])

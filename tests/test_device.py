@@ -55,3 +55,17 @@ def test_kiosk_cookie_adds_device_home_button(env):
     assert {"kiosk", "theme-dark"} <= body_classes(page) and 'href="/device"' in page
     c.get("/device?kiosk=0")
     assert "kiosk" not in body_classes(c.get("/doctor/").get_data(as_text=True))
+
+
+def test_front_door_is_the_device_page(env):
+    c = env["app"].test_client()
+    assert c.get("/").headers["Location"].endswith("/device")              # signed out: device home
+    login(c, "doc@clinic.test")
+    assert c.get("/").headers["Location"].endswith("/doctor/")             # signed in: straight to work
+
+
+def test_front_door_is_the_device_page(env):
+    c = env["app"].test_client()
+    assert c.get("/").headers["Location"].endswith("/device")              # signed out: device home
+    login(c, "doc@clinic.test")
+    assert c.get("/").headers["Location"].endswith("/doctor/")             # signed in: straight to work

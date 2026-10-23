@@ -136,6 +136,68 @@
     }).catch(() => brain.remove());
   }
 
+  // ------------------------------------------------------------------ kiosk: on-screen keyboard
+  // The device's touch screen has no keyboard; the compositor's own keyboard is not reliable in a bare kiosk
+  // session, so the portal brings one. Kiosk only (cookie), appears when a text field is focused.
+  if (document.body.classList.contains("kiosk")) {
+    const ROWS = {
+      abc: ["1234567890", "qwertyuiop", "asdfghjkl", "⇧zxcvbnm⌫", "?123 @ . space _ - ↵"],
+      sym: ["1234567890", "!#$%&*+=/\\", "()[]{}<>:;", "⇧'\"`~^|,⌫", "abc @ . space _ - ↵"],
+    };
+    const kb = document.createElement("div");
+    kb.className = "okb"; kb.setAttribute("aria-hidden", "true");
+    document.body.append(kb);
+    let target = null, layer = "abc", shift = false;
+    const typable = e => e && ((e.tagName === "INPUT" && /^(text|email|password|search|tel|number|url|)$/.test(e.type)) || e.tagName === "TEXTAREA");
+    const put = text => {
+      if (!target) return;
+      const v = target.value, s = target.selectionStart ?? v.length, e = target.selectionEnd ?? v.length;
+      try { target.setRangeText(text, s, e, "end"); } catch (_) { target.value = v + text; }
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const back = () => {
+      if (!target) return;
+      const v = target.value; let s = target.selectionStart ?? v.length, e = target.selectionEnd ?? v.length;
+      if (s === e && s > 0) s -= 1;
+      try { target.setRangeText("", s, e, "end"); } catch (_) { target.value = v.slice(0, -1); }
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const render = () => {
+      kb.textContent = "";
+      ROWS[layer].forEach(row => {
+        const r = document.createElement("div"); r.className = "okb-row";
+        const keys = row.includes(" ") ? row.split(" ") : [...row];
+        keys.forEach(k => {
+          const b = document.createElement("button"); b.type = "button"; b.dataset.k = k;
+          b.textContent = k === "space" ? "" : (shift && k.length === 1 ? k.toUpperCase() : k);
+          b.className = "okb-k" + ({ space: " wide", "⇧": " fn", "⌫": " fn", "↵": " fn go", "?123": " fn", abc: " fn" }[k] || "") + (k === "⇧" && shift ? " on" : "");
+          r.append(b);
+        });
+        kb.append(r);
+      });
+    };
+    kb.addEventListener("pointerdown", ev => ev.preventDefault());           // keep focus in the field
+    kb.addEventListener("click", ev => {
+      const k = ev.target.closest("button")?.dataset.k; if (!k) return;
+      if (k === "⇧") { shift = !shift; render(); }
+      else if (k === "⌫") back();
+      else if (k === "?123") { layer = "sym"; render(); }
+      else if (k === "abc") { layer = "abc"; render(); }
+      else if (k === "space") put(" ");
+      else if (k === "↵") { if (target?.tagName === "TEXTAREA") put("\n"); else target?.form?.requestSubmit(); }
+      else { put(shift ? k.toUpperCase() : k); if (shift) { shift = false; render(); } }
+    });
+    document.addEventListener("focusin", ev => {
+      if (!typable(ev.target)) return;
+      target = ev.target; layer = target.type === "number" || target.type === "tel" ? "sym" : "abc"; render();
+      kb.classList.add("on"); document.body.classList.add("okb-open");
+      target.scrollIntoView({ block: "center" });
+    });
+    document.addEventListener("focusout", () => setTimeout(() => {
+      if (!typable(document.activeElement)) { kb.classList.remove("on"); document.body.classList.remove("okb-open"); target = null; }
+    }, 0));
+  }
+
   if (document.body.classList.contains("kiosk")) {         // the device's own screen: back to device home when idle
     let idle;
     const arm = () => { clearTimeout(idle); idle = setTimeout(() => { location.href = "/device"; }, 3 * 60 * 1000); };

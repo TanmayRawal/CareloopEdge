@@ -787,3 +787,17 @@ a.small:has(> .ic), .pager .btn { display: inline-flex; align-items: center; gap
   .content.analytics .kpi { border-bottom: 1px solid var(--border); }
   .content.analytics .kpi .k-sub { white-space: normal; }
 }
+
+/* ================================================================== kiosk on-screen keyboard */
+.okb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 200; display: none; padding: 6px 6px 8px; gap: 5px; flex-direction: column;
+  background: #0b0d10; border-top: 1px solid #23282e; user-select: none; touch-action: manipulation; }
+.okb.on { display: flex; }
+.okb-row { display: flex; gap: 5px; justify-content: center; }
+.okb-k { flex: 1 1 0; max-width: 76px; height: 40px; border: 1px solid #2a3038; border-radius: 3px; background: #1b1f24; color: #e7e9ec;
+  font: 500 17px var(--font); cursor: pointer; padding: 0; }
+.okb-k:active { background: #2c4250; }
+.okb-k.fn { background: #23282e; color: #bcc2c9; font-size: 15px; max-width: 96px; }
+.okb-k.wide { flex: 4 1 0; max-width: 360px; }
+.okb-k.go { background: #0b6a87; border-color: #0b6a87; color: #fff; }
+.okb-k.on { background: #3fb6d6; color: #062530; }
+body.okb-open { padding-bottom: 240px; }
