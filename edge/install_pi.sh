@@ -266,9 +266,12 @@ if [[ $KIOSK -eq 1 ]]; then
   # (the public copy: Caddy's own directory is readable only by the caddy user)
   PUB_CA=/srv/neuroedge-public/neuroedge-ca.crt
   if [[ -f "$PUB_CA" ]]; then
-    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -N --empty-password 2>/dev/null || true
-    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -D -n neuroedge-portal 2>/dev/null || true
-    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -A -t "C,," -n neuroedge-portal -i "$PUB_CA"
+    # an NSS database with an empty password (from a file: certutil must never wait for a prompt)
+    NOPW="$(mktemp)"; chmod 644 "$NOPW"
+    [[ -f "$KH/.pki/nssdb/cert9.db" ]] || timeout 30 runuser -u kiosk -- certutil -N -d "sql:$KH/.pki/nssdb" -f "$NOPW" </dev/null
+    timeout 30 runuser -u kiosk -- certutil -D -d "sql:$KH/.pki/nssdb" -n neuroedge-portal </dev/null 2>/dev/null || true
+    timeout 30 runuser -u kiosk -- certutil -A -d "sql:$KH/.pki/nssdb" -f "$NOPW" -t "C,," -n neuroedge-portal -i "$PUB_CA" </dev/null
+    rm -f "$NOPW"
   fi
   [[ -f "$ETC/kiosk.env" ]] || cat > "$ETC/kiosk.env" <<EOF
 # NeuroEdge kiosk (the Pi's own screen). Edit, then reboot (or restart lightdm / getty@tty1).
