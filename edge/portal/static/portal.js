@@ -61,7 +61,6 @@
     const tick = () => {
       const d = new Date();
       clock.textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      $("#dv-date").textContent = d.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     };
     tick(); setInterval(tick, 10000);
     setTimeout(() => location.reload(), 60000);           // status (temperature, last analysis) stays current

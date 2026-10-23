@@ -3,57 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Device · {{ brand }}</title>
+  <title>{{ brand }}</title>
   <link rel="stylesheet" href="{{ asset('portal.css') }}">
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
 </head>
 <body class="theme-dark">
 {% include "portal/_icons.html" %}
 <div class="device" id="device">
-  <header class="dv-top">
-    <span class="pbrand">{% include "portal/_logo.html" %}
-      <span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
-    <div class="dv-clock"><b id="dv-time">{{ fmt_clock(now) }}</b><span id="dv-date">{{ fmt_long(now) }}</span></div>
+  <header class="ds-bar">
+    <span class="ds-brand">{% include "portal/_logo.html" %}<b>{{ brand }}</b><span>{{ clinic }}</span></span>
+    <span class="ds-ind" title="Network">{% if s.lan %}<svg class="ic sm"><use href="#i-wifi"/></svg>{{ s.lan }}{% else %}<span class="off">No network</span>{% endif %}</span>
+    <span class="ds-ind {{ 'warn' if s.disk_low }}" title="Free storage"><svg class="ic sm"><use href="#i-server"/></svg>{{ s.disk_free }}</span>
+    {% if s.temp_c is not none %}<span class="ds-ind {{ 'warn' if s.hot }}" title="Processor temperature"><svg class="ic sm"><use href="#i-cpu"/></svg>{{ '%.0f'|format(s.temp_c) }} °C</span>{% endif %}
+    <span class="ds-clock" id="dv-time">{{ fmt_clock(now) }}</span>
   </header>
 
-  <main class="dv-main">
-    <div class="dv-col">
-      <section class="dv-panel" aria-label="Device status">
-        <h2>Brain MRI analysis</h2>
-        <div class="dv-status">
-          <div class="dv-row"><span class="dv-dot {{ 'ok' if s.verified else 'warn' }}"></span><span class="lbl">Model</span>
-            <span class="val">{{ s.model_version }} · {{ 'signature verified' if s.verified else 'unsigned dev bundle' }}</span></div>
-          <div class="dv-row"><span class="dv-dot ok"></span><span class="lbl">Analysis</span>
-            <span class="val">{{ 'Study + image' if s.whole_study else 'Image' }}{% if s.last_analysis %} · last {{ s.last_analysis }} ago{% endif %}</span></div>
-          <div class="dv-row"><span class="dv-dot {{ s.temp_level or '' }}"></span><span class="lbl">Temperature{% if s.load is not none %} · load{% endif %}</span>
-            <span class="val">{{ '%.0f'|format(s.temp_c) ~ ' °C' if s.temp_c is not none else '—' }}{% if s.load is not none %} · {{ s.load }} / {{ s.cpus }}{% endif %}</span></div>
-          <div class="dv-row"><span class="dv-dot {{ 'err' if s.disk_pct_used >= 90 else 'warn' if s.disk_pct_used >= 80 else 'ok' }}"></span><span class="lbl">Storage</span>
-            <span class="val">{{ s.disk_free }} free</span></div>
-        </div>
-      </section>
-      <section class="dv-panel" aria-label="Connect">
-        <h2>Open on a phone or laptop</h2>
-        <div class="dv-connect">
-          {% if s.qr %}<div class="dv-qr" aria-hidden="true">{{ s.qr|safe }}</div>{% endif %}
-          <div class="dv-urls">{% for u in s.urls %}<code>{{ u }}</code>{% else %}<code>https://{{ s.host }}.local</code>{% endfor %}
-            <span>Same Wi-Fi / clinic network. Patients see only their signed reports.</span></div>
-        </div>
-      </section>
-    </div>
-    <div class="dv-col">
-      <nav class="dv-actions" aria-label="Start">
-        <a class="dv-btn" href="{{ url_for('auth.home') if me else url_for('auth.login', **{'as': 'staff'}) }}"><svg class="ic"><use href="#i-steth"/></svg>
-          <span>{{ 'Open worklist' if me and me.role != 'patient' else 'Clinician sign-in' }}<small>Review studies, sign reports</small></span></a>
-        <a class="dv-btn alt" href="{{ url_for('auth.login') }}"><svg class="ic"><use href="#i-upload"/></svg>
-          <span>Patient<small>Upload a scan · see your report</small></span></a>
-      </nav>
-      <p class="dv-note">Decision support for radiologists. Images are analysed on this device and not sent to external
-        services. Every result is reviewed and signed by a radiologist.</p>
-    </div>
+  <main class="ds-main">
+    <section class="ds-state {{ 'is-ready' if s.ready else 'is-check' }}" aria-live="polite">
+      <div class="ds-word"><svg class="ic"><use href="#{{ 'i-check' if s.ready else 'i-alert' }}"/></svg>{{ 'Ready' if s.ready else 'Needs attention' }}</div>
+      <p class="ds-what">Brain MRI analysis on this device</p>
+      <p class="ds-meta">{{ s.model }}{% if s.verified %} · signature verified{% endif %}{% if s.whole_study %} · whole studies and single images{% endif %}</p>
+      {% if s.last_analysis %}<p class="ds-meta">Last study analysed {{ s.last_analysis }} ago</p>{% endif %}
+      {% if s.issues %}<ul class="ds-issues">{% for x in s.issues %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+    </section>
+
+    <nav class="ds-actions" aria-label="Start">
+      <a class="ds-act primary" href="{{ url_for('auth.home') if me and me.role != 'patient' else url_for('auth.login', **{'as': 'staff'}) }}">
+        <svg class="ic"><use href="#i-steth"/></svg>
+        <span><b>{{ 'Open worklist' if me and me.role != 'patient' else 'Clinician' }}</b><small>Review studies and sign reports</small></span>
+        <svg class="ic go"><use href="#i-chevron"/></svg></a>
+      <a class="ds-act" href="{{ url_for('auth.login') }}">
+        <svg class="ic"><use href="#i-user"/></svg>
+        <span><b>Patient</b><small>Upload a scan or read your report</small></span>
+        <svg class="ic go"><use href="#i-chevron"/></svg></a>
+    </nav>
   </main>
 
-  <footer class="dv-foot"><span>{{ s.host }}</span><span>Up {{ s.uptime }}</span><span>{{ s.precision|upper }} on CPU</span>
-    <span>Research prototype · not a medical device</span></footer>
+  <footer class="ds-foot">
+    {% if s.qr %}<span class="ds-qr" aria-hidden="true">{{ s.qr|safe }}</span>{% endif %}
+    <span class="ds-url"><span>Open on a phone or laptop on this network</span><b>{{ s.url or ('https://' ~ s.host ~ '.local') }}</b></span>
+    <span class="ds-legal">Research prototype · not a medical device</span>
+  </footer>
 </div>
 <script src="{{ asset('portal.js') }}"></script>
 </body>
