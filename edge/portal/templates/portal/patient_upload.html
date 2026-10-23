@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Upload a scan{% endblock %}
 {% block pcontent %}
-<div class="page-head narrow-card"><div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a><h1>Upload a scan</h1></div></div>
+<div class="page-head narrow-card"><div><a class="small" href="{{ url_for('patient.dashboard') }}"><svg class="ic sm"><use href="#i-back"/></svg>My reports</a><h1>Upload a scan</h1></div></div>
 <section class="card narrow-card">
     <div class="card-b">
       {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}

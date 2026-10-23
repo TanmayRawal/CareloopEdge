@@ -2,8 +2,8 @@
 {% block title %}{{ 'Reschedule' if reschedule_of else 'Book a consultation' }}{% endblock %}
 {% macro body() %}
 <div class="page-head narrow-card wide"><div>
-  {% if staff_for %}<a class="small" href="{{ url_for('care.patient', uid=staff_for.id) }}">← {{ staff_for.name }}</a>
-  {% else %}<a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}">← Back</a>{% endif %}
+  {% if staff_for %}<a class="small" href="{{ url_for('care.patient', uid=staff_for.id) }}"><svg class="ic sm"><use href="#i-back"/></svg>{{ staff_for.name }}</a>
+  {% else %}<a class="small" href="{{ url_for('patient.appointments') if reschedule_of else url_for('patient.case', cid=case.id) }}"><svg class="ic sm"><use href="#i-back"/></svg>Back</a>{% endif %}
   <h1>{{ 'Choose a new time' if reschedule_of else 'Book a consultation' }}</h1>
   <p>{% if staff_for %}For {{ staff_for.name }} · {% endif %}{% if doctor %}With {{ doctor.name }}{% endif %}</p></div></div>
 

@@ -2,12 +2,12 @@
 {% block title %}My reports{% endblock %}
 {% block pcontent %}
 <div class="welcome">
-  <div><h1>Hello, {{ me.name.split(' ')[0] }}</h1></div>
+  <div><h1>My reports</h1><p class="muted">{{ me.name }}</p></div>
   <a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>
 </div>
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
 {% if stage >= 0 %}
-<ol class="journey" aria-label="Your care journey">
+<ol class="journey" aria-label="Care progress">
   {% for label in ('Scan sent', 'Report ready', 'Consultation', 'Follow-up') %}
     <li class="{{ 'done' if loop.index0 < stage else 'current' if loop.index0 == stage }}"><span class="dot">{% if loop.index0 < stage %}<svg class="ic"><use href="#i-check"/></svg>{% else %}{{ loop.index }}{% endif %}</span>{{ label }}</li>
   {% endfor %}

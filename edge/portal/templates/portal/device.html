@@ -19,14 +19,12 @@
   <main class="dv-main">
     <div class="dv-col">
       <section class="dv-panel" aria-label="Device status">
-        <h2>Brain MRI AI · on this device</h2>
+        <h2>Brain MRI analysis</h2>
         <div class="dv-status">
           <div class="dv-row"><span class="dv-dot {{ 'ok' if s.verified else 'warn' }}"></span><span class="lbl">Model</span>
             <span class="val">{{ s.model_version }} · {{ 'signature verified' if s.verified else 'unsigned dev bundle' }}</span></div>
           <div class="dv-row"><span class="dv-dot ok"></span><span class="lbl">Analysis</span>
             <span class="val">{{ 'Study + image' if s.whole_study else 'Image' }}{% if s.last_analysis %} · last {{ s.last_analysis }} ago{% endif %}</span></div>
-          <div class="dv-row"><span class="dv-dot {{ '' if s.llm is none else 'ok' if s.llm else 'warn' }}"></span><span class="lbl">Report assistant</span>
-            <span class="val">{{ 'Not installed' if s.llm is none else 'Online' if s.llm else 'Offline' }}</span></div>
           <div class="dv-row"><span class="dv-dot {{ s.temp_level or '' }}"></span><span class="lbl">Temperature{% if s.load is not none %} · load{% endif %}</span>
             <span class="val">{{ '%.0f'|format(s.temp_c) ~ ' °C' if s.temp_c is not none else '—' }}{% if s.load is not none %} · {{ s.load }} / {{ s.cpus }}{% endif %}</span></div>
           <div class="dv-row"><span class="dv-dot {{ 'err' if s.disk_pct_used >= 90 else 'warn' if s.disk_pct_used >= 80 else 'ok' }}"></span><span class="lbl">Storage</span>
@@ -49,8 +47,8 @@
         <a class="dv-btn alt" href="{{ url_for('auth.login') }}"><svg class="ic"><use href="#i-upload"/></svg>
           <span>Patient<small>Upload a scan · see your report</small></span></a>
       </nav>
-      <p class="dv-note">Decision support for radiologists: scans are analysed here, on this device, with no cloud AI.
-        Every result is reviewed and signed by a doctor.</p>
+      <p class="dv-note">Decision support for radiologists. Images are analysed on this device and not sent to external
+        services. Every result is reviewed and signed by a radiologist.</p>
     </div>
   </main>
 

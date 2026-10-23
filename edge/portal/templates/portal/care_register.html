@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Register patient{% endblock %}
 {% block content %}
-<div class="page-head narrow-card wide"><div><a class="small" href="{{ url_for('care.patients') }}">← Patients</a><h1>Register a patient</h1></div></div>
+<div class="page-head narrow-card wide"><div><a class="small" href="{{ url_for('care.patients') }}"><svg class="ic sm"><use href="#i-back"/></svg>Patients</a><h1>Register a patient</h1></div></div>
 {% if error %}<div class="alert error narrow-card wide" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
 <form method="post" enctype="multipart/form-data" class="narrow-card wide">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">

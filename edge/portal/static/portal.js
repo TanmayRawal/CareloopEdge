@@ -1,16 +1,7 @@
-// NeuroEdge Imaging portal — no external dependencies; the CSP allows only this file.
+// CareLoop-Edge portal — no external dependencies; the CSP allows only this file.
 (function () {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-  const csrf = $('meta[name="csrf-token"]')?.content || "";
-  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const postJSON = async (url, body) => {
-    const r = await fetch(url, { method: "POST", headers: { "X-CSRF-Token": csrf, "Content-Type": "application/json" },
-                                 body: JSON.stringify(body || {}) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
-    return j;
-  };
 
   // ------------------------------------------------------------------ login: patient / clinician tabs
   const tabs = $$(".role-tabs button");
@@ -39,7 +30,7 @@
     const label = $("#dz-file");
     const show = () => {
       if (!input.files.length) return;
-      label.textContent = "✓ " + (input.files.length > 1 ? `${input.files.length} files (one series)` : input.files[0].name);
+      label.textContent = (input.files.length > 1 ? `${input.files.length} files (one series)` : input.files[0].name);
       $("#st1")?.classList.remove("on"); $("#st2")?.classList.add("on");
     };
     input.addEventListener("change", show);
@@ -240,39 +231,5 @@
     else if (series && (ev.key === "ArrowUp" || ev.key === "ArrowDown")) setSlice(slice + (ev.key === "ArrowUp" ? -1 : 1));
     else return;
     ev.preventDefault();
-  });
-
-  // ------------------------------------------------------------------ assistant
-  const nb = $("#narrative-btn"), out = $("#narrative");
-  nb?.addEventListener("click", async () => {
-    nb.disabled = true; const label = nb.textContent; nb.textContent = "Drafting…";
-    out.textContent = "";
-    try {
-      const j = await postJSON(`/doctor/case/${cid}/narrative`);
-      if (j.narrative) out.append(el("p", null, j.narrative));
-      else {
-        if (j.message) out.append(el("p", "muted small", j.message));
-        (j.sections || []).forEach(([t, txt]) => { const p = el("p"); p.append(el("b", null, t + ": "), txt); out.append(p); });
-      }
-    } catch (e) { out.append(el("p", "muted", e.message)); }
-    finally { nb.disabled = false; nb.textContent = label; }
-  });
-  const form = $("#ask-form"), q = $("#ask-q"), log = $("#ask-log");
-  form?.addEventListener("submit", async ev => {
-    ev.preventDefault();
-    const question = q.value.trim(); if (!question) return;
-    const item = el("div", "qa"); item.append(el("p", "q", question));
-    const ans = el("div", "muted small", "Thinking…"); item.append(ans); log.prepend(item); q.value = "";
-    try {
-      const j = await postJSON(`/doctor/case/${cid}/ask`, { question });
-      ans.className = ""; ans.textContent = "";
-      if (j.answer) ans.append(el("p", null, j.answer));
-      else ans.append(el("p", "muted small", j.llm_used ? "No verified answer; related sources:" : "Related sources:"));
-      if (j.sources?.length) {
-        const d = el("details", "small"); d.append(el("summary", null, `Sources (${j.sources.length})`));
-        j.sources.forEach(s => { const p = el("p"); p.append(el("b", null, `[${s.source}] `), s.text); d.append(p); });
-        ans.append(d);
-      }
-    } catch (e) { ans.textContent = e.message; }
   });
 })();

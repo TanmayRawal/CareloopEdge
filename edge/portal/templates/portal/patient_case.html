@@ -3,7 +3,7 @@
 {% block pcontent %}
 {% set age = age_from_dob(profile.dob if profile else None) %}
 <div class="page-head no-print">
-  <div><a class="small" href="{{ url_for('patient.dashboard') }}">← My reports</a>
+  <div><a class="small" href="{{ url_for('patient.dashboard') }}"><svg class="ic sm"><use href="#i-back"/></svg>My reports</a>
     <h1>MRI Brain · {{ fmt_date(case.created) }}</h1></div>
   <div>{% if report %}<button class="btn primary" type="button" id="print-btn"><svg class="ic sm"><use href="#i-print"/></svg>Print / save as PDF</button>
        {% else %}<span class="pill s-{{ case.status }}">{{ status_text[case.status] }}</span>{% endif %}</div>

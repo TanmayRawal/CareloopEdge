@@ -19,7 +19,7 @@ and encrypted** bundle through a self-hosted registry.
                     ├─ doctor worklist → review → signed, versioned report → patient
                     ├─ consultation booking · reminders (in-app + e-mail) · attendance / no-shows
                     ├─ follow-up plans (doctor-approved) · referrals · contact log · risk-ranked worklist
-                    └─ doctor assistant: Qwen3-1.7B (llama.cpp) + cited KB + deterministic verifier
+                    └─ whole-study MRI (NIfTI / DICOM series) · device screen (kiosk) on the Pi's own display
                               ▲
                               │  signed (OpenSSF Model Signing) + AES-256-GCM, key wrapped per device (X25519)
  Training PC ──publish──►  Registry: FastAPI + Caddy TLS in Docker (enrollment, revocation, audit log)
@@ -35,7 +35,7 @@ and encrypted** bundle through a self-hosted registry.
   * consent records, download all their data, request account deletion, reset a forgotten password.
 * **Radiologists:**
   * a prioritised worklist with SLA timers and a PACS-style viewer (Grad-CAM, lesion outline, zoom and pan);
-  * the AI findings panel and the doctor assistant;
+  * the AI findings panel (classification, 95% set, lesion, quality flags) with Grad-CAM on the key slices;
   * signed and amended reports;
   * the consultation schedule with attendance marking;
   * availability editing (hours and days off);
@@ -83,7 +83,8 @@ Key findings:
 * Lesion-attention pooling makes Grad-CAM lesion-focused while keeping it exact. Explanation-guided training had
   failed (a negative result).
 * v0's INT8 model quietly lost 11 F1 points on external data, which v1 avoids.
-* A 1.7B local LLM cannot be trusted to interpret statistics, so those answers are deterministic.
+* A 1.7B local LLM could not be trusted to interpret statistics; the language assistant was removed from the
+  portal (the experiment stays in `edge/agent`, installed only with `install_pi.sh --with-llm`).
 
 ## Repository
 | Path | What |
@@ -91,7 +92,7 @@ Key findings:
 | `neuroedge/` | Shared core for PC, server and Pi: preprocessing, model, CAM maths, uncertainty, metrics, crypto, bundles |
 | `training/` | Data manifests and leakage audit, training, ablation, calibration, export, INT8 quantization, XAI evaluation, acceptance report |
 | `server/` | Model registry (FastAPI), Docker Compose + Caddy, publish tool, live end-to-end check |
-| `edge/` | Pi runtime: engine, sync, clinic portal (`edge/portal`), assistant, benchmark, parity check, installer, Caddy, firewall, systemd units |
+| `edge/` | Pi runtime: engine, sync, clinic portal (`edge/portal`), language-model experiment (`edge/agent`, not used by the portal), benchmark, parity check, installer, Caddy, firewall, systemd units |
 | `docs/` | [Findings](docs/FINDINGS.md), [model card](docs/MODEL_CARD.md), [Pi deployment guide](docs/PI_DEPLOY.md) |
 | `tests/` | 133 tests: follow-up plans and risk score, referrals, two-step sign-in, audit chain, appointments, reminders, mailer, CAM exactness, crypto and tamper detection, leakage dedupe, portal access control and security, verifier, deploy files |
 | `reference/` | The original notebook (reference only) |

@@ -105,18 +105,6 @@
         </table>
       {% endif %}
       </div>
-      <details class="panel" id="assistant">
-        <summary><svg class="ic sm"><use href="#i-chat"/></svg>Assistant</summary>
-        <div class="panel-b">
-          <button class="btn sm" type="button" id="narrative-btn" {% if not r or r.status != 'ok' %}disabled{% endif %}>Draft summary</button>
-          <div id="narrative" class="assistant-out"></div>
-          <form id="ask-form" class="ask">
-            <input id="ask-q" maxlength="500" placeholder="Ask about this result" autocomplete="off" {% if not r %}disabled{% endif %}>
-            <button class="btn sm" type="submit" aria-label="Ask"><svg class="ic sm"><use href="#i-send"/></svg></button>
-          </form>
-          <div id="ask-log" class="assistant-out"></div>
-        </div>
-      </details>
     </section>
 
     <section class="card" data-pane="report">

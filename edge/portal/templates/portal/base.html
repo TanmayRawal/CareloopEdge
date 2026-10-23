@@ -29,7 +29,7 @@
         {% for n in bell_items %}
           <a class="bell-item {{ 'unread' if not n.read_at }}" href="{{ url_for('notifications.open', nid=n.id) }}">
             <span class="bi-t">{{ n.title }}</span><span class="bi-d">{{ 'Just now' if ago(n.created) == '0 min' else ago(n.created) ~ ' ago' }}</span></a>
-        {% else %}<div class="bell-empty">You're all caught up.</div>{% endfor %}
+        {% else %}<div class="bell-empty">No new notifications.</div>{% endfor %}
         <a class="bell-all" href="{{ url_for('notifications.index') }}">View all notifications</a>
       </div>
     </details>

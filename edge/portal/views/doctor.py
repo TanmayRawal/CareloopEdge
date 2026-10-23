@@ -1,4 +1,4 @@
-"""Radiologist area: worklist, case review and reporting, assistant, consultations, availability, analytics."""
+"""Radiologist area: worklist, case review and reporting, consultations, availability, analytics."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ LATEST_AI = "LEFT JOIN ai_results ai ON ai.id = (SELECT id FROM ai_results WHERE
 
 def blueprint(d) -> Blueprint:
     bp = Blueprint("doctor", __name__, url_prefix="/doctor")
-    db, ctx, assistant = d.db, d.ctx, d.assistant
+    db, ctx = d.db, d.ctx
 
     def status_counts() -> dict:
         counts = dict.fromkeys(STATUSES, 0)
@@ -69,7 +69,7 @@ def blueprint(d) -> Blueprint:
         appt = scheduling.active_for_case(db, cid)
         return render_template("portal/doctor_case.html", case=c, ai=ai, r=ai["result"] if ai else None,
                                patient=patient, profile=profile, reports=db.reports(cid), diagnoses=DIAGNOSES,
-                               llm_ready=assistant.llm.available(), history=history,
+                               history=history,
                                appt=scheduling.appointment(db, appt["id"]) if appt else None,
                                no_shows=scheduling.no_show_count(db, c["patient_id"]),
                                plan=careplan.active(db, c["patient_id"]))
@@ -132,32 +132,6 @@ def blueprint(d) -> Blueprint:
         except ValueError as e:
             flash(str(e), "error")
         return redirect(url_for("doctor.worklist"))
-
-    @bp.post("/case/<cid>/narrative")
-    @auth.require("doctor")
-    def narrative(cid):
-        d.get_case_or_404(cid)
-        ai = db.latest_ai(cid)
-        if ai is None:
-            return jsonify(error="No AI result."), 400
-        rep = assistant.report(ai["result"])
-        db.audit(g.user["id"], "assistant_narrative", cid, {"llm_used": rep["llm_used"]}, d.ip())
-        return jsonify(narrative=rep["narrative"], sections=rep["sections"], llm_used=rep["llm_used"],
-                       message=None if rep["narrative"] else ("Local assistant offline — standard summary shown."
-                                                              if not rep["llm_used"] else "Draft failed checks; standard summary shown."))
-
-    @bp.post("/case/<cid>/ask")
-    @auth.require("doctor")
-    def ask(cid):
-        d.get_case_or_404(cid)
-        ai = db.latest_ai(cid)
-        q = (request.get_json(silent=True) or {}).get("question", "").strip()
-        if not q or ai is None:
-            return jsonify(error="Empty question."), 400
-        res = assistant.ask(q[:500], ai["result"])
-        return jsonify(answer=res.get("answer"), llm_used=res.get("llm_used"), route=res.get("route"),
-                       sources=[{"source": p["source"], "text": p["text"]}
-                                for p in (res.get("fallback") or res.get("passages") or [])])
 
     # ------------------------------------------------------------------ consultations
     def my_appt(aid: int):
