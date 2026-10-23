@@ -180,9 +180,12 @@ install -m 644 "$APP/src/edge/systemd/"neuroedge-*.{service,timer,path} /etc/sys
 systemctl daemon-reload
 if [[ $LLM -eq 1 ]]; then
   systemctl unmask neuroedge-llm.service >/dev/null 2>&1 || true
+  install -m 644 "$APP/src/edge/systemd/neuroedge-llm.service" /etc/systemd/system/
+  systemctl daemon-reload
   systemctl enable --now neuroedge-llm.service
 else
   systemctl disable --now neuroedge-llm.service >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/neuroedge-llm.service       # a unit file there would block masking
   systemctl mask neuroedge-llm.service >/dev/null       # the web unit only "Wants" it; masked = never started
 fi
 systemctl enable --now neuroedge-sync.timer neuroedge-web-restart.path neuroedge-reminders.timer
