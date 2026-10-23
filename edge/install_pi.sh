@@ -263,10 +263,12 @@ if [[ $KIOSK -eq 1 ]]; then
   KH=/home/kiosk
   install -d -o kiosk -g kiosk -m 700 "$KH/.config" "$KH/.config/labwc" "$KH/.pki" "$KH/.pki/nssdb"
   # Trust the portal's CA so https://localhost has no warning (cookies stay Secure / __Host-, through Caddy).
-  if [[ -f "$CA_ROOT" ]]; then
+  # (the public copy: Caddy's own directory is readable only by the caddy user)
+  PUB_CA=/srv/neuroedge-public/neuroedge-ca.crt
+  if [[ -f "$PUB_CA" ]]; then
     runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -N --empty-password 2>/dev/null || true
     runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -D -n neuroedge-portal 2>/dev/null || true
-    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -A -t "C,," -n neuroedge-portal -i "$CA_ROOT"
+    runuser -u kiosk -- certutil -d "sql:$KH/.pki/nssdb" -A -t "C,," -n neuroedge-portal -i "$PUB_CA"
   fi
   [[ -f "$ETC/kiosk.env" ]] || cat > "$ETC/kiosk.env" <<EOF
 # NeuroEdge kiosk (the Pi's own screen). Edit, then reboot (or restart lightdm / getty@tty1).
