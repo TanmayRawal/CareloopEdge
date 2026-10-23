@@ -187,7 +187,7 @@ def blueprint(d) -> Blueprint:
         out = {r["status"]: r["n"] for r in db.q("SELECT status, COUNT(*) AS n FROM outbox GROUP BY status")}
         info = {"model_version": d.model_info.get("version", "—"), "precision": d.model_info.get("precision") or "—",
                 "classes": ", ".join(CLASS_TEXT.get(c, c) for c in d.model_info.get("class_names", [])) or "—",
-                "llm": "Online" if d.assistant.llm.available() else "Offline", "uptime": ago(STARTED),
+                "uptime": ago(STARTED),
                 "cases": db.one("SELECT COUNT(*) AS n FROM cases")["n"], "reports": db.one("SELECT COUNT(*) AS n FROM reports")["n"],
                 "appointments": db.one("SELECT COUNT(*) AS n FROM appointments")["n"], "roles": roles,
                 "blob": human_bytes(blob_bytes), "db": human_bytes(db_bytes), "disk_free": human_bytes(disk.free),

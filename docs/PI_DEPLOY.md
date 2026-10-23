@@ -7,15 +7,15 @@ What runs on the Pi, all offline after setup:
 | `caddy` | HTTPS for the portal (Caddy local CA, certificates issued on demand for the Pi's IP / `<hostname>.local`); HTTP only redirects and serves the CA certificate | `:443`, `:80` (LAN) |
 | `neuroedge-web` | Clinic portal (Flask under gunicorn): patient upload → INT8 ONNX classifier + segmentation, exact Grad-CAM, lesion outline, conformal set, OOD check → doctor worklist → signed report; doctor assistant | `127.0.0.1:8080` (loopback only) |
 | `neuroedge-firewall` | nftables table `inet neuroedge`: only SSH, HTTP(S), mDNS, DHCP and ICMP inbound | — |
-| `neuroedge-llm` | llama.cpp server with Qwen3-1.7B Q4_K_M (assistant narratives and Q&A) | `127.0.0.1:8081` (loopback only) |
+| `neuroedge-llm` | **Only with `--with-llm` (research):** llama.cpp server with Qwen3-1.7B. Not used by the portal; masked on a normal install | `127.0.0.1:8081` (loopback only) |
 | `neuroedge-sync.timer` | daily check for a new signed + encrypted model; a new version is trial-decrypted and verified before it is activated | — |
 | `neuroedge-web-restart.path` | restarts the web app when a newly verified model version is activated | — |
 | `neuroedge-reminders.timer` | every 5 min: reminder rules (unread/unsigned studies, appointment reminders, daily agenda, attendance, no-shows) and e-mail delivery from the outbox | outbound SMTP only |
 
 The model is stored only as ciphertext on the Pi. It is decrypted and its signature verified in RAM at startup.
 Patient data (portal database, encrypted scans, overlays and signed reports) lives in `/var/lib/neuroedge/portal`;
-its key is `/etc/neuroedge/portal.key`. Memory budget: web app ≈ 0.3–1 GB + LLM ≈ 1.6 GB (1.1 GB weights + 0.47 GB
-KV cache for 4096 tokens), so under 3 GB of the 8 GB.
+its key is `/etc/neuroedge/portal.key`. Memory budget: web app ≈ 0.3 GB idle, up to ≈ 2.5 GB while analysing a large
+whole study (one at a time), so a 4 GB board is the minimum and 8 GB is comfortable.
 
 ## 1. Hardware and OS
 * Raspberry Pi 5, 8 GB, with the **Active Cooler** (sustained inference throttles without it), the official
@@ -24,17 +24,13 @@ KV cache for 4096 tokens), so under 3 GB of the 8 GB.
   (e.g. `neuroedge`), a user, Wi-Fi or Ethernet, and enable SSH.
 * Boot, then: `sudo apt update && sudo apt full-upgrade -y && sudo reboot`.
 
-## 2. Copy the code (and optionally the LLM file) to the Pi
+## 2. Copy the code to the Pi
 From the PC (PowerShell or Git Bash), in the project folder:
 ```bash
 ssh <user>@neuroedge.local "mkdir -p ~/neuroedge"
 ```
 ```bash
 scp -r neuroedge edge requirements-edge.txt pyproject.toml <user>@neuroedge.local:~/neuroedge/
-```
-To avoid downloading the 1.1 GB LLM again, copy the copy that is already verified on the PC:
-```bash
-scp C:/Users/Tanmay/neuroedge_data/llm/Qwen3-1.7B-Q4_K_M.gguf <user>@neuroedge.local:~/
 ```
 For benchmarking, also copy 40 held-out test scans (made by `python -m training.export_bench_samples`):
 ```bash
@@ -45,16 +41,14 @@ scp -r C:/Users/Tanmay/neuroedge_data/bench_samples <user>@neuroedge.local:~/
 On the Pi:
 ```bash
 cd ~/neuroedge
-sudo bash edge/install_pi.sh --gguf ~/Qwen3-1.7B-Q4_K_M.gguf
+sudo bash edge/install_pi.sh
 ```
-* Building llama.cpp takes about 10–15 minutes on the Pi 5. It is pinned to release `b11320`, the build the
-  assistant was evaluated with.
-* The GGUF file is checked against its pinned SHA-256 and refused if it differs.
-* It also installs Caddy (HTTPS), the firewall, the portal key and database, and prints the portal CA fingerprint.
+* It installs Caddy (HTTPS), the firewall, the portal key and database, and prints the portal CA fingerprint.
   PyTorch is not needed on the Pi (`--with-deep-explain` exists only for research tools).
 * Re-running the script is safe; use it to upgrade the code.
 
-Check: `systemctl status neuroedge-llm` should be active. The web app waits until a model is installed.
+The web app waits until a model is installed. (Research only: `--with-llm [--gguf FILE]` also builds llama.cpp
+`b11320` and the pinned Qwen3-1.7B model; the portal does not use them.)
 
 ## 4. Get the model onto the Pi
 **Normal (secure) path.** The registry server runs on your PC or a VPS. One-time server setup, from the repo root
@@ -178,7 +172,7 @@ sudo neuroedge-portal smtp-test --to you@hospital.org
 
 ## 5b. Showcase kiosk (the Pi's own 7" screen)
 The screen shows a **device home** page (`/device`) with:
-* the model version and signature check, and engine / assistant status;
+* the model version and signature check, and engine status;
 * temperature and storage;
 * the portal address with a QR code for phones;
 * two touch buttons, Clinician and Patient.
@@ -251,9 +245,9 @@ It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, S
 ## 7. Operations
 | Task | Command |
 |---|---|
-| Logs | `journalctl -u neuroedge-web -f`, `journalctl -u neuroedge-llm -f` |
+| Logs | `journalctl -u neuroedge-web -f` |
 | Model status / update now | `sudo neuroedge-sync status`, `sudo systemctl start neuroedge-sync` |
-| Restart | `sudo systemctl restart neuroedge-web neuroedge-llm` |
+| Restart | `sudo systemctl restart neuroedge-web` |
 | Temperature / throttling | `vcgencmd measure_temp`, `vcgencmd get_throttled` |
 | Portal users | `sudo neuroedge-portal create-user --role doctor --email ... --name ...` (or the admin Users page) |
 | Reminders / e-mail | `systemctl list-timers neuroedge-reminders.timer`, `journalctl -u neuroedge-reminders`, `sudo neuroedge-portal smtp-test --to ...` |

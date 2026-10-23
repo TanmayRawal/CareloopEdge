@@ -4,7 +4,7 @@ Roles
   patient  registers, uploads scans, follows the review, reads the DOCTOR's signed report (never AI output),
            books / reschedules / cancels a consultation with the reporting radiologist
   doctor   prioritised worklist with SLA badges, case review with AI (calibrated probabilities, 95% set, Grad-CAM,
-           lesion outline, review flags, assistant), signs / amends reports, consultation schedule and attendance,
+           lesion outline, review flags), signs / amends reports, consultation schedule and attendance,
            working hours and days off
   admin    care coordinator + administrator: follow-up worklist ranked by an explainable risk score, patient record
            with a unified timeline, walk-in registration, contact log and reminders (doctor-approved plans only),
@@ -51,9 +51,6 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     db = DB(Path(data_dir) / "portal.db")
     store = BlobStore.from_key_file(Path(data_dir), Path(key_file))
     ctx = services.Ctx(db=db, store=store, engine=engine, model_version=str(model_info.get("version", "unknown")))
-    if assistant is None:
-        from edge.agent.orchestrator import Assistant
-        assistant = Assistant()
     app.extensions["portal"] = {"db": db, "store": store, "ctx": ctx, "assistant": assistant}
 
     # Static files are served with a content hash in the URL, so they can be cached for a year.

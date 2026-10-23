@@ -322,10 +322,6 @@ details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: ""; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
 details.panel[open] > summary::after { transform: rotate(-135deg); }
 details.panel .panel-b { padding: 0 16px 14px; }
-.assistant-out p { font-size: var(--fs-sm); color: var(--text-2); }
-.qa { border-left: 2px solid var(--border-2); padding: 4px 0 4px 10px; margin-top: 10px; }
-.qa .q { font-weight: 600; color: var(--text); }
-.ask { display: flex; gap: 8px; margin-top: 10px; }
 .signed-box { display: flex; gap: 10px; align-items: center; background: var(--ok-soft); color: var(--text); border: 1px solid var(--ok-line); border-left: 3px solid var(--ok);
   border-radius: var(--r); padding: 9px 12px; font-size: var(--fs-xs); margin-bottom: 14px; }
 .signed-box .ic { color: var(--ok); }
@@ -738,3 +734,6 @@ body.case-expanded .case-head, body.case-expanded .case-tabs { display: none; }
 /* row actions inside tables stay quiet: outlined, so the data, not the buttons, carries the eye */
 .table .btn.primary { background: transparent; color: var(--accent); border-color: var(--accent); }
 .table .btn.primary:hover { background: var(--accent-soft); }
+/* back links and pager: icon + text, no typographic arrows */
+a.small:has(> .ic), .pager .btn { display: inline-flex; align-items: center; gap: 4px; }
+.ic.flip { transform: scaleX(-1); }

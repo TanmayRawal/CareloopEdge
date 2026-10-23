@@ -2,10 +2,10 @@
 # NeuroEdge installer for Raspberry Pi 5 (Raspberry Pi OS 64-bit, Bookworm or newer). Run from the repo root:
 #
 #   sudo bash edge/install_pi.sh [--with-deep-explain] [--gguf FILE] [--ca-cert FILE] [--dev-bundle DIR]
-#                                [--kiosk] [--display td1|td2|hdmi] [--rotate 0|90|180|270] [--no-llm]
+#                                [--kiosk] [--display td1|td2|hdmi] [--rotate 0|90|180|270] [--with-llm]
 #
 #   --with-deep-explain  also install CPU PyTorch + timm (research tools only; the v1 portal shows Grad-CAM + lesion)
-#   --gguf FILE          use a local copy of Qwen3-1.7B-Q4_K_M.gguf instead of downloading it (fully offline install)
+#   --gguf FILE          with --with-llm: use a local copy of Qwen3-1.7B-Q4_K_M.gguf instead of downloading it
 #   --ca-cert FILE       trust this CA for the model registry (e.g. Caddy's internal root for a LAN server)
 #   --dev-bundle DIR     DEVELOPMENT ONLY: serve a plaintext bundle directory (no server, no encryption at rest)
 #   --kiosk              the Pi's own screen shows the portal full-screen: device home (/device) -> portal, touch
@@ -14,13 +14,14 @@
 #                        td1 = original 7" Touch Display (800x480; Pi 5 needs the 22-to-15-pin display cable),
 #                        td2 = Touch Display 2 (720x1280 portrait panel; use --rotate 90 for landscape), hdmi = none
 #   --rotate DEG         rotate the kiosk screen (e.g. 90 for Touch Display 2 in landscape)
-#   --no-llm             no report assistant (no llama.cpp build, no 1.1 GB model, ~1.6 GB less RAM): for a Pi 4 or a
-#                        smaller board. "Draft summary" then uses the built-in template; everything else is unchanged.
+#   --with-llm           RESEARCH ONLY: also build llama.cpp and run the local language model (Qwen3-1.7B, ~1.6 GB RAM)
+#                        used by edge/agent experiments. The portal does not use it; a normal install leaves it out and
+#                        stops / masks the service if an earlier install had it.
 #
-# Layout: code /opt/neuroedge/src, venv /opt/neuroedge/venv, llama.cpp /opt/neuroedge/bin, LLM /opt/neuroedge/llm,
+# Layout: code /opt/neuroedge/src, venv /opt/neuroedge/venv (llama.cpp /opt/neuroedge/bin + /opt/neuroedge/llm only with --with-llm),
 # device state (keys, encrypted bundles) /var/lib/neuroedge, config /etc/neuroedge. Services run as user "neuroedge".
 # Network exposure: Caddy serves the portal over HTTPS (:443, local CA) and redirects :80; the Flask app and the
-# LLM listen on loopback only; an nftables table admits only SSH, HTTP(S) and mDNS.
+# optional LLM listen on loopback only; an nftables table admits only SSH, HTTP(S) and mDNS.
 # Re-running the script is safe (idempotent); it upgrades the code in place.
 set -euo pipefail
 
@@ -32,7 +33,7 @@ GGUF_NAME=Qwen3-1.7B-Q4_K_M.gguf
 GGUF_URL=https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/$GGUF_NAME
 GGUF_SHA256=b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
 
-DEEP=0; GGUF_SRC=""; CA_CERT=""; DEV_BUNDLE=""; KIOSK=0; DISPLAY_MODEL=""; ROTATE=0; LLM=1
+DEEP=0; GGUF_SRC=""; CA_CERT=""; DEV_BUNDLE=""; KIOSK=0; DISPLAY_MODEL=""; ROTATE=0; LLM=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-deep-explain) DEEP=1; shift ;;
@@ -42,7 +43,8 @@ while [[ $# -gt 0 ]]; do
     --kiosk) KIOSK=1; shift ;;
     --display) DISPLAY_MODEL="$2"; shift 2 ;;
     --rotate) ROTATE="$2"; shift 2 ;;
-    --no-llm) LLM=0; shift ;;
+    --with-llm) LLM=1; shift ;;
+    --no-llm) LLM=0; shift ;;                  # the default; kept for older instructions
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -102,7 +104,7 @@ if [[ -n "$GGUF_SRC" ]]; then install -m 644 "$GGUF_SRC" "$GGUF";
 elif [[ ! -f "$GGUF" ]]; then curl -L --fail --retry 5 -C - -o "$GGUF.part" "$GGUF_URL" && mv "$GGUF.part" "$GGUF"; fi
 echo "$GGUF_SHA256  $GGUF" | sha256sum -c - || { echo "GGUF checksum mismatch: refusing to use it" >&2; rm -f "$GGUF"; exit 1; }
 else
-  say "Report assistant: not installed (--no-llm)"
+  say "Local language model: not installed (portal does not use it; --with-llm for research)"
 fi
 
 if [[ -n "$CA_CERT" ]]; then
@@ -127,7 +129,6 @@ EOF
 fi
 grep -q '^NEUROEDGE_BEHIND_PROXY=' "$ETC/web.env" || echo "NEUROEDGE_BEHIND_PROXY=1" >> "$ETC/web.env"
 sed -i '/^NEUROEDGE_LLM=/d' "$ETC/web.env"
-[[ $LLM -eq 1 ]] || echo "NEUROEDGE_LLM=off" >> "$ETC/web.env"
 grep -q '^NEUROEDGE_PORTAL_DATA=' "$ETC/web.env" || printf 'NEUROEDGE_PORTAL_DATA=%s/portal
 NEUROEDGE_PORTAL_KEY=%s/portal.key
 ' "$STATE" "$ETC" >> "$ETC/web.env"
@@ -340,7 +341,6 @@ IP="$(hostname -I | awk '{print $1}')"
 cat <<EOF
 
 NeuroEdge installed.
-  LLM:  systemctl status neuroedge-llm      (loopback :8081)
   Web:  https://$IP/  or  https://$(hostname).local/      (starts once a model is installed)
   CA:   install http://$IP/neuroedge-ca.crt on each laptop/phone; check its fingerprint with: sudo neuroedge-ca
 
