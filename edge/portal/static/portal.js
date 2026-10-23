@@ -63,8 +63,79 @@
       clock.textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     };
     tick(); setInterval(tick, 10000);
-    setTimeout(() => location.reload(), 60000);           // status (temperature, last analysis) stays current
+    setTimeout(() => location.reload(), 5 * 60000);       // status (temperature, storage) stays current
   }
+  // ------------------------------------------------------------------ device home: 3D brain
+  // Surface points of a real MRI brain (training/make_brain_points.py: int8 x, y, z, nx, ny, nz, RAS+), drawn on a
+  // 2D canvas: turntable about the superior axis, camera 22 degrees above, back faces culled, Lambert shading in 8
+  // tones, and an axial "scan" plane sweeping head to foot. No WebGL, no libraries; ~6k points per frame at <= 30 fps.
+  const brain = $("#brain");
+  if (brain) {
+    const ctx = brain.getContext("2d");
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const TONES = 8, ELEV = 22 * Math.PI / 180, SPEED = 0.22;              // rad/s: one turn in ~29 s
+    const L = [-0.35, 0.45, 0.82], ln = Math.hypot(...L); L.forEach((v, i) => { L[i] = v / ln; });
+    const tone = k => {                                                     // accent hue, brightness by shading
+      const t = 0.18 + 0.82 * k / (TONES - 1);
+      return `rgb(${Math.round(30 + 60 * t)}, ${Math.round(80 + 130 * t)}, ${Math.round(100 + 130 * t)})`;
+    };
+    const palette = Array.from({ length: TONES }, (_, k) => tone(k));
+    let P = null, n = 0, yaw = 0.6, pitch = ELEV, last = 0, drag = null, idleUntil = 0, W = 0, H = 0, dpr = 1;
+    const fit = () => {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const r = brain.getBoundingClientRect();
+      W = brain.width = Math.max(1, Math.round(r.width * dpr)); H = brain.height = Math.max(1, Math.round(r.height * dpr));
+    };
+    const draw = now => {
+      if (!P) return;
+      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const scale = 0.47 * Math.min(W, H), ox = W / 2, oy = H / 2, s = Math.max(1.4, 1.9 * dpr * Math.min(W, H) / 520);
+      const scan = still ? 2 : Math.sin(now / 2600) * 1.05;                 // axial plane position (z, -1..1)
+      ctx.clearRect(0, 0, W, H);
+      const xs = new Float32Array(n), ys = new Float32Array(n), tk = new Int8Array(n);
+      for (let i = 0; i < n; i++) {
+        const o = i * 6, x = P[o] / 127, y = P[o + 1] / 127, z = P[o + 2] / 127;
+        const nx = P[o + 3] / 127, ny = P[o + 4] / 127, nz = P[o + 5] / 127;
+        // yaw about superior (z), then pitch about screen x; camera looks along +y
+        const x1 = x * cy - y * sy, y1 = x * sy + y * cy;
+        const nx1 = nx * cy - ny * sy, ny1 = nx * sy + ny * cy;
+        const z2 = y1 * sp + z * cp;
+        const ny2 = ny1 * cp - nz * sp, nz2 = ny1 * sp + nz * cp;
+        const toward = -ny2;                                              // normal component toward the viewer
+        if (toward < -0.05) { tk[i] = -1; continue; }
+        const lam = Math.max(0, nx1 * L[0] + nz2 * L[1] + toward * L[2]);
+        xs[i] = ox + x1 * scale; ys[i] = oy - z2 * scale;
+        tk[i] = Math.abs(z - scan) < 0.035 ? TONES : Math.min(TONES - 1, Math.floor(lam * TONES));
+      }
+      for (let k = 0; k <= TONES; k++) {
+        ctx.fillStyle = k === TONES ? "#e9f8fc" : palette[k];
+        const sz = k === TONES ? s * 1.25 : s;
+        for (let i = 0; i < n; i++) if (tk[i] === k) ctx.fillRect(xs[i] - sz / 2, ys[i] - sz / 2, sz, sz);
+      }
+    };
+    const loop = now => {
+      if (document.hidden) { requestAnimationFrame(loop); return; }
+      if (now - last >= 33) {                                             // ~30 fps is plenty, and cheap on a Pi
+        if (!drag && now > idleUntil) yaw += SPEED * Math.min(0.1, (now - (last || now)) / 1000);
+        last = now; draw(now);
+      }
+      requestAnimationFrame(loop);
+    };
+    brain.addEventListener("pointerdown", ev => { drag = { x: ev.clientX, y: ev.clientY, yaw, pitch }; brain.setPointerCapture(ev.pointerId); });
+    brain.addEventListener("pointermove", ev => {
+      if (!drag) return;
+      yaw = drag.yaw + (ev.clientX - drag.x) * 0.01;
+      pitch = Math.max(-0.6, Math.min(1.2, drag.pitch + (ev.clientY - drag.y) * 0.01));
+      if (still) draw(performance.now());
+    });
+    ["pointerup", "pointercancel"].forEach(e => brain.addEventListener(e, () => { drag = null; idleUntil = performance.now() + 3000; }));
+    new ResizeObserver(() => { fit(); draw(performance.now()); }).observe(brain);
+    fetch(brain.dataset.src).then(r => r.arrayBuffer()).then(buf => {
+      P = new Int8Array(buf); n = Math.floor(P.length / 6); fit();
+      if (still) draw(0); else requestAnimationFrame(loop);
+    }).catch(() => brain.remove());
+  }
+
   if (document.body.classList.contains("kiosk")) {         // the device's own screen: back to device home when idle
     let idle;
     const arm = () => { clearTimeout(idle); idle = setTimeout(() => { location.href = "/device"; }, 3 * 60 * 1000); };

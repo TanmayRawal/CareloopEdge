@@ -20,9 +20,12 @@ def test_device_page_is_public_and_has_no_patient_data(env):
     assert "Clinician" in page and "Patient" in page                              # the two entry points
     assert "Zebulon" not in page and "Quixote" not in page and "pat@x.test" not in page
     assert "Meningioma" not in page and "NE-0" not in page                          # no results, no record numbers
-    # stub model "test-1" is neither a release nor signature-verified: said in plain words, no internal names
-    assert "Development model" in page and "Needs attention" not in page and "test-1" not in page
-    assert "signature of the AI model is not verified" in page
+    # no internal model names or provenance notices on the device screen (those are on Admin > System)
+    assert "test-1" not in page and "Development model" not in page and "signature" not in page
+    assert 'id="brain"' in page and "Ready" in page
+    src = re.search(r'data-src="([^"]+)"', page).group(1)
+    data = k.get(src).data                                          # 3D brain point cloud: int8 x y z nx ny nz
+    assert len(data) % 6 == 0 and len(data) // 6 > 5000
 
 
 def test_device_page_names_a_verified_release(env):
@@ -34,6 +37,8 @@ def test_device_page_names_a_verified_release(env):
         model_info, db, data_dir = info, env["db"], env["tmp"]
     s = device.status(D)
     assert s["model"] == "Model 0.3.0" and s["verified"] and not s["issues"] and s["ready"]
+    D.model_info = {"version": "mri_v2vol_seed0_int8", "verified": False}
+    assert device.status(D)["model"] is None and device.status(D)["ready"]     # a dev build is not a problem to show
 
 
 def body_classes(page: str) -> set[str]:
