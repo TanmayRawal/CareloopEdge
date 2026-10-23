@@ -273,18 +273,27 @@ if [[ $KIOSK -eq 1 ]]; then
     timeout 30 runuser -u kiosk -- certutil -A -d "sql:$KH/.pki/nssdb" -f "$NOPW" -t "C,," -n neuroedge-portal -i "$PUB_CA" </dev/null
     rm -f "$NOPW"
   fi
-  [[ -f "$ETC/kiosk.env" ]] || cat > "$ETC/kiosk.env" <<EOF
+  KENV=/etc/default/neuroedge-kiosk      # world-readable: the kiosk user cannot enter $ETC (portal key)
+  [[ -f "$KENV" ]] || cat > "$KENV" <<EOF
 # NeuroEdge kiosk (the Pi's own screen). Edit, then reboot (or restart lightdm / getty@tty1).
 KIOSK_URL=https://localhost/device?kiosk=1
 KIOSK_ROTATE=$ROTATE
 EOF
-  chmod 644 "$ETC/kiosk.env"
+  chmod 644 "$KENV"
   # labwc: no key bindings (no terminal / menu escape from the kiosk), no window decorations
   cat > "$KH/.config/labwc/rc.xml" <<'EOF'
 <?xml version="1.0"?>
 <labwc_config>
   <core><decoration>client</decoration></core>
-  <keyboard></keyboard>
+  <keyboard>
+    <!-- no way out of the kiosk from a keyboard: clear the default terminal, launcher, window and exit bindings -->
+    <keybind key="W-Return"><action name="None"/></keybind>
+    <keybind key="A-F3"><action name="None"/></keybind>
+    <keybind key="A-F4"><action name="None"/></keybind>
+    <keybind key="A-Tab"><action name="None"/></keybind>
+    <keybind key="W-a"><action name="None"/></keybind>
+    <keybind key="A-Escape"><action name="None"/></keybind>
+  </keyboard>
   <mouse><default/></mouse>
 </labwc_config>
 EOF
@@ -292,7 +301,7 @@ EOF
 <openbox_menu></openbox_menu>
 ' > "$KH/.config/labwc/menu.xml"
   cat > "$KH/.config/labwc/autostart" <<'EOF'
-. /etc/neuroedge/kiosk.env
+. /etc/default/neuroedge-kiosk
 if [ "${KIOSK_ROTATE:-0}" != "0" ]; then
   for o in $(wlr-randr | awk '/^[^ ]/ {print $1}'); do wlr-randr --output "$o" --transform "$KIOSK_ROTATE"; done
 fi
@@ -302,7 +311,7 @@ EOF
   cat > /usr/local/bin/neuroedge-kiosk-browser <<EOF
 #!/bin/sh
 # Full-screen browser for the device screen; restarted if it ever exits. Waits for the portal first.
-. $ETC/kiosk.env
+. $KENV
 until curl -sk -o /dev/null https://localhost/device; do sleep 2; done
 while true; do
   $CHROMIUM_BIN --kiosk --incognito --noerrdialogs --disable-translate --no-first-run --disable-features=Translate \
