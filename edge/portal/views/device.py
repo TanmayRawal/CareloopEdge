@@ -60,7 +60,7 @@ def status(d) -> dict:
     return {
         "model_version": info.get("version", "—"), "verified": bool(info.get("verified")),
         "whole_study": bool(info.get("whole_study")), "precision": info.get("precision") or "—",
-        "llm": d.assistant.llm.available(), "uptime": ago(STARTED), "last_analysis": ago(last) if last else None,
+        "llm": None if os.environ.get("NEUROEDGE_LLM") == "off" else d.assistant.llm.available(), "uptime": ago(STARTED), "last_analysis": ago(last) if last else None,
         "temp_c": temp, "temp_level": None if temp is None else "err" if temp >= 80 else "warn" if temp >= 70 else "ok",
         "load": None if load is None else round(load, 2), "cpus": os.cpu_count() or 1,
         "disk_free": human_bytes(disk.free), "disk_pct_used": round(100 * (disk.total - disk.free) / disk.total),

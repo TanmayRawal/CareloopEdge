@@ -2,7 +2,7 @@
 # NeuroEdge installer for Raspberry Pi 5 (Raspberry Pi OS 64-bit, Bookworm or newer). Run from the repo root:
 #
 #   sudo bash edge/install_pi.sh [--with-deep-explain] [--gguf FILE] [--ca-cert FILE] [--dev-bundle DIR]
-#                                [--kiosk] [--display td1|td2|hdmi] [--rotate 0|90|180|270]
+#                                [--kiosk] [--display td1|td2|hdmi] [--rotate 0|90|180|270] [--no-llm]
 #
 #   --with-deep-explain  also install CPU PyTorch + timm (research tools only; the v1 portal shows Grad-CAM + lesion)
 #   --gguf FILE          use a local copy of Qwen3-1.7B-Q4_K_M.gguf instead of downloading it (fully offline install)
@@ -14,6 +14,8 @@
 #                        td1 = original 7" Touch Display (800x480; Pi 5 needs the 22-to-15-pin display cable),
 #                        td2 = Touch Display 2 (720x1280 portrait panel; use --rotate 90 for landscape), hdmi = none
 #   --rotate DEG         rotate the kiosk screen (e.g. 90 for Touch Display 2 in landscape)
+#   --no-llm             no report assistant (no llama.cpp build, no 1.1 GB model, ~1.6 GB less RAM): for a Pi 4 or a
+#                        smaller board. "Draft summary" then uses the built-in template; everything else is unchanged.
 #
 # Layout: code /opt/neuroedge/src, venv /opt/neuroedge/venv, llama.cpp /opt/neuroedge/bin, LLM /opt/neuroedge/llm,
 # device state (keys, encrypted bundles) /var/lib/neuroedge, config /etc/neuroedge. Services run as user "neuroedge".
@@ -30,7 +32,7 @@ GGUF_NAME=Qwen3-1.7B-Q4_K_M.gguf
 GGUF_URL=https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/$GGUF_NAME
 GGUF_SHA256=b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
 
-DEEP=0; GGUF_SRC=""; CA_CERT=""; DEV_BUNDLE=""; KIOSK=0; DISPLAY_MODEL=""; ROTATE=0
+DEEP=0; GGUF_SRC=""; CA_CERT=""; DEV_BUNDLE=""; KIOSK=0; DISPLAY_MODEL=""; ROTATE=0; LLM=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-deep-explain) DEEP=1; shift ;;
@@ -40,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --kiosk) KIOSK=1; shift ;;
     --display) DISPLAY_MODEL="$2"; shift 2 ;;
     --rotate) ROTATE="$2"; shift 2 ;;
+    --no-llm) LLM=0; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -77,7 +80,8 @@ if [[ $DEEP -eq 1 ]]; then
   "$APP/venv/bin/pip" install -q timm "${LOCK[@]}"
 fi
 
-say "llama.cpp $LLAMA_TAG (native build for the Cortex-A76: NEON + dotprod)"
+if [[ $LLM -eq 1 ]]; then
+say "llama.cpp $LLAMA_TAG (native build for this CPU: NEON + dotprod where available)"
 # A shallow clone reports "build 1" in --version, so the installed tag is recorded in a stamp file instead.
 if [[ ! -x "$APP/bin/llama-server" || "$(cat "$APP/bin/llama-server.tag" 2>/dev/null)" != "$LLAMA_TAG" ]]; then
   rm -rf "$APP/llama.cpp-src"
@@ -97,6 +101,9 @@ GGUF="$APP/llm/$GGUF_NAME"
 if [[ -n "$GGUF_SRC" ]]; then install -m 644 "$GGUF_SRC" "$GGUF";
 elif [[ ! -f "$GGUF" ]]; then curl -L --fail --retry 5 -C - -o "$GGUF.part" "$GGUF_URL" && mv "$GGUF.part" "$GGUF"; fi
 echo "$GGUF_SHA256  $GGUF" | sha256sum -c - || { echo "GGUF checksum mismatch: refusing to use it" >&2; rm -f "$GGUF"; exit 1; }
+else
+  say "Report assistant: not installed (--no-llm)"
+fi
 
 if [[ -n "$CA_CERT" ]]; then
   say "Trusting registry CA $CA_CERT"
@@ -119,6 +126,8 @@ EOF
   chgrp neuroedge "$ETC/web.env"
 fi
 grep -q '^NEUROEDGE_BEHIND_PROXY=' "$ETC/web.env" || echo "NEUROEDGE_BEHIND_PROXY=1" >> "$ETC/web.env"
+sed -i '/^NEUROEDGE_LLM=/d' "$ETC/web.env"
+[[ $LLM -eq 1 ]] || echo "NEUROEDGE_LLM=off" >> "$ETC/web.env"
 grep -q '^NEUROEDGE_PORTAL_DATA=' "$ETC/web.env" || printf 'NEUROEDGE_PORTAL_DATA=%s/portal
 NEUROEDGE_PORTAL_KEY=%s/portal.key
 ' "$STATE" "$ETC" >> "$ETC/web.env"
@@ -168,7 +177,14 @@ chmod 755 /usr/local/bin/neuroedge-sync
 say "systemd units"
 install -m 644 "$APP/src/edge/systemd/"neuroedge-*.{service,timer,path} /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now neuroedge-llm.service neuroedge-sync.timer neuroedge-web-restart.path neuroedge-reminders.timer
+if [[ $LLM -eq 1 ]]; then
+  systemctl unmask neuroedge-llm.service >/dev/null 2>&1 || true
+  systemctl enable --now neuroedge-llm.service
+else
+  systemctl disable --now neuroedge-llm.service >/dev/null 2>&1 || true
+  systemctl mask neuroedge-llm.service >/dev/null       # the web unit only "Wants" it; masked = never started
+fi
+systemctl enable --now neuroedge-sync.timer neuroedge-web-restart.path neuroedge-reminders.timer
 systemctl enable neuroedge-web.service
 systemctl restart neuroedge-web.service || true    # skipped (condition) until a model is installed
 
