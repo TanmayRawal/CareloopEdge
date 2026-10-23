@@ -62,10 +62,3 @@ def test_front_door_is_the_device_page(env):
     assert c.get("/").headers["Location"].endswith("/device")              # signed out: device home
     login(c, "doc@clinic.test")
     assert c.get("/").headers["Location"].endswith("/doctor/")             # signed in: straight to work
-
-
-def test_front_door_is_the_device_page(env):
-    c = env["app"].test_client()
-    assert c.get("/").headers["Location"].endswith("/device")              # signed out: device home
-    login(c, "doc@clinic.test")
-    assert c.get("/").headers["Location"].endswith("/doctor/")             # signed in: straight to work
