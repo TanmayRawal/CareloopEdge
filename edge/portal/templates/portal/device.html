@@ -19,11 +19,11 @@
   </header>
 
   <main class="ds-main">
-    <section class="ds-state {{ 'is-ready' if s.ready else 'is-check' }}" aria-live="polite">
-      <div class="ds-word"><svg class="ic"><use href="#{{ 'i-check' if s.ready else 'i-alert' }}"/></svg>{{ 'Ready' if s.ready else 'Needs attention' }}</div>
-      <p class="ds-what">Brain MRI analysis on this device</p>
-      <p class="ds-meta">{{ s.model }}{% if s.verified %} · signature verified{% endif %}{% if s.whole_study %} · whole studies and single images{% endif %}</p>
-      {% if s.last_analysis %}<p class="ds-meta">Last study analysed {{ s.last_analysis }} ago</p>{% endif %}
+    <section class="ds-visual {{ 'is-ready' if s.ready else 'is-check' }}" aria-live="polite">
+      <canvas id="brain" data-src="{{ asset('brain.bin') }}" role="img"
+              aria-label="Rotating brain surface reconstructed from an MRI study"></canvas>
+      <p class="ds-caption"><span class="ds-state-word"><svg class="ic sm"><use href="#{{ 'i-check' if s.ready else 'i-alert' }}"/></svg>{{ 'Ready' if s.ready else 'Needs attention' }}</span>
+        <span>Brain MRI analysis on this device{% if s.model %} · {{ s.model }}{% endif %}</span></p>
       {% if s.issues %}<ul class="ds-issues">{% for x in s.issues %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
     </section>
 

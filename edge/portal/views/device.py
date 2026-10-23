@@ -49,7 +49,7 @@ def qr_svg(url: str) -> str | None:
 
 
 def status(d) -> dict:
-    """What the device screen shows: one state ("Ready") plus the specific problems, if any, in plain words."""
+    """What the device screen shows: ready or not, plus the specific problems, if any, in plain words."""
     info = d.model_info
     temp = soc_temp_c()
     disk = shutil.disk_usage(d.data_dir)
@@ -62,16 +62,14 @@ def status(d) -> dict:
     url = base if base and "localhost" not in base and "127.0.0.1" not in base else (f"https://{lan}" if lan else base)
     version = str(info.get("version") or "")
     released = bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
-    issues = []
-    if not info.get("verified"):
-        issues.append("Development model: the signature of the AI model is not verified on this device.")
+    issues = []                 # only problems someone at the device can act on; model provenance is on Admin > System
     if temp is not None and temp >= 80:
         issues.append(f"The device is hot ({temp:.0f} °C). Analysis slows down; check the cooler and airflow.")
     if low:
         issues.append(f"Storage is nearly full ({human_bytes(disk.free)} left). Back up and archive old studies.")
     return {
-        "ready": not any(x.startswith(("The device is hot", "Storage")) for x in issues), "issues": issues,
-        "model": f"Model {version}" if released else "Development model",
+        "ready": not issues, "issues": issues,
+        "model": f"Model {version}" if released else None,
         "verified": bool(info.get("verified")), "whole_study": bool(info.get("whole_study")),
         "last_analysis": ago(last) if last else None, "uptime": ago(STARTED),
         "temp_c": temp, "hot": temp is not None and temp >= 70,
