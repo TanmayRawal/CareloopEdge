@@ -25,8 +25,8 @@
             <span class="val">{{ s.model_version }} · {{ 'signature verified' if s.verified else 'unsigned dev bundle' }}</span></div>
           <div class="dv-row"><span class="dv-dot ok"></span><span class="lbl">Analysis</span>
             <span class="val">{{ 'Study + image' if s.whole_study else 'Image' }}{% if s.last_analysis %} · last {{ s.last_analysis }} ago{% endif %}</span></div>
-          <div class="dv-row"><span class="dv-dot {{ 'ok' if s.llm else 'warn' }}"></span><span class="lbl">Report assistant</span>
-            <span class="val">{{ 'Online' if s.llm else 'Offline' }}</span></div>
+          <div class="dv-row"><span class="dv-dot {{ '' if s.llm is none else 'ok' if s.llm else 'warn' }}"></span><span class="lbl">Report assistant</span>
+            <span class="val">{{ 'Not installed' if s.llm is none else 'Online' if s.llm else 'Offline' }}</span></div>
           <div class="dv-row"><span class="dv-dot {{ s.temp_level or '' }}"></span><span class="lbl">Temperature{% if s.load is not none %} · load{% endif %}</span>
             <span class="val">{{ '%.0f'|format(s.temp_c) ~ ' °C' if s.temp_c is not none else '—' }}{% if s.load is not none %} · {{ s.load }} / {{ s.cpus }}{% endif %}</span></div>
           <div class="dv-row"><span class="dv-dot {{ 'err' if s.disk_pct_used >= 90 else 'warn' if s.disk_pct_used >= 80 else 'ok' }}"></span><span class="lbl">Storage</span>
