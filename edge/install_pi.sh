@@ -325,6 +325,10 @@ autologin-user=kiosk
 autologin-user-timeout=0
 autologin-session=labwc
 '       > /etc/lightdm/lightdm.conf.d/50-neuroedge-kiosk.conf
+    # lightdm.conf is read after conf.d and Raspberry Pi OS sets desktop autologin for the admin user there, which
+    # would win (and give the screen an admin desktop with sudo): turn that off, keeping a copy of the original.
+    [[ -f /etc/lightdm/lightdm.conf.neuroedge-orig ]] || cp -a /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.neuroedge-orig
+    sed -i -E 's/^(autologin-user=|autologin-session=)/#neuroedge-kiosk# \1/' /etc/lightdm/lightdm.conf
     KIOSK_RESTART="systemctl restart lightdm"
   else
     # Lite image: autologin on tty1, ~/.bash_profile starts labwc
