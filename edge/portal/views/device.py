@@ -8,7 +8,7 @@ points. /device?kiosk=1 marks this browser as the device's kiosk (cookie): every
 
 from __future__ import annotations
 
-import os
+import re
 import shutil
 import socket
 import time
@@ -49,22 +49,34 @@ def qr_svg(url: str) -> str | None:
 
 
 def status(d) -> dict:
+    """What the device screen shows: one state ("Ready") plus the specific problems, if any, in plain words."""
     info = d.model_info
     temp = soc_temp_c()
     disk = shutil.disk_usage(d.data_dir)
-    load = os.getloadavg()[0] if hasattr(os, "getloadavg") else None
+    # low = little room in absolute terms (a whole study and its slice images take ~5-100 MB), not a percentage
+    low = disk.free < 2 * 1024 ** 3 or (disk.total - disk.free) / disk.total > 0.97
     last = d.db.one("SELECT MAX(created) AS t FROM ai_results")["t"]
     base = (d.db.setting("base_url") or "").rstrip("/")
     lan = lan_address()
-    urls = [u for u in dict.fromkeys([base, f"https://{lan}" if lan else ""]) if u]
+    # the address a phone on the clinic network can open: the configured one unless it only works on this machine
+    url = base if base and "localhost" not in base and "127.0.0.1" not in base else (f"https://{lan}" if lan else base)
+    version = str(info.get("version") or "")
+    released = bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
+    issues = []
+    if not info.get("verified"):
+        issues.append("Development model: the signature of the AI model is not verified on this device.")
+    if temp is not None and temp >= 80:
+        issues.append(f"The device is hot ({temp:.0f} °C). Analysis slows down; check the cooler and airflow.")
+    if low:
+        issues.append(f"Storage is nearly full ({human_bytes(disk.free)} left). Back up and archive old studies.")
     return {
-        "model_version": info.get("version", "—"), "verified": bool(info.get("verified")),
-        "whole_study": bool(info.get("whole_study")), "precision": info.get("precision") or "—",
-        "uptime": ago(STARTED), "last_analysis": ago(last) if last else None,
-        "temp_c": temp, "temp_level": None if temp is None else "err" if temp >= 80 else "warn" if temp >= 70 else "ok",
-        "load": None if load is None else round(load, 2), "cpus": os.cpu_count() or 1,
-        "disk_free": human_bytes(disk.free), "disk_pct_used": round(100 * (disk.total - disk.free) / disk.total),
-        "host": socket.gethostname(), "urls": urls, "qr": qr_svg(urls[0]) if urls else None,
+        "ready": not any(x.startswith(("The device is hot", "Storage")) for x in issues), "issues": issues,
+        "model": f"Model {version}" if released else "Development model",
+        "verified": bool(info.get("verified")), "whole_study": bool(info.get("whole_study")),
+        "last_analysis": ago(last) if last else None, "uptime": ago(STARTED),
+        "temp_c": temp, "hot": temp is not None and temp >= 70,
+        "disk_free": human_bytes(disk.free), "disk_low": low,
+        "lan": lan, "url": url, "qr": qr_svg(url) if url else None, "host": socket.gethostname(),
     }
 
 
