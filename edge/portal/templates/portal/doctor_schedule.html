@@ -23,7 +23,7 @@
   {% for a in unmarked %}
     <div class="appt-row">
       <div class="time-col"><b>{{ fmt_clock(a.start_ts) }}</b><span>{{ fmt_day(a.start_ts) }}</span></div>
-      <div class="grow"><b>{{ a.patient_name }}</b><div class="small muted">{{ mrn(a.patient_id) }}</div></div>
+      <div class="grow"><b>{{ pname(a.patient_name) }}</b><div class="small muted">{{ mrn(a.patient_id) }}</div></div>
       {% include "portal/_mark_buttons.html" %}
     </div>
   {% endfor %}
@@ -41,7 +41,7 @@
   {% for a in by_day.get(dday, []) %}
     <div class="appt-row {{ 'dim' if a.status == 'cancelled' }} {{ 'now' if a.start_ts <= now < a.end_ts and a.status in ('booked', 'arrived') }}">
       <div class="time-col"><b>{{ fmt_clock(a.start_ts) }}</b><span>{{ ((a.end_ts - a.start_ts) / 60)|int }} min</span></div>
-      <div class="grow"><b>{{ a.patient_name }}</b>{% if a.no_shows >= 2 %} <span class="tag warn" title="Missed {{ a.no_shows }} appointments">{{ a.no_shows }} no-shows</span>{% endif %}
+      <div class="grow"><b>{{ pname(a.patient_name) }}</b>{% if a.no_shows >= 2 %} <span class="tag warn" title="Missed {{ a.no_shows }} appointments">{{ a.no_shows }} no-shows</span>{% endif %}
         <div class="small muted">{{ mrn(a.patient_id) }}{% if a.patient_phone %} · {{ a.patient_phone }}{% endif %}{% if a.reason %} · {{ a.reason }}{% endif %}</div></div>
       <a class="btn sm ghost" href="{{ url_for('doctor.case_review', cid=a.case_id) }}">Study</a>
       <span class="pill a-{{ a.status }}">{{ appt_text[a.status] }}</span>

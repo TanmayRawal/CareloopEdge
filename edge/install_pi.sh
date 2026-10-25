@@ -321,6 +321,27 @@ while true; do
 done
 EOF
   chmod 755 /usr/local/bin/neuroedge-kiosk-browser
+  # Lock the kiosk browser down (managed policy: applies to Chromium on this device): only the local portal,
+  # no developer tools, downloads, printing, file dialogs, password saving or autofill.
+  install -d -m 755 /etc/chromium/policies/managed
+  cat > /etc/chromium/policies/managed/neuroedge-kiosk.json <<'EOF'
+{
+  "URLBlocklist": ["*"],
+  "URLAllowlist": ["https://localhost", "about:blank"],
+  "DeveloperToolsAvailability": 2,
+  "DownloadRestrictions": 3,
+  "PrintingEnabled": false,
+  "AllowFileSelectionDialogs": false,
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BrowserSignin": 0,
+  "TranslateEnabled": false,
+  "EditBookmarksEnabled": false,
+  "DefaultPopupsSetting": 2
+}
+EOF
+  chmod 644 /etc/chromium/policies/managed/neuroedge-kiosk.json
   # Start labwc on tty1 after autologin
   cat > "$KH/.bash_profile" <<'EOF'
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$WAYLAND_DISPLAY" ]; then exec labwc >/tmp/labwc.log 2>&1; fi

@@ -62,3 +62,44 @@ def test_front_door_is_the_device_page(env):
     assert c.get("/").headers["Location"].endswith("/device")              # signed out: device home
     login(c, "doc@clinic.test")
     assert c.get("/").headers["Location"].endswith("/doctor/")             # signed in: straight to work
+
+
+def test_kiosk_signs_out_sooner_and_returns_home(env):
+    import time as _t
+    c = env["app"].test_client()
+    c.get("/device?kiosk=1")
+    login(c, "doc@clinic.test")
+    with c.session_transaction() as s:                       # 6 minutes without activity
+        s["t_seen"] = _t.time() - 6 * 60
+    assert c.get("/doctor/").status_code in (302, 401, 403)   # the kiosk session has closed
+    login(c, "doc@clinic.test")
+    from test_portal import csrf
+    r = c.post("/logout", data={"csrf": csrf(c, "/doctor/")})
+    assert r.headers["Location"].endswith("/device")          # signing out on the kiosk shows the device home
+    d = env["app"].test_client()                              # a normal browser: 6 minutes idle is fine
+    login(d, "doc@clinic.test")
+    with d.session_transaction() as s:
+        s["t_seen"] = _t.time() - 6 * 60
+    assert d.get("/doctor/").status_code == 200
+
+
+def test_patient_names_are_initials_on_the_kiosk_only(env):
+    from edge.portal.common import initials
+    assert initials("Meera Joshi") == "M. J." and initials("Dr. A. Rao") == "D. A. R." and initials("") == "—"
+    p = env["app"].test_client()
+    register(p, "zq@x.test", "Zebulon Quixote")
+    upload(p)
+    doc = env["app"].test_client()
+    login(doc, "doc@clinic.test")
+    assert "Zebulon Quixote" in doc.get("/doctor/").get_data(as_text=True)
+    doc.get("/device?kiosk=1")
+    page = doc.get("/doctor/").get_data(as_text=True)
+    assert "Zebulon" not in page and "Z. Q." in page
+
+
+def test_kiosk_browser_is_locked_down_by_policy():
+    from pathlib import Path
+    s = (Path(__file__).resolve().parents[1] / "edge/install_pi.sh").read_text(encoding="utf-8")
+    for key in ('"URLBlocklist": ["*"]', '"DeveloperToolsAvailability": 2', '"DownloadRestrictions": 3',
+                '"PrintingEnabled": false', '"AllowFileSelectionDialogs": false'):
+        assert key in s

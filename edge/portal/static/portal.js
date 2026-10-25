@@ -81,6 +81,9 @@
     };
     const palette = Array.from({ length: TONES }, (_, k) => tone(k));
     let P = null, n = 0, yaw = 0.6, pitch = ELEV, last = 0, drag = null, idleUntil = 0, W = 0, H = 0, dpr = 1;
+    // stop animating after a minute without a touch (CPU and heat stay free for analysis); a touch resumes it
+    const REST_MS = 60000;
+    let touched = performance.now(), resting = false;
     const fit = () => {
       dpr = Math.min(2, window.devicePixelRatio || 1);
       const r = brain.getBoundingClientRect();
@@ -114,6 +117,7 @@
       }
     };
     const loop = now => {
+      if (now - touched > REST_MS && !drag) { resting = true; return; }
       if (document.hidden) { requestAnimationFrame(loop); return; }
       if (now - last >= 33) {                                             // ~30 fps is plenty, and cheap on a Pi
         if (!drag && now > idleUntil) yaw += SPEED * Math.min(0.1, (now - (last || now)) / 1000);
@@ -121,6 +125,8 @@
       }
       requestAnimationFrame(loop);
     };
+    const wake = () => { touched = performance.now(); if (resting && !still) { resting = false; last = 0; requestAnimationFrame(loop); } };
+    ["pointerdown", "keydown", "touchstart"].forEach(e => document.addEventListener(e, wake, { passive: true }));
     brain.addEventListener("pointerdown", ev => { drag = { x: ev.clientX, y: ev.clientY, yaw, pitch }; brain.setPointerCapture(ev.pointerId); });
     brain.addEventListener("pointermove", ev => {
       if (!drag) return;
@@ -200,7 +206,12 @@
 
   if (document.body.classList.contains("kiosk")) {         // the device's own screen: back to device home when idle
     let idle;
-    const arm = () => { clearTimeout(idle); idle = setTimeout(() => { location.href = "/device"; }, 3 * 60 * 1000); };
+    // a shared screen: when nobody has touched it for 3 minutes, sign out (the server then shows the device home)
+    const leave = () => {
+      const out = document.querySelector('form[action$="/logout"]');
+      if (out) out.submit(); else location.href = "/device";
+    };
+    const arm = () => { clearTimeout(idle); idle = setTimeout(leave, 3 * 60 * 1000); };
     ["pointerdown", "keydown", "wheel", "touchstart"].forEach(e => document.addEventListener(e, arm, { passive: true }));
     arm();
   }

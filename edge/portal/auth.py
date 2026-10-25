@@ -22,6 +22,13 @@ _ph = PasswordHasher()
 MIN_PASSWORD = 10
 MAX_FAILURES, LOCK_SECONDS = 5, 15 * 60
 IDLE_SECONDS, ABSOLUTE_SECONDS = 30 * 60, 12 * 3600
+KIOSK_IDLE_SECONDS = 5 * 60          # the device's own, shared screen: a forgotten session closes sooner
+
+
+def on_kiosk() -> bool:
+    """This browser is the device's shared screen (cookie set by /device?kiosk=1)."""
+    from flask import request
+    return request.cookies.get("ne_kiosk") == "1"
 # A real hash of a random string: verifying against it for unknown e-mails keeps response time constant,
 # so the login form does not reveal which accounts exist.
 _DUMMY = _ph.hash("not-a-real-password-#")
@@ -107,7 +114,8 @@ def load_user(db) -> None:
     if uid is None:
         return
     now = time.time()
-    if now - session.get("t_seen", 0) > IDLE_SECONDS or now - session.get("t_login", 0) > ABSOLUTE_SECONDS:
+    idle = KIOSK_IDLE_SECONDS if on_kiosk() else IDLE_SECONDS
+    if now - session.get("t_seen", 0) > idle or now - session.get("t_login", 0) > ABSOLUTE_SECONDS:
         session.clear()
         g.expired = True
         return

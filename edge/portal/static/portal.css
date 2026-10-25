@@ -801,3 +801,6 @@ a.small:has(> .ic), .pager .btn { display: inline-flex; align-items: center; gap
 .okb-k.go { background: #0b6a87; border-color: #0b6a87; color: #fff; }
 .okb-k.on { background: #3fb6d6; color: #062530; }
 body.okb-open { padding-bottom: 240px; }
+
+/* kiosk: no printing or saving from the device's shared screen */
+.kiosk #print-btn, .kiosk .no-kiosk { display: none !important; }

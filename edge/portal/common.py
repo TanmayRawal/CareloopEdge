@@ -57,6 +57,12 @@ def fmt_iso(day: str | None) -> str:
         return day or "—"
 
 
+def initials(name: str | None) -> str:
+    """'Meera Joshi' -> 'M. J.': how patient names appear on the device's shared screen (privacy)."""
+    parts = [p for p in (name or "").replace(".", " ").split() if p]
+    return " ".join(p[0].upper() + "." for p in parts[:3]) or "—"
+
+
 def ago(ts, now: float | None = None) -> str:
     if not ts:
         return "—"

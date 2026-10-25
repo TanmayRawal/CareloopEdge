@@ -85,7 +85,7 @@ def blueprint(d) -> Blueprint:
         if g.user is not None:
             db.audit(g.user["id"], "logout", ip=d.ip())
         session.clear()
-        return redirect(url_for("auth.login"))
+        return redirect(url_for("device.home") if auth.on_kiosk() else url_for("auth.login"))
 
     @bp.route("/register", methods=["GET", "POST"])
     def register():
