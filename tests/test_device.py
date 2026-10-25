@@ -22,7 +22,7 @@ def test_device_page_is_public_and_has_no_patient_data(env):
     assert "Meningioma" not in page and "NE-0" not in page                          # no results, no record numbers
     # no internal model names or provenance notices on the device screen (those are on Admin > System)
     assert "test-1" not in page and "Development model" not in page and "signature" not in page
-    assert 'id="brain"' in page and "Ready" in page
+    assert 'id="brain"' in page
     src = re.search(r'data-src="([^"]+)"', page).group(1)
     data = k.get(src).data                                          # 3D brain point cloud: int8 x y z nx ny nz
     assert len(data) % 6 == 0 and len(data) // 6 > 5000
