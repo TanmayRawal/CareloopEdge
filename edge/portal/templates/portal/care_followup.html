@@ -14,7 +14,7 @@
   <div class="fu-row">
     <div class="fu-risk">{% with rk = r.risk %}{% include "portal/_risk.html" %}{% endwith %}</div>
     <div class="fu-who">
-      <a class="cell-main" href="{{ url_for('care.patient', uid=p.id) }}">{{ p.name }}</a>
+      <a class="cell-main" href="{{ url_for('care.patient', uid=p.id) }}">{{ pname(p.name) }}</a>
       <div class="cell-sub">{{ mrn(p.id) }}{% if p.phone %} · {{ p.phone }}{% endif %}{% if p.district %} · {{ p.district }}{% endif %}</div>
       <div class="why">{% for t, pts in r.risk.factors if pts > 0 and not t.startswith(('Overdue by', 'Due soon')) %}<span>{{ t }}</span>{% endfor %}</div>
     </div>
@@ -46,7 +46,7 @@
         </form>
       </details>
       {% if plan and plan.status == 'approved' %}
-      <form method="post" action="{{ url_for('care.remind', pid=plan.id) }}" data-confirm="Send a follow-up reminder to {{ p.name }}?">
+      <form method="post" action="{{ url_for('care.remind', pid=plan.id) }}" data-confirm="Send a follow-up reminder to {{ pname(p.name) }}?">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="worklist"><input type="hidden" name="q" value="{{ queue }}">
         <button class="btn sm" type="submit"><svg class="ic sm"><use href="#i-mail"/></svg>Remind</button></form>
       {% endif %}

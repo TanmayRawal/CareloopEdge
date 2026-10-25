@@ -6,7 +6,7 @@
   {% for pl in rows %}
     <div class="appt-row">
       <div class="time-col"><b>{{ plan_text[pl.kind] }}</b><span>due {{ fmt_iso(pl.due_date) }}</span></div>
-      <div class="grow"><a class="cell-main" href="{{ url_for('care.patient', uid=pl.patient_id) }}">{{ pl.patient_name }}</a>
+      <div class="grow"><a class="cell-main" href="{{ url_for('care.patient', uid=pl.patient_id) }}">{{ pname(pl.patient_name) }}</a>
         <div class="small muted">{{ mrn(pl.patient_id) }} · proposed by {{ pl.proposed_by_name or '—' }} {{ ago(pl.proposed_at) }} ago{% if pl.note %} · {{ pl.note }}{% endif %}</div></div>
       <form method="post" action="{{ url_for('care.approve', pid=pl.id) }}" class="row-actions">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="approvals">

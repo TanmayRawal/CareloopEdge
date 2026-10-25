@@ -1,6 +1,6 @@
 {% extends "portal/base.html" %}
-{% block title %}{{ patient.name }}{% endblock %}
-{% block crumbs %}<a href="{{ url_for('doctor.worklist') }}">Worklist</a><svg class="ic"><use href="#i-chevron"/></svg><b>{{ patient.name }} · {{ mrn(patient.id) }}</b>{% endblock %}
+{% block title %}{{ pname(patient.name) }}{% endblock %}
+{% block crumbs %}<a href="{{ url_for('doctor.worklist') }}">Worklist</a><svg class="ic"><use href="#i-chevron"/></svg><b>{{ pname(patient.name) }} · {{ mrn(patient.id) }}</b>{% endblock %}
 {% block content_class %}full{% endblock %}
 {% block content %}
 {% set att = r.attempt if r else 1 %}
@@ -8,7 +8,7 @@
 {% set latest = reports[0] if reports else None %}
 <div class="case-head">
   <div class="pt"><span class="avatar">{{ patient.name[:1]|upper }}</span>
-    <div><h1>{{ patient.name }}</h1><div class="cell-sub"><span class="mono">{{ mrn(patient.id) }}</span>{% if age is not none %} · {{ age }} y{% endif %}{% if profile and profile.sex %} · {{ profile.sex }}{% endif %}</div></div></div>
+    <div><h1>{{ pname(patient.name) }}</h1><div class="cell-sub"><span class="mono">{{ mrn(patient.id) }}</span>{% if age is not none %} · {{ age }} y{% endif %}{% if profile and profile.sex %} · {{ profile.sex }}{% endif %}</div></div></div>
   <div class="meta">
     <div><span>Study</span><b>MRI Brain</b></div>
     <div><span>Received</span><b>{{ fmt_time(case.created) }}</b></div>

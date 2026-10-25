@@ -58,8 +58,10 @@ def status(d) -> dict:
     last = d.db.one("SELECT MAX(created) AS t FROM ai_results")["t"]
     base = (d.db.setting("base_url") or "").rstrip("/")
     lan = lan_address()
-    # the address a phone on the clinic network can open: the configured one unless it only works on this machine
-    url = base if base and "localhost" not in base and "127.0.0.1" not in base else (f"https://{lan}" if lan else base)
+    # the address a phone on the clinic network can open: the device's IP address. The configured base URL only if it
+    # is not this machine alone (localhost) and not an mDNS ".local" name, which Android phones usually cannot resolve.
+    local_only = not base or any(x in base for x in ("localhost", "127.0.0.1", ".local"))
+    url = f"https://{lan}" if lan and local_only else (base or (f"https://{lan}" if lan else ""))
     version = str(info.get("version") or "")
     released = bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
     issues = []                 # only problems someone at the device can act on; model provenance is on Admin > System
