@@ -22,8 +22,6 @@
     <section class="ds-visual {{ 'is-ready' if s.ready else 'is-check' }}" aria-live="polite">
       <canvas id="brain" data-src="{{ asset('brain.bin') }}" role="img"
               aria-label="Rotating brain surface reconstructed from an MRI study"></canvas>
-      <p class="ds-caption"><span class="ds-state-word"><svg class="ic sm"><use href="#{{ 'i-check' if s.ready else 'i-alert' }}"/></svg>{{ 'Ready' if s.ready else 'Needs attention' }}</span>
-        <span>Brain MRI analysis on this device{% if s.model %} · {{ s.model }}{% endif %}</span></p>
       {% if s.issues %}<ul class="ds-issues">{% for x in s.issues %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
     </section>
 
