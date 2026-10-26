@@ -117,6 +117,12 @@
         {% endif %}
         <form method="post" action="{{ url_for('doctor.sign', cid=case.id) }}" class="form">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="field">Clinical indication
+            <textarea name="indication" rows="2" maxlength="2000" placeholder="e.g. Headache for 3 months; rule out a space-occupying lesion.">{{ latest.indication if latest and latest.indication else (case.patient_note or '') }}</textarea></label>
+          <label class="field">Technique
+              <textarea name="technique" rows="2" maxlength="2000">{{ latest.technique if latest and latest.technique else defaults.technique }}</textarea></label>
+          <label class="field">Comparison
+              <textarea name="comparison" rows="2" maxlength="2000">{{ latest.comparison if latest and latest.comparison else defaults.comparison }}</textarea></label>
           <label class="field">Impression / final diagnosis
             <select name="diagnosis" required>
               {% for d in diagnoses %}<option value="{{ d }}" {% if (latest and latest.final_diagnosis == d) or (not latest and r and r.status == 'ok' and r.prediction == d) %}selected{% endif %}>{{ class_text[d] }}</option>{% endfor %}
@@ -127,8 +133,13 @@
               <label><input type="radio" name="agrees" value="no">Disagree</label>
               <label><input type="radio" name="agrees" value="na">Not used</label>
             </div></div>
-          <label class="field">Findings <span class="hint">Shown to the patient</span>
-            <textarea name="findings" rows="5" required maxlength="5000" placeholder="Describe location, size, signal and mass effect.">{{ latest.findings if latest else '' }}</textarea></label>
+          <div class="field">Findings <span class="hint">Shown to the patient</span>
+            <div class="tpl-bar">Structured template:
+              <button type="button" class="btn sm" data-tpl="{{ templates.lesion }}">Lesion</button>
+              <button type="button" class="btn sm" data-tpl="{{ templates.normal }}">Normal study</button></div>
+            <textarea name="findings" id="findings" rows="8" required maxlength="5000" placeholder="Describe location, size, signal and mass effect." aria-label="Findings">{{ latest.findings if latest else '' }}</textarea></div>
+          <label class="field">Impression <span class="hint">Optional: summary in numbered points, most important first</span>
+            <textarea name="impression" rows="2" maxlength="2000" placeholder="1. Extra-axial enhancing mass, most consistent with meningioma.">{{ latest.impression if latest and latest.impression else '' }}</textarea></label>
           <label class="field">Recommendation <span class="hint">Optional</span>
             <textarea name="recommendation" rows="2" maxlength="2000" placeholder="e.g. Neurosurgical referral; contrast-enhanced MRI follow-up.">{{ latest.recommendation if latest else '' }}</textarea></label>
           {% if latest %}<label class="field">Reason for amendment<input name="amendment_reason" required maxlength="500"></label>{% endif %}

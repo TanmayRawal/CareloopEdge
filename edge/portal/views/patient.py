@@ -136,7 +136,13 @@ def blueprint(d) -> Blueprint:
         reports = db.reports(cid)
         profile = db.one("SELECT * FROM patient_profiles WHERE user_id = ?", (c["patient_id"],))
         appt = scheduling.active_for_case(db, cid)
-        return render_template("portal/patient_case.html", case=c, reports=reports, profile=profile,
+        doc = None
+        if reports:
+            r = reports[0]
+            ai = db.one("SELECT model_version FROM ai_results WHERE id = ?", (r["ai_result_id"],)) if r["ai_result_id"] else None
+            doc = services.report_doc(db, c, r, db.user(r["doctor_id"]), r["version"], r["signed_at"],
+                                      ai["model_version"] if ai else None)
+        return render_template("portal/patient_case.html", case=c, reports=reports, profile=profile, doc=doc,
                                report=reports[0] if reports else None, attempt=attempt,
                                appt=scheduling.appointment(db, appt["id"]) if appt else None)
 

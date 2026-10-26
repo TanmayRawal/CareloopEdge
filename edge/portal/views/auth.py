@@ -174,6 +174,13 @@ def blueprint(d) -> Blueprint:
                               ((f.get("phone") or "")[:30] or None, (f.get("district") or "").strip()[:80] or None, me["id"]))
             db.audit(me["id"], "preferences_updated", detail={"email_reminders": bool(f.get("notify_email"))}, ip=d.ip())
             flash("Your preferences were saved.")
+        elif form == "signature" and me["role"] == "doctor":
+            with db.tx() as c:
+                c.execute("UPDATE users SET credentials = ?, reg_no = ? WHERE id = ?",
+                          ((f.get("credentials") or "").strip()[:120] or None, (f.get("reg_no") or "").strip()[:60] or None,
+                           me["id"]))
+            db.audit(me["id"], "signature_details_updated", ip=d.ip())
+            flash("Your report signature details were saved.")
         elif form == "deletion" and me["role"] == "patient":
             if not db.one("SELECT 1 FROM data_requests WHERE user_id = ? AND status = 'open'", (me["id"],)):
                 with db.tx() as c:

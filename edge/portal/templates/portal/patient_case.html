@@ -10,30 +10,7 @@
 </div>
 
 {% if report %}
-<article class="doc">
-  <header class="doc-head">
-    <div class="org">{% include "portal/_logo.html" %}<div><b>{{ clinic }}</b><small>Department of Neuroradiology</small></div></div>
-    <div class="title"><b>Radiology report</b><small>{{ fmt_date(report.signed_at) }}</small></div>
-  </header>
-  <div class="doc-meta">
-    <div><span>Patient</span><b>{{ me.name }}</b></div>
-    <div><span>Patient ID</span><b>{{ mrn(me.id) }}</b></div>
-    <div><span>Age / sex</span><b>{{ age if age is not none else '—' }}{% if profile and profile.sex %} / {{ profile.sex }}{% endif %}</b></div>
-    <div><span>Date of birth</span><b>{{ profile.dob if profile and profile.dob else '—' }}</b></div>
-    <div><span>Examination</span><b>MRI Brain</b></div>
-    <div><span>Received</span><b>{{ fmt_date(case.created) }}</b></div>
-    <div><span>Reported</span><b>{{ fmt_date(report.signed_at) }}</b></div>
-    <div><span>Status</span><b>Final{% if report.version > 1 %} (amended){% endif %}</b></div>
-  </div>
-  <section class="doc-sec"><h3>Impression</h3><div class="dx">{{ class_text.get(report.final_diagnosis, report.final_diagnosis) }}</div></section>
-  <section class="doc-sec"><h3>Findings</h3><div class="pre">{{ report.findings }}</div></section>
-  {% if report.recommendation %}<section class="doc-sec"><h3>Recommendation</h3><div class="pre">{{ report.recommendation }}</div></section>{% endif %}
-  <div class="doc-sign">
-    <div class="sig"><small>Electronically signed by</small><b>{{ report.doctor_name }}</b><small>Radiologist · {{ fmt_time(report.signed_at) }}</small></div>
-    {% if report.version > 1 %}<div class="ver">Amended report</div>{% endif %}
-  </div>
-  <p class="small muted center">Please discuss this report with your doctor.</p>
-</article>
+{% set logo = True %}{% include "portal/_report_doc.html" %}
 <section class="card next-appt cta no-print doc-cta">
   {% if appt %}
     <div class="at-date sm"><span>{{ fmt_day(appt.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(appt.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(appt.start_ts).split(' ')[2] }}</span></div>
