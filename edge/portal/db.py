@@ -57,6 +57,7 @@ DEFAULT_SETTINGS = {
     "referral_stale_days": "14",                # referral not closed after N days -> admin digest
     "lost_after_days": "60",                    # approved plan overdue this long with no contact -> lost
     "require_staff_2fa": "0",                   # 1 = doctors and admins must set up two-step sign-in
+    "upload_device_only": "1",                  # 1 = patients sign up and upload scans only at the device's own screen
 }
 PLAN_KINDS = ("consultation", "repeat_scan", "referral", "other")
 PLAN_STATUSES = ("proposed", "approved", "completed", "lost", "cancelled")

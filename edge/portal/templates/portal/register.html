@@ -17,6 +17,11 @@
   </section>
   <section class="auth-main">
     <div class="auth-box wide">
+      {% if not intake_here() %}
+      <h2>Accounts are created at the clinic</h2>
+      <p class="muted">Create your patient account on the CareLoop screen at {{ clinic }} when you bring your scan.
+        After that you can sign in from this phone or computer to follow the review, read your report and book a consultation.</p>
+      {% else %}
       <h2>Create your patient account</h2>
       {% if error %}<div class="alert error" role="alert"><svg class="ic sm"><use href="#i-alert"/></svg><span>{{ error }}</span></div>{% endif %}
       <form method="post" class="form">
@@ -37,6 +42,7 @@
           <span>I agree that my scans and reports are stored encrypted at the clinic and are seen only by clinic doctors.</span></label>
         <button class="btn primary lg block" type="submit">Create account</button>
       </form>
+      {% endif %}
       <div class="auth-alt">Already registered? <a href="{{ url_for('auth.login') }}">Sign in</a></div>
     </div>
   </section>

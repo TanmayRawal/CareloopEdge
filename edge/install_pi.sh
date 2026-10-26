@@ -255,7 +255,7 @@ if [[ $KIOSK -eq 1 ]]; then
   say "Kiosk: device screen (labwc + Chromium + on-screen keyboard, user 'kiosk')"
   # Minimal Wayland session, no desktop. Chromium is 'chromium' on Debian 13 / Pi OS Trixie, 'chromium-browser' before.
   CHROMIUM_PKG=chromium; apt-cache show chromium >/dev/null 2>&1 || CHROMIUM_PKG=chromium-browser
-  apt-get install -y -qq labwc "$CHROMIUM_PKG" squeekboard wlr-randr libnss3-tools fonts-dejavu-core
+  apt-get install -y -qq labwc "$CHROMIUM_PKG" squeekboard wlr-randr libnss3-tools fonts-dejavu-core udisks2 gvfs
   CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser)"
   # A user with no password, no sudo and no shell access over SSH; only the physical screen logs it in.
   id kiosk &>/dev/null || useradd --create-home --shell /bin/bash --groups video,render,input kiosk
@@ -322,7 +322,8 @@ done
 EOF
   chmod 755 /usr/local/bin/neuroedge-kiosk-browser
   # Lock the kiosk browser down (managed policy: applies to Chromium on this device): only the local portal,
-  # no developer tools, downloads, printing, file dialogs, password saving or autofill.
+  # no developer tools, downloads, printing, password saving or autofill. The file chooser stays: it is how a
+  # patient picks a scan from a USB drive (udisks2 mounts it on tap); it can only upload, never open, files.
   install -d -m 755 /etc/chromium/policies/managed
   cat > /etc/chromium/policies/managed/neuroedge-kiosk.json <<'EOF'
 {
@@ -331,7 +332,7 @@ EOF
   "DeveloperToolsAvailability": 2,
   "DownloadRestrictions": 3,
   "PrintingEnabled": false,
-  "AllowFileSelectionDialogs": false,
+  "AllowFileSelectionDialogs": true,
   "PasswordManagerEnabled": false,
   "AutofillAddressEnabled": false,
   "AutofillCreditCardEnabled": false,

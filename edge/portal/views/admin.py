@@ -34,7 +34,9 @@ SETTING_FORM = [  # key, label, hint, kind
     ("referral_stale_days", "Referral not completed after (days)", "", "number"),
     ("lost_after_days", "Lost to follow-up after (days overdue)", "", "number"),
     ("require_staff_2fa", "Two-step sign-in for staff", "", "flag"),
+    ("upload_device_only", "Patient sign-up and scan upload", "Phones and home computers can always sign in, view reports and book", "flag"),
 ]
+FLAG_LABELS = {"upload_device_only": ("From any device", "Only at the clinic device")}
 
 
 def validate(key: str, value: str) -> str | None:
@@ -248,7 +250,7 @@ def blueprint(d) -> Blueprint:
             current = values
         else:
             current = db.settings()
-        return render_template("portal/admin_settings.html", fields=SETTING_FORM, current=current, errors=errors,
+        return render_template("portal/admin_settings.html", fields=SETTING_FORM, flag_labels=FLAG_LABELS, current=current, errors=errors,
                                defaults=DEFAULT_SETTINGS, mail=mailer.status()), (400 if errors else 200)
 
     return bp

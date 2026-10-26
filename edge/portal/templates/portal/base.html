@@ -115,7 +115,7 @@
         <a href="{{ url_for('patient.dashboard') }}" class="{{ 'active' if ep in ('patient.dashboard', 'patient.case') }}">My reports</a>
         <a href="{{ url_for('patient.appointments') }}" class="{{ 'active' if ep in ('patient.appointments', 'patient.book', 'patient.reschedule', 'patient.appointment_done') }}">Appointments</a>
         <a href="{{ url_for('patient.records') }}" class="{{ 'active' if ep in ('patient.records', 'patient.referral') }}">Documents</a>
-        <a href="{{ url_for('patient.upload') }}" class="{{ 'active' if ep == 'patient.upload' }}">New scan</a>
+        {% if intake_here() %}<a href="{{ url_for('patient.upload') }}" class="{{ 'active' if ep == 'patient.upload' }}">New scan</a>{% endif %}
       </nav>
       {{ user_menu('') }}
     </div>

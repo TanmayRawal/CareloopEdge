@@ -3,7 +3,7 @@
 {% block pcontent %}
 <div class="welcome">
   <div><h1>My reports</h1><p class="muted">{{ me.name }}</p></div>
-  <a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>
+  {% if intake_here() %}<a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>{% endif %}
 </div>
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
 {% if stage >= 0 %}
@@ -18,12 +18,12 @@
   <div class="success-ic sm"><svg class="ic"><use href="#{{ 'i-send' if plan.kind == 'referral' else 'i-scan' if plan.kind == 'repeat_scan' else 'i-calendar' }}"/></svg></div>
   <div class="grow"><span class="eyebrow">Your next step · by {{ fmt_iso(plan.due_date) }}</span>
     <h2>{% if plan.kind == 'consultation' %}Book a consultation with your radiologist
-        {% elif plan.kind == 'repeat_scan' %}Have a follow-up MRI and upload it here
+        {% elif plan.kind == 'repeat_scan' %}Have a follow-up MRI and {{ 'upload it here' if intake_here() else 'bring it to the clinic' }}
         {% elif plan.kind == 'referral' %}Visit {{ ref.facility if ref else 'the specialist' }} with your referral letter
         {% else %}{{ plan.note or 'Follow-up with your care team' }}{% endif %}</h2>
     {% if plan.note and plan.kind != 'other' %}<div class="small muted">{{ plan.note }}</div>{% endif %}</div>
   {% if plan.kind == 'consultation' and plan.case_id %}<a class="btn primary" href="{{ url_for('patient.book', cid=plan.case_id) }}">Book now</a>
-  {% elif plan.kind == 'repeat_scan' %}<a class="btn primary" href="{{ url_for('patient.upload') }}">Upload scan</a>
+  {% elif plan.kind == 'repeat_scan' and intake_here() %}<a class="btn primary" href="{{ url_for('patient.upload') }}">Upload scan</a>
   {% elif plan.kind == 'referral' and ref %}<a class="btn primary" href="{{ url_for('patient.referral', rid=ref.id) }}" target="_blank" rel="noopener">View letter</a>{% endif %}
 </section>
 {% endif %}
@@ -50,8 +50,9 @@
   <div class="card-h"><h2>My studies</h2></div>
   {% if not cases %}
     <div class="empty"><svg class="ic"><use href="#i-image"/></svg><h2>No scans yet</h2>
-      <p>Upload a brain MRI image to have it reviewed by a radiologist.</p>
-      <a class="btn primary" href="{{ url_for('patient.upload') }}">Upload a scan</a></div>
+      {% if intake_here() %}<p>Upload a brain MRI image to have it reviewed by a radiologist.</p>
+      <a class="btn primary" href="{{ url_for('patient.upload') }}">Upload a scan</a>
+      {% else %}<p>Bring your MRI to {{ clinic }} and send it from the CareLoop screen there. Your report will appear here.</p>{% endif %}</div>
   {% else %}
     {% for c in cases %}
     <a class="study" href="{{ url_for('patient.case', cid=c.id) }}">

@@ -11,13 +11,13 @@
                            ('Reminders', ('remind_before_hours', 'unmarked_after_min', 'agenda_hour')),
                            ('Booking rules', ('booking_lead_hours', 'booking_horizon_days', 'cancel_cutoff_hours')),
                            ('Follow-up', ('followup_due_soon_days', 'referral_stale_days', 'lost_after_days')),
-                           ('Security', ('require_staff_2fa',))) %}
+                           ('Security', ('require_staff_2fa', 'upload_device_only'))) %}
     <section class="card">
       <div class="card-h"><h2>{{ title }}</h2></div>
       <div class="card-b settings-grid">
         {% for k, label, hint, kind in fields if k in keys %}
           <label class="field {{ 'invalid' if errors.get(k) }}">{{ label }}
-            {% if kind == 'flag' %}<select name="{{ k }}"><option value="0" {{ 'selected' if current[k] == '0' }}>Optional</option><option value="1" {{ 'selected' if current[k] == '1' }}>Required</option></select>
+            {% if kind == 'flag' %}{% set fl = flag_labels.get(k, ('Optional', 'Required')) %}<select name="{{ k }}"><option value="0" {{ 'selected' if current[k] == '0' }}>{{ fl[0] }}</option><option value="1" {{ 'selected' if current[k] == '1' }}>{{ fl[1] }}</option></select>
             {% else %}<input name="{{ k }}" value="{{ current[k] }}" {{ 'inputmode=decimal' if kind == 'number' }} required maxlength="120">{% endif %}
             {% if errors.get(k) or hint %}<span class="hint">{{ errors[k] if errors.get(k) else hint }}</span>{% endif %}</label>
         {% endfor %}

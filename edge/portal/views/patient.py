@@ -105,6 +105,8 @@ def blueprint(d) -> Blueprint:
     @bp.route("/upload", methods=["GET", "POST"])
     @auth.require("patient")
     def upload():
+        if not auth.patient_intake_here(db):              # scans come in at the clinic's device, not from home
+            return render_template("portal/patient_upload.html"), (403 if request.method == "POST" else 200)
         if request.method == "GET":
             return render_template("portal/patient_upload.html")
         try:
@@ -121,6 +123,8 @@ def blueprint(d) -> Blueprint:
     def case(cid):
         c = d.get_case_or_404(cid)
         if request.method == "POST":                        # re-upload requested by the doctor
+            if not auth.patient_intake_here(db):
+                abort(403)
             try:
                 name, data = services.combine_files([(f.filename, f.read()) for f in request.files.getlist("scan")])
                 services.resubmit_scan(ctx, g.user, c, data, name, d.ip())

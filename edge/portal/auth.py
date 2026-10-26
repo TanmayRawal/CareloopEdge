@@ -29,6 +29,20 @@ def on_kiosk() -> bool:
     """This browser is the device's shared screen (cookie set by /device?kiosk=1)."""
     from flask import request
     return request.cookies.get("ne_kiosk") == "1"
+
+
+def on_device() -> bool:
+    """The request comes from the device's own screen: a client on this machine that asked for localhost. Unlike the
+    kiosk cookie this cannot be set from elsewhere: LAN computers have their own address, and Tailscale Funnel
+    visitors (who also reach Caddy from loopback) carry their address in X-Forwarded-For and the public host name."""
+    from flask import request
+    host = request.host if request.host.endswith("]") else request.host.rsplit(":", 1)[0]
+    return request.remote_addr in ("127.0.0.1", "::1") and host.strip("[]") in ("localhost", "127.0.0.1", "::1")
+
+
+def patient_intake_here(db) -> bool:
+    """Patients may sign up and upload scans from this browser (department setting: only at the device, or anywhere)."""
+    return db.setting("upload_device_only") != "1" or on_device()
 # A real hash of a random string: verifying against it for unknown e-mails keeps response time constant,
 # so the login form does not reveal which accounts exist.
 _DUMMY = _ph.hash("not-a-real-password-#")
