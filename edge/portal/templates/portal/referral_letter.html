@@ -1,44 +1,86 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Referral letter · {{ patient.name }}</title>
+<html lang="en"><head><meta charset="utf-8"><title>Referral letter · {{ patient.name }} · R-{{ '%05d'|format(ref.id) }}</title>
 <style>
-  body { font: 14px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: #111827; background: #f3f5f8; margin: 0; }
-  .page { max-width: 800px; margin: 28px auto; background: #fff; padding: 40px 48px; border: 1px solid #e2e8f0; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0b5c7a; padding-bottom: 14px; }
-  .org b { font-size: 17px; display: block; } .org small, .title small { color: #64748b; font-size: 12px; }
-  .title { text-align: right; } .title b { display: block; color: #073b4f; font-size: 15px; letter-spacing: .05em; text-transform: uppercase; }
-  .to { padding: 18px 0 6px; } .to span, .meta span { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
-  .to b { font-size: 16px; }
-  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 18px; padding: 14px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-top: 12px; }
-  .meta b { font-size: 13.5px; font-weight: 600; }
-  .urgent { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #fdecea; color: #b42318; }
-  .sec { padding: 16px 0; border-bottom: 1px solid #e2e8f0; }
-  .sec h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #073b4f; }
+  @page { size: A4; margin: 16mm 14mm; }
+  body { font: 13.5px/1.6 "IBM Plex Sans", "Segoe UI", system-ui, Roboto, Arial, sans-serif; color: #15181c; background: #eef0f2; margin: 0; }
+  .doc { max-width: 800px; margin: 28px auto; background: #fff; padding: 40px 48px; border: 1px solid #dfe2e6; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 14px; border-bottom: 2px solid #15181c; }
+  .head .org b { font-size: 16px; display: block; letter-spacing: .02em; text-transform: uppercase; }
+  .head small { display: block; color: #687079; font-size: 12px; }
+  .head .title { text-align: right; } .head .title b { display: block; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; }
+  .badge { display: inline-block; margin-top: 6px; padding: 2px 8px; border: 1px solid #3c434b; font-size: 11px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase; }
+  .badge.urgent { border-color: #b42318; color: #b42318; } .badge.soon { border-color: #9a5800; color: #9a5800; }
+  .addr { display: flex; justify-content: space-between; gap: 24px; padding: 18px 0 10px; }
+  .addr span, .meta span { display: block; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #687079; }
+  .addr b { font-size: 15px; display: block; }
+  .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 18px; padding: 12px 0; border-top: 1px solid #dfe2e6;
+    border-bottom: 1px solid #dfe2e6; }
+  .meta b { font-size: 13px; font-weight: 500; }
+  .re { margin: 18px 0 12px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  .sec { padding: 10px 0; }
+  .sec h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #3c434b; }
   .pre { white-space: pre-wrap; }
-  .sign { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 26px; }
-  .sign b { display: block; font-size: 15px; } .sign small, .ver { color: #64748b; font-size: 12px; } .ver { text-align: right; }
-  @media print { body { background: #fff; } .page { margin: 0; border: 0; padding: 0; max-width: none; } }
+  .dx { font-weight: 600; }
+  ul { margin: 0; padding-left: 18px; }
+  .sign { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; padding-top: 18px; }
+  .sign b { display: block; font-size: 15px; } .sign small { display: block; color: #687079; font-size: 12px; }
+  .sign .ver { text-align: right; color: #687079; font-size: 11px; }
+  .foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #dfe2e6; color: #687079; font-size: 11px; }
+  @media print { body { background: #fff; } .doc { margin: 0; border: 0; padding: 0; max-width: none; } }
 </style></head>
-<body><div class="page">
-<div class="head">
-  <div class="org"><b>{{ clinic }}</b><small>Department of Radiology</small></div>
-  <div class="title"><b>Referral letter</b><small>Ref. R-{{ '%05d'|format(ref.id) }} · {{ signed }}</small></div>
+<body><article class="doc">
+<header class="head">
+  <div class="org"><b>{{ clinic }}</b><small>Department of Radiology{% if address %} · {{ address }}{% endif %}</small>
+    {% if phone %}<small>Tel. {{ phone }}</small>{% endif %}</div>
+  <div class="title"><b>Referral letter</b><small>Ref. R-{{ '%05d'|format(ref.id) }} · {{ signed }}</small>
+    <span class="badge {{ ref.urgency }}">{{ urgency }}</span></div>
+</header>
+
+<div class="addr">
+  <div><span>To</span><b>The Consultant{% if ref.specialty %}, {{ ref.specialty }}{% endif %}</b>{{ ref.facility }}</div>
+  <div><span>From</span><b>{{ doctor.name }}</b>{{ doctor.credentials or 'Radiologist' }}<br>{{ clinic }}</div>
 </div>
-<div class="to"><span>To</span><b>{{ ref.facility }}</b>{% if ref.specialty %}<div>{{ ref.specialty }}</div>{% endif %}
-  {% if ref.urgency != 'routine' %}<div class="urgent">{{ urgency }}</div>{% endif %}</div>
+
 <div class="meta">
-  <div><span>Patient</span><b>{{ patient.name }}</b></div>
+  <div><span>Patient name</span><b>{{ patient.name }}</b></div>
   <div><span>Patient ID</span><b>{{ mrn(patient.id) }}</b></div>
+  <div><span>Age / sex</span><b>{{ age_sex }}</b></div>
   <div><span>Date of birth</span><b>{{ profile.dob if profile and profile.dob else '—' }}</b></div>
-  <div><span>Sex</span><b>{{ profile.sex if profile and profile.sex else '—' }}</b></div>
   <div><span>Phone</span><b>{{ profile.phone if profile and profile.phone else '—' }}</b></div>
   <div><span>District</span><b>{{ profile.district if profile and profile.district else '—' }}</b></div>
   <div><span>Urgency</span><b>{{ urgency }}</b></div>
   <div><span>Date</span><b>{{ signed }}</b></div>
 </div>
-<div class="sec"><h3>Reason for referral</h3><div class="pre">{{ ref.reason }}</div></div>
-<div class="sec"><h3>Enclosed</h3><div>The signed radiology report is available to the patient in the patient portal and can be printed for this visit.</div></div>
+
+<p class="re">Re: {{ patient.name }} ({{ mrn(patient.id) }}){% if report %}, MRI brain of {{ report.received }}{% endif %}</p>
+<p>Dear Colleague,</p>
+<p>Thank you for seeing this patient{% if ref.specialty %} in the {{ ref.specialty }} service{% endif %}.
+  {% if report %}They had an MRI of the brain at our centre, which was reported on {{ report.reported }}.{% endif %}
+  {% if ref.urgency == 'urgent' %}<b>We would be grateful if they could be seen urgently.</b>
+  {% elif ref.urgency == 'soon' %}We would be grateful if they could be seen within the next two weeks.{% endif %}</p>
+
+<section class="sec"><h3>Reason for referral</h3><div class="pre">{{ ref.reason }}</div></section>
+{% if report %}
+<section class="sec"><h3>Imaging summary (MRI brain, accession {{ report.accession }})</h3>
+  <div class="dx">{{ report.diagnosis }}</div>
+  {% if report.impression %}<div class="pre">{{ report.impression }}</div>{% endif %}
+  {% if report.recommendation and report.recommendation != ref.reason %}<div class="pre">Radiologist's recommendation: {{ report.recommendation }}</div>{% endif %}</section>
+{% endif %}
+<section class="sec"><h3>Enclosed</h3>
+  <ul>{% if report %}<li>Signed radiology report, MRI brain, accession {{ report.accession }} ({{ report.reported }})</li>{% endif %}
+    <li>Images can be provided on request.</li></ul></section>
+
+<p>Thank you for your help with this patient's care. Please contact us{% if phone %} on {{ phone }}{% endif %} if you need further
+  information or the images.</p>
+<p>Yours sincerely,</p>
+
 <div class="sign">
-  <div><small>Electronically signed by</small><b>{{ doctor.name }}</b><small>Radiologist · {{ clinic }}</small></div>
-  <div class="ver">Archived, tamper-evident copy</div>
+  <div><small>Electronically signed by</small><b>{{ doctor.name }}</b>
+    <small>{{ doctor.credentials or 'Radiologist' }}{% if doctor.reg_no %} · Reg. no. {{ doctor.reg_no }}{% endif %}</small>
+    <small>{{ clinic }}</small></div>
+  <div class="ver">Ref. R-{{ '%05d'|format(ref.id) }}<br>Electronically signed; valid without a handwritten signature</div>
 </div>
-</div></body></html>
+<footer class="foot">Confidential medical correspondence. Copy given to the patient to take to the appointment.</footer>
+</article></body></html>

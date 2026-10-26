@@ -149,9 +149,22 @@ def sign_referral(db, store, ref, doctor, clinic: str, now: float | None = None)
         raise PlanError("Only a doctor can sign a referral.")
     if ref["status"] != "draft":
         raise PlanError("This referral is already signed.")
+    from edge.portal import common, services
     patient = db.user(ref["patient_id"])
-    html = render_template("portal/referral_letter.html", ref=ref, patient=patient, profile=db.profile(ref["patient_id"]),
-                           doctor=doctor, clinic=clinic, urgency=URGENCY_TEXT[ref["urgency"]],
+    profile = db.profile(ref["patient_id"])
+    age = common.age_from_dob(profile["dob"] if profile else None)
+    sex = (profile["sex"] if profile else None) or ""
+    report = None                                       # imaging summary from the signed report of the referred study
+    if ref["case_id"]:
+        case = db.case(ref["case_id"])
+        reps = db.reports(ref["case_id"])
+        if case and reps:
+            report = services.report_doc(db, case, reps[0], db.user(reps[0]["doctor_id"]), reps[0]["version"],
+                                         reps[0]["signed_at"], None)
+    html = render_template("portal/referral_letter.html", ref=ref, patient=patient, profile=profile,
+                           doctor=db.user(doctor["id"]), clinic=clinic, urgency=URGENCY_TEXT[ref["urgency"]],
+                           address=db.setting("clinic_address"), phone=db.setting("clinic_phone"), report=report,
+                           age_sex=" / ".join(x for x in (f"{age} y" if age is not None else "", sex) if x) or "—",
                            signed=time.strftime("%d %b %Y", time.localtime(now)))
     sha = store.put(*letter_kind(ref["id"]), html.encode("utf-8"))
     with db.tx() as c:

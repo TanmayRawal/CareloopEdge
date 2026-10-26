@@ -64,3 +64,22 @@ def test_staff_email_has_its_own_footer(env):
     notify.notify(env["db"], doc, "doc_unread", {"studies": "2 studies", "hours": 4, "oldest": "5 hours ago"}, "/doctor/")
     m = env["db"].one("SELECT * FROM outbox WHERE subject LIKE 'Reporting backlog%'")
     assert "do not forward it outside the care team" in m["text"] and "call 108" not in m["text"]
+
+
+def test_referral_letter_is_a_formal_letter_with_the_imaging_summary(env):
+    p, d = env["app"].test_client(), env["app"].test_client()
+    register(p, "rf@x.test", "Meena Joshi")
+    upload(p)
+    cid = env["db"].q("SELECT id FROM cases")[0]["id"]
+    login(d, "doc@clinic.test")
+    d.post("/account", data={"csrf": csrf(d, "/account"), "form": "signature",
+                             "credentials": "MD (Radiodiagnosis)", "reg_no": "RMC 12345"})
+    sign(env, d, cid, impression="1. Extra-axial mass, most consistent with meningioma.", fu_kind="referral",
+         ref_facility="SMS Hospital, Jaipur", ref_specialty="Neurosurgery", ref_urgency="soon")
+    rid = env["db"].one("SELECT id FROM referrals")["id"]
+    letter = p.get(f"/patient/referrals/{rid}").get_data(as_text=True)
+    for text in ("Dear Colleague,", "The Consultant, Neurosurgery", "SMS Hospital, Jaipur", "Re: Meena Joshi",
+                 "Imaging summary", "1. Extra-axial mass", f"accession {cid[:8].upper()}", "Yours sincerely,",
+                 "Reg. no. RMC 12345", "within the next two weeks"):
+        assert text in letter
+    assert "script" not in letter.lower()
