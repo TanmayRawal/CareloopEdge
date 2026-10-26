@@ -67,9 +67,15 @@ def login(c, email, pw=PW):
     return c.post("/login", data={"csrf": csrf(c), "email": email, "password": pw})
 
 
-def register(c, email="pat@x.test", name="Pat One"):
-    return c.post("/register", data={"csrf": csrf(c, "/register"), "name": name, "email": email, "password": PW,
-                                     "password2": PW, "consent": "yes"})
+def register(c, email="pat@x.test", name="Pat One", confirm=True):
+    """Sign up; confirm=True then follows the e-mail confirmation link, as the patient would."""
+    r = c.post("/register", data={"csrf": csrf(c, "/register"), "name": name, "email": email, "password": PW,
+                                  "password2": PW, "consent": "yes"})
+    mail = c.application.extensions["portal"]["db"].one(
+        "SELECT text FROM outbox WHERE to_email = ? AND subject LIKE 'Please confirm%' ORDER BY id DESC", (email.lower(),))
+    if confirm and mail:
+        c.get(re.search(r"(/verify/[\w-]+)", mail["text"]).group(1))
+    return r
 
 
 def upload(c, data=PNG, consent="yes"):

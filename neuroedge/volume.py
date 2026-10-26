@@ -27,6 +27,8 @@ from .preprocess import RawImage
 PLANES = ("axial", "coronal", "sagittal")
 MAX_FILES = 2000                     # DICOM files per series
 MAX_VOXELS = 512 * 512 * 400         # refuse absurd volumes (decompression bombs)
+MAX_NIFTI_BYTES = MAX_VOXELS * 4 + (1 << 20)   # largest uncompressed NIfTI accepted (float32 voxels + header)
+MAX_ARCHIVE_BYTES = 600 * 1024 * 1024          # uncompressed content of an uploaded .zip
 
 
 @dataclass
@@ -73,16 +75,27 @@ def _canonical(arr: np.ndarray, affine: np.ndarray) -> tuple[np.ndarray, tuple[f
     return np.ascontiguousarray(out), (sp[0], sp[1], sp[2])
 
 
+def _gunzip_bounded(raw: bytes, limit: int) -> bytes:
+    """gzip -> bytes, refusing to inflate past `limit` (a 200 MB upload of zeros would otherwise become ~200 GB)."""
+    import zlib
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    out = d.decompress(raw, limit + 1)
+    if len(out) > limit or d.unconsumed_tail:
+        raise ValueError("volume too large")
+    return out
+
+
 def load_nifti(source: str | Path | bytes) -> Volume:
     import nibabel as nib
     if isinstance(source, (bytes, bytearray)):
-        import gzip
         raw = bytes(source)
         if raw[:2] == b"\x1f\x8b":
-            raw = gzip.decompress(raw)
+            raw = _gunzip_bounded(raw, MAX_NIFTI_BYTES)
         img = nib.Nifti1Image.from_bytes(raw)
     else:
         img = nib.load(str(source))
+    if int(np.prod(img.shape[:3])) > MAX_VOXELS:          # from the header, before any voxel is read
+        raise ValueError("volume too large")
     arr = np.asarray(img.dataobj, dtype=np.float32)
     if arr.ndim == 4:                      # some exports carry a singleton / multi-echo 4th axis
         arr = arr[..., 0]
@@ -177,7 +190,7 @@ def load_volume(source: str | Path | bytes | list[bytes], filename: str | None =
     if name.endswith(".zip") or source[:4] == b"PK\x03\x04":
         with zipfile.ZipFile(io.BytesIO(source)) as z:
             infos = [i for i in z.infolist() if not i.is_dir()][:MAX_FILES]
-            if sum(i.file_size for i in infos) > 1_000_000_000:
+            if sum(i.file_size for i in infos) > MAX_ARCHIVE_BYTES:
                 raise ValueError("series archive too large")
             nifti = [i for i in infos if i.filename.lower().endswith((".nii", ".nii.gz"))]
             if nifti:

@@ -6,7 +6,7 @@ import time
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, session, url_for
 
-from edge.portal import auth, totp
+from edge.portal import auth, notify, tokens, totp
 from edge.portal.common import safe_next
 from edge.portal.db import CONSENT_VERSION
 
@@ -96,7 +96,8 @@ def blueprint(d) -> Blueprint:
         f = request.form
         email, name, pw = f.get("email", "").strip().lower(), f.get("name", "").strip(), f.get("password", "")
         err = None
-        if not d.register_limiter.hit(d.ip() or "?"):
+        limiter = d.kiosk_register_limiter if auth.on_device() else d.register_limiter
+        if not limiter.hit(d.ip() or "?"):
             err = "Too many registrations from this device. Try later."
         elif not name or "@" not in email or len(email) > 200:
             err = "Please enter your name and a valid e-mail address."
@@ -113,9 +114,17 @@ def blueprint(d) -> Blueprint:
         uid = db.create_user(email, name, "patient", auth.hash_password(pw),
                              {"dob": f.get("dob") or None, "sex": f.get("sex") or None, "phone": f.get("phone") or None,
                               "district": (f.get("district") or "").strip()[:80] or None})
+        with db.tx() as c:                               # e-mail is sent only once the address is confirmed
+            c.execute("UPDATE users SET email_verified = 0 WHERE id = ?", (uid,))
         db.audit(uid, "registered", ip=d.ip())
+        send_verification(db.user(uid))
         auth.start_session(db.user(uid))
         return redirect(url_for("patient.dashboard"))
+
+    def send_verification(user) -> None:
+        raw = tokens.issue(db, "verify", user["id"])
+        notify.notify(db, user, "verify_email", {}, None, in_app=False, force_email=True,
+                      actions=[("Confirm my e-mail address", f"/verify/{raw}")])
 
     # ------------------------------------------------------------------ account
     def consents(uid: int) -> list:
@@ -164,8 +173,9 @@ def blueprint(d) -> Blueprint:
                 return render_account(error)
             with db.tx() as c:
                 c.execute("UPDATE users SET pw_hash = ? WHERE id = ?", (auth.hash_password(f["new"]), me["id"]))
+            session["pwv"] = auth.pw_version(db.user(me["id"]))   # this browser stays signed in; other sessions end
             db.audit(me["id"], "password_changed", ip=d.ip())
-            flash("Your password was changed.")
+            flash("Your password was changed. Any other device signed in to your account has been signed out.")
         elif form == "prefs":
             set_email_consent(me, bool(f.get("notify_email")))
             if me["role"] == "patient":
@@ -181,6 +191,10 @@ def blueprint(d) -> Blueprint:
                            me["id"]))
             db.audit(me["id"], "signature_details_updated", ip=d.ip())
             flash("Your report signature details were saved.")
+        elif form == "verify_resend" and not me["email_verified"]:
+            if d.token_limiter.hit(f"verify{me['id']}"):
+                send_verification(me)
+            flash(f"We sent a new confirmation link to {me['email']}.")
         elif form == "deletion" and me["role"] == "patient":
             if not db.one("SELECT 1 FROM data_requests WHERE user_id = ? AND status = 'open'", (me["id"],)):
                 with db.tx() as c:

@@ -108,6 +108,12 @@ TEMPLATES = {
         "{clinic} has registered you for follow-up care. Please set a password to see your reports, appointments and "
         "next steps online.\n\nFor your security, the link below works once and expires in 7 days. If you were not "
         "expecting this e-mail, please contact the department.", []),
+    "verify_email": (
+        "Please confirm your e-mail address",
+        "Thank you for registering with {clinic}. Please confirm that this is your e-mail address, so that we can "
+        "tell you when your report is ready and send your appointment details.\n\nThe link below works once and "
+        "expires in 7 days. If you did not register, you can ignore this e-mail and no further messages will be sent.",
+        []),
     "password_reset": (
         "Reset your password",
         "We received a request to reset the password for your account.\n\nFor your security, the link below works once "
@@ -128,7 +134,7 @@ TEMPLATES = {
         "{patient} has replied that they cannot attend the consultation on {when} with {doctor}.{extra}", []),
 }
 # The e-mail's main button (when the caller gives a link but no buttons of its own).
-LINK_LABEL = {"report_ready": "View your report", "reupload": "View the request", "referral_ready": "View the referral letter",
+LINK_LABEL = {"verify_email": "Confirm my e-mail address", "report_ready": "View your report", "reupload": "View the request", "referral_ready": "View the referral letter",
               "appt_booked": "Manage your appointment", "appt_rescheduled": "Manage your appointment",
               "appt_cancelled": "Book a new time", "appt_reminder": "Manage your appointment",
               "appt_no_show": "Book a new appointment", "followup_planned": "View your next step",
@@ -258,7 +264,9 @@ def notify(db, user, kind: str, ctx: dict | None = None, link: str | None = None
         with db.tx() as c:
             c.execute("INSERT INTO notifications (user_id,kind,title,body,link,created) VALUES (?,?,?,?,?,?)",
                       (user["id"], kind, m["subject"], m["body"], link, now))
-    if email and user["email"] and user["active"] and (user["notify_email"] or force_email):
+    # unconfirmed address (self-registration): only the confirmation and password e-mails go out
+    confirmed = user["email_verified"] or kind in ("verify_email", "password_reset", "invite")
+    if email and user["email"] and user["active"] and confirmed and (user["notify_email"] or force_email):
         base = db.setting("base_url").rstrip("/")
         default = LINK_LABEL.get(kind, "Open CareLoop" if kind.startswith(("doc_", "admin_")) else "Open the patient portal")
         links = [(label, base + path) for label, path in (actions or ([(default, link)] if link else []))]

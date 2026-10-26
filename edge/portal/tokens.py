@@ -9,7 +9,7 @@ import hashlib
 import secrets
 import time
 
-TTL = {"invite": 7 * 86400, "reset": 3600, "appt_yes": 30 * 86400, "appt_no": 30 * 86400}
+TTL = {"invite": 7 * 86400, "reset": 3600, "verify": 7 * 86400, "appt_yes": 30 * 86400, "appt_no": 30 * 86400}
 
 
 def _h(raw: str) -> str:
@@ -20,7 +20,7 @@ def issue(db, purpose: str, user_id: int, ref_id: int | None = None, now: float 
     now = time.time() if now is None else now
     raw = secrets.token_urlsafe(32)
     with db.tx() as c:
-        if purpose in ("invite", "reset"):               # a new link replaces older unused ones
+        if purpose in ("invite", "reset", "verify"):     # a new link replaces older unused ones
             c.execute("UPDATE tokens SET used_at = ? WHERE user_id = ? AND purpose = ? AND used_at IS NULL",
                       (now, user_id, purpose))
         c.execute("INSERT INTO tokens (purpose,token_hash,user_id,ref_id,created,expires) VALUES (?,?,?,?,?,?)",

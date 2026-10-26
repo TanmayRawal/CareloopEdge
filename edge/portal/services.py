@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import threading
 import time
 import zipfile
@@ -20,6 +21,7 @@ from flask import render_template
 
 from edge.portal import common, notify, scheduling
 
+log = logging.getLogger("neuroedge.portal")
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".dcm", ".dicom"}
 SERIES_EXT = (".zip", ".nii", ".nii.gz")
 MAX_UPLOAD = 20 * 1024 * 1024
@@ -126,11 +128,14 @@ def submit_scan(ctx: Ctx, patient, data: bytes, filename: str, note: str, consen
     try:
         ctx.store.put(cid, "scan_1", data)
         res = _analyse_into(ctx, cid, 1, data, name)
-    except UploadError:
+    except Exception as e:                           # unreadable file, or the analysis itself failed (memory, model)
         with ctx.db.tx() as c:                       # nothing usable was submitted: remove the empty case
             c.execute("DELETE FROM cases WHERE id = ?", (cid,))
         ctx.store.delete_case(cid)
-        raise
+        if isinstance(e, UploadError):
+            raise
+        log.exception("analysis failed for an upload")
+        raise UploadError("The scan could not be analysed. Please try again; if it fails again, ask the clinic staff.") from e
     ctx.db.audit(patient["id"], "case_submitted", cid, {"ai_status": res["status"], "model": ctx.model_version}, ip)
     from edge.portal import careplan
     if careplan.complete_matching(ctx.db, patient["id"], ("repeat_scan",), "New scan received"):
@@ -144,7 +149,13 @@ def resubmit_scan(ctx: Ctx, patient, case, data: bytes, filename: str, ip: str |
     name = _validate(filename, data)
     attempt = (ctx.db.latest_ai(case["id"]) or {}).get("result", {}).get("attempt", 1) + 1
     ctx.store.put(case["id"], f"scan_{attempt}", data)
-    res = _analyse_into(ctx, case["id"], attempt, data, name)
+    try:
+        res = _analyse_into(ctx, case["id"], attempt, data, name)
+    except UploadError:
+        raise
+    except Exception as e:
+        log.exception("analysis failed for a re-upload")
+        raise UploadError("The scan could not be analysed. Please try again; if it fails again, ask the clinic staff.") from e
     ctx.db.set_case(case["id"], status="awaiting_review", scan_filename=name,
                     scan_sha256=hashlib.sha256(data).hexdigest(), scan_size=len(data))
     ctx.db.audit(patient["id"], "case_resubmitted", case["id"], {"attempt": attempt, "ai_status": res["status"]}, ip)
