@@ -18,7 +18,8 @@
           <span class="dz-title">Drag your scan here or browse</span>
           <span class="muted small">One image (PNG, JPG, DICOM · 20 MB) or a whole series: all DICOM files of it, a .zip, or .nii.gz (200 MB)</span>
           <span class="dz-file" id="dz-file"></span>
-          <input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom,.zip,.nii,.gz" multiple required>
+          {# no accept= filter: the Linux file picker on the kiosk hid .nii.gz files; the server checks every type #}
+          <input type="file" name="scan" id="scan" multiple required>
         </label>
         <label class="btn block dz-folder"><svg class="ic sm"><use href="#i-file"/></svg>Choose a folder (USB drive or CD)
           <input type="file" name="scan" id="scan-dir" webkitdirectory></label>
