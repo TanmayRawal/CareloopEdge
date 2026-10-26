@@ -359,6 +359,8 @@ details.panel .panel-b { padding: 0 16px 14px; }
 .dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .dropzone .ic { width: 30px; height: 30px; color: var(--accent); stroke-width: 1.4; }
 .dropzone .dz-title { font-weight: 600; font-size: var(--fs-lg); }
+.dz-folder { position: relative; margin-top: 8px; }
+.dz-folder input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .dz-file { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 600; color: var(--ok); }
 .thumb-img { width: 100%; border-radius: var(--r); background: #000; display: block; aspect-ratio: 1; object-fit: contain; }
 

@@ -61,12 +61,14 @@
       <div class="section-label"></div>
       {% if case.status == 'reupload_requested' %}
         <div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg><div><b>Your radiologist asked for a new image.</b><br>{{ case.doctor_message }}</div></div>
+        {% if intake_here() %}
         <form method="post" enctype="multipart/form-data" class="form">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <label class="dropzone" id="dropzone"><svg class="ic"><use href="#i-upload"/></svg><span class="dz-title">Choose the new image</span>
             <span class="dz-file" id="dz-file"></span><input type="file" name="scan" id="scan" accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.dcm,.dicom,.zip,.nii,.gz" multiple required></label>
           <button class="btn primary" type="submit">Send new image</button>
         </form>
+        {% else %}<p>Please bring the new scan to {{ clinic }} and send it from the CareLoop screen there.</p>{% endif %}
       {% else %}
         <p>Your scan has been received. The report will appear here once your radiologist has reviewed it.</p>
       {% endif %}

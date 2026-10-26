@@ -34,6 +34,14 @@
       $("#st1")?.classList.remove("on"); $("#st2")?.classList.add("on");
     };
     input.addEventListener("change", show);
+    const dir = $("#scan-dir");                      // a whole folder (DICOM series on a USB drive or CD)
+    dir?.addEventListener("change", () => {
+      if (!dir.files.length) return;
+      input.value = ""; input.required = false;
+      label.textContent = `${dir.files.length} files from the folder`;
+      $("#st1")?.classList.remove("on"); $("#st2")?.classList.add("on");
+    });
+    input.addEventListener("change", () => { if (dir && input.files.length) { dir.value = ""; input.required = true; } });
     ["dragenter", "dragover"].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add("drag"); }));
     ["dragleave", "drop"].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove("drag"); }));
     dz.addEventListener("drop", ev => { if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(); } });

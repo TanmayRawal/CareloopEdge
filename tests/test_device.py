@@ -101,5 +101,33 @@ def test_kiosk_browser_is_locked_down_by_policy():
     from pathlib import Path
     s = (Path(__file__).resolve().parents[1] / "edge/install_pi.sh").read_text(encoding="utf-8")
     for key in ('"URLBlocklist": ["*"]', '"DeveloperToolsAvailability": 2', '"DownloadRestrictions": 3',
-                '"PrintingEnabled": false', '"AllowFileSelectionDialogs": false'):
+                '"PrintingEnabled": false', '"URLAllowlist": ["https://localhost", "about:blank"]'):
         assert key in s
+
+
+def test_patients_upload_only_at_the_device(env):
+    phone = env["app"].test_client()
+    phone.environ_base["REMOTE_ADDR"] = "10.0.0.7"                  # the patient's phone on the clinic Wi-Fi
+    assert "Accounts are created at the clinic" in phone.get("/register").get_data(as_text=True)
+    assert register(phone, "ph@x.test", "Phone Patient").status_code == 403
+    assert env["db"].user_by_email("ph@x.test") is None
+    assert register(env["app"].test_client(), "ph@x.test", "Phone Patient").status_code == 302   # at the device
+    login(phone, "ph@x.test")                                      # then signs in from the phone
+    page = phone.get("/patient/upload").get_data(as_text=True)
+    assert "Scans are uploaded at the clinic" in page and 'id="upload-form"' not in page
+    assert 'href="/patient/upload"' not in phone.get("/patient/").get_data(as_text=True)
+    assert upload(phone).status_code == 403
+    from edge.portal import auth                                   # Funnel visitors also reach Caddy from loopback,
+    with env["app"].test_request_context("/", base_url="https://x.ts.net", environ_base={"REMOTE_ADDR": "127.0.0.1"}):   # but under the public host name
+        assert not auth.on_device()
+    with env["app"].test_request_context("/", base_url="https://localhost", environ_base={"REMOTE_ADDR": "127.0.0.1"}):
+        assert auth.on_device()
+    kiosk = env["app"].test_client()                               # the device's own screen (https://localhost)
+    login(kiosk, "ph@x.test")
+    assert upload(kiosk).status_code == 302
+    assert phone.get("/patient/").status_code == 200               # reports and booking stay open on the phone
+    admin = env["app"].test_client()
+    login(admin, "admin@clinic.test")
+    env["db"].set_setting("upload_device_only", "0")               # department setting: upload from anywhere
+    assert upload(phone).status_code == 302
+    assert "Only at the clinic device" in admin.get("/admin/settings").get_data(as_text=True)

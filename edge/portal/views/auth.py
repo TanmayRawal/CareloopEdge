@@ -89,6 +89,8 @@ def blueprint(d) -> Blueprint:
 
     @bp.route("/register", methods=["GET", "POST"])
     def register():
+        if not auth.patient_intake_here(d.db):            # new patients sign up at the clinic's device
+            return render_template("portal/register.html"), (403 if request.method == "POST" else 200)
         if request.method == "GET":
             return render_template("portal/register.html")
         f = request.form
