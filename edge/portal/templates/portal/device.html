@@ -39,7 +39,7 @@
 
   <footer class="ds-foot">
     {% if s.qr %}<span class="ds-qr" aria-hidden="true">{{ s.qr|safe }}</span>{% endif %}
-    <span class="ds-url"><span>Open on a phone or laptop on this network</span><b>{{ s.url or ('https://' ~ s.host ~ '.local') }}</b></span>
+    <span class="ds-url"><span>{{ 'Open on any phone or laptop' if s.public else 'Open on a phone or laptop on this network' }}</span><b>{{ s.url or ('https://' ~ s.host ~ '.local') }}</b></span>
     <span class="ds-legal">Research prototype · not a medical device</span>
   </footer>
 </div>

@@ -76,7 +76,7 @@ def status(d) -> dict:
         "last_analysis": ago(last) if last else None, "uptime": ago(STARTED),
         "temp_c": temp, "hot": temp is not None and temp >= 70,
         "disk_free": human_bytes(disk.free), "disk_low": low,
-        "lan": lan, "url": url, "qr": qr_svg(url) if url else None, "host": socket.gethostname(),
+        "lan": lan, "url": url, "public": bool(base) and not local_only, "qr": qr_svg(url) if url else None, "host": socket.gethostname(),
     }
 
 
