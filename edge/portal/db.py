@@ -291,7 +291,7 @@ MIGRATIONS = [
     ALTER TABLE audit ADD COLUMN prev_hash TEXT;
     ALTER TABLE audit ADD COLUMN hash TEXT
     """,
-    # v5: structured radiology report (indication, technique, comparison, impression) and the reporter's credentials
+    # v4: structured radiology report (indication, technique, comparison, impression) and the reporter's credentials
     """
     ALTER TABLE reports ADD COLUMN indication TEXT;
     ALTER TABLE reports ADD COLUMN technique TEXT;
@@ -300,7 +300,7 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN credentials TEXT;
     ALTER TABLE users ADD COLUMN reg_no TEXT
     """,
-    # v6: signed reports and the audit log are append-only in the database itself (not only by convention); one
+    # v5: signed reports and the audit log are append-only in the database itself (not only by convention); one
     # active appointment per study; e-mail addresses of self-registered patients are confirmed before e-mail is sent
     """
     CREATE TRIGGER reports_immutable_u BEFORE UPDATE ON reports
@@ -315,16 +315,16 @@ MIGRATIONS = [
         (SELECT MIN(id) FROM appointments WHERE status IN ('booked','arrived') GROUP BY case_id);
     CREATE UNIQUE INDEX appt_case_active ON appointments(case_id) WHERE status IN ('booked','arrived');
     ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1;
-    CREATE TABLE tokens_v6 (
+    CREATE TABLE tokens_v5 (
         id INTEGER PRIMARY KEY,
         purpose TEXT NOT NULL CHECK (purpose IN ('invite','reset','verify','appt_yes','appt_no')),
         token_hash TEXT NOT NULL UNIQUE,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         ref_id INTEGER, created REAL NOT NULL, expires REAL NOT NULL, used_at REAL
     );
-    INSERT INTO tokens_v6 SELECT id, purpose, token_hash, user_id, ref_id, created, expires, used_at FROM tokens;
+    INSERT INTO tokens_v5 SELECT id, purpose, token_hash, user_id, ref_id, created, expires, used_at FROM tokens;
     DROP TABLE tokens;
-    ALTER TABLE tokens_v6 RENAME TO tokens
+    ALTER TABLE tokens_v5 RENAME TO tokens
     """,
 ]
 
