@@ -131,3 +131,9 @@ def test_patients_upload_only_at_the_device(env):
     env["db"].set_setting("upload_device_only", "0")               # department setting: upload from anywhere
     assert upload(phone).status_code == 302
     assert "Only at the clinic device" in admin.get("/admin/settings").get_data(as_text=True)
+
+
+def test_kiosk_install_removes_the_admin_console_autologin():
+    from pathlib import Path
+    s = (Path(__file__).resolve().parents[1] / "edge/install_pi.sh").read_text(encoding="utf-8")
+    assert 'mv "$GETTY_AL" "$GETTY_AL.neuroedge-orig"' in s and 'eval "$KIOSK_RESTART"' in s

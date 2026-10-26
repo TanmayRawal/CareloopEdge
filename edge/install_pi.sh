@@ -361,6 +361,13 @@ autologin-session=labwc
     [[ -f /etc/lightdm/lightdm.conf.neuroedge-orig ]] || cp -a /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.neuroedge-orig
     sed -i -E 's/^(autologin-user=|autologin-session=)/#neuroedge-kiosk# \1/' /etc/lightdm/lightdm.conf
     KIOSK_RESTART="systemctl restart lightdm"
+    # Raspberry Pi OS also logs the admin user in on the text console (tty1). On a kiosk anyone with a USB keyboard
+    # could switch to it (Ctrl+Alt+F1) and get a shell with sudo: keep the normal login prompt instead.
+    GETTY_AL=/etc/systemd/system/getty@tty1.service.d/autologin.conf
+    if [[ -f "$GETTY_AL" ]] && grep -q -- "--autologin" "$GETTY_AL"; then
+      mv "$GETTY_AL" "$GETTY_AL.neuroedge-orig"
+      KIOSK_RESTART="$KIOSK_RESTART; systemctl restart getty@tty1"
+    fi
   else
     # Lite image: autologin on tty1, ~/.bash_profile starts labwc
     mkdir -p /etc/systemd/system/getty@tty1.service.d
@@ -377,7 +384,7 @@ ExecStart=-/sbin/agetty --autologin kiosk --noclear %%I $TERM
     systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
   fi
   systemctl daemon-reload
-  $KIOSK_RESTART
+  eval "$KIOSK_RESTART"
 fi
 
 IP="$(hostname -I | awk '{print $1}')"
