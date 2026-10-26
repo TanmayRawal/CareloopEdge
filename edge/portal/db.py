@@ -41,6 +41,8 @@ APPT_ACTIVE = ("booked", "arrived")
 # Department policy; editable by the admin (Settings page) and stored in the `settings` table.
 DEFAULT_SETTINGS = {
     "clinic_name": "Radiology Department",
+    "clinic_address": "",                       # letterhead of reports and e-mails (optional)
+    "clinic_phone": "",
     "base_url": "https://rpi.local",            # used in e-mail links
     "timezone": "Asia/Kolkata",
     "unread_hours": "4",                        # study not opened -> remind doctors
@@ -289,6 +291,15 @@ MIGRATIONS = [
     ALTER TABLE audit ADD COLUMN prev_hash TEXT;
     ALTER TABLE audit ADD COLUMN hash TEXT
     """,
+    # v5: structured radiology report (indication, technique, comparison, impression) and the reporter's credentials
+    """
+    ALTER TABLE reports ADD COLUMN indication TEXT;
+    ALTER TABLE reports ADD COLUMN technique TEXT;
+    ALTER TABLE reports ADD COLUMN comparison TEXT;
+    ALTER TABLE reports ADD COLUMN impression TEXT;
+    ALTER TABLE users ADD COLUMN credentials TEXT;
+    ALTER TABLE users ADD COLUMN reg_no TEXT
+    """,
 ]
 
 
@@ -519,7 +530,10 @@ class DB:
     # ---------------------------------------------------------------------------- reports
     def add_report(self, cid: str, doctor_id: int, diagnosis: str, agrees: bool | None, findings: str,
                    recommendation: str, ai_result_id: int | None, snapshot_sha256: str,
-                   amendment_reason: str | None = None) -> int:
+                   amendment_reason: str | None = None, sections: dict | None = None) -> int:
+        """sections: indication, technique, comparison, impression (free text, optional)."""
+        sec = {k: ((sections or {}).get(k) or "").strip()[:2000] or None
+               for k in ("indication", "technique", "comparison", "impression")}
         if diagnosis not in DIAGNOSES:
             raise ValueError(diagnosis)
         with self.tx() as c:
@@ -527,15 +541,17 @@ class DB:
             if v > 1 and not (amendment_reason or "").strip():
                 raise ValueError("an amendment needs a reason")
             c.execute("INSERT INTO reports (case_id,version,doctor_id,final_diagnosis,agrees_with_ai,findings,"
-                      "recommendation,ai_result_id,signed_at,amendment_reason,snapshot_sha256) "
-                      "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                      "recommendation,ai_result_id,signed_at,amendment_reason,snapshot_sha256,"
+                      "indication,technique,comparison,impression) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (cid, v, doctor_id, diagnosis, None if agrees is None else int(agrees), findings[:5000],
-                       (recommendation or "")[:2000], ai_result_id, time.time(), amendment_reason, snapshot_sha256))
+                       (recommendation or "")[:2000], ai_result_id, time.time(), amendment_reason, snapshot_sha256,
+                       sec["indication"], sec["technique"], sec["comparison"], sec["impression"]))
             c.execute("UPDATE cases SET status = 'finalized', updated = ? WHERE id = ?", (time.time(), cid))
         return v
 
     def reports(self, cid: str) -> list:
-        return self.q("SELECT r.*, u.name AS doctor_name FROM reports r JOIN users u ON u.id = r.doctor_id "
+        return self.q("SELECT r.*, u.name AS doctor_name, u.credentials AS doctor_credentials, u.reg_no AS doctor_reg_no "
+                      "FROM reports r JOIN users u ON u.id = r.doctor_id "
                       "WHERE r.case_id = ? ORDER BY r.version DESC", (cid,))
 
     def next_report_version(self, cid: str) -> int:

@@ -1,0 +1,39 @@
+{# Radiology report document: the archived snapshot and the patient's portal view render the same markup from `doc`
+   (services.report_doc). Section order: indication, technique, comparison, findings, impression, recommendation. #}
+<article class="doc">
+  <header class="doc-head">
+    <div class="org">{% if logo %}{% include "portal/_logo.html" %}{% endif %}<div><b>{{ doc.clinic }}</b>
+      <small>Department of Radiology{% if doc.address %} · {{ doc.address }}{% endif %}</small>
+      {% if doc.phone %}<small>Tel. {{ doc.phone }}</small>{% endif %}</div></div>
+    <div class="title"><b>{{ doc.exam }}</b><small>Radiology report</small><span class="doc-status {{ 'amended' if doc.status == 'Amended' }}">{{ doc.status }}</span></div>
+  </header>
+  {% if doc.amendment_reason %}<p class="doc-amend"><b>Amended report (version {{ doc.version }}).</b> Reason: {{ doc.amendment_reason }}</p>{% endif %}
+  <div class="doc-meta">
+    <div><span>Patient name</span><b>{{ doc.patient }}</b></div>
+    <div><span>Patient ID</span><b>{{ doc.mrn }}</b></div>
+    <div><span>Age / sex</span><b>{{ doc.age_sex }}</b></div>
+    <div><span>Date of birth</span><b>{{ doc.dob }}</b></div>
+    <div><span>Accession no.</span><b>{{ doc.accession }}</b></div>
+    <div><span>Study received</span><b>{{ doc.received }}</b></div>
+    <div><span>Reported</span><b>{{ doc.reported }}</b></div>
+    <div><span>Modality</span><b>MR</b></div>
+  </div>
+  <section class="doc-sec"><h3>Clinical indication</h3><div class="pre">{{ doc.indication }}</div></section>
+  <section class="doc-sec"><h3>Technique</h3><div class="pre">{{ doc.technique }}</div></section>
+  <section class="doc-sec"><h3>Comparison</h3><div class="pre">{{ doc.comparison }}</div></section>
+  <section class="doc-sec"><h3>Findings</h3><div class="pre">{{ doc.findings }}</div></section>
+  <section class="doc-sec doc-imp"><h3>Impression</h3><div class="dx">{{ doc.diagnosis }}</div>
+    {% if doc.impression %}<div class="pre">{{ doc.impression }}</div>{% endif %}</section>
+  {% if doc.recommendation %}<section class="doc-sec"><h3>Recommendation</h3><div class="pre">{{ doc.recommendation }}</div></section>{% endif %}
+  <div class="doc-sign">
+    <div class="sig"><small>Electronically signed by</small><b>{{ doc.doctor }}</b>
+      <small>{{ doc.credentials }}{% if doc.reg_no %} · Reg. no. {{ doc.reg_no }}{% endif %}</small>
+      <small>{{ doc.reported }}</small></div>
+    <div class="ver">Report {{ doc.accession }}-{{ doc.version }}<br>Electronically signed; valid without a handwritten signature</div>
+  </div>
+  <footer class="doc-foot">
+    {% if doc.ai_note %}<p>{{ doc.ai_note }}</p>{% endif %}
+    <p>This report should be interpreted together with the clinical findings. Please discuss it with your doctor.
+      Confidential medical record of {{ doc.clinic }}{% if doc.sha %}; image fingerprint (SHA-256) {{ doc.sha }}{% endif %}.</p>
+  </footer>
+</article>

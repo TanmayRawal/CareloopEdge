@@ -18,6 +18,8 @@ STARTED = time.time()
 
 SETTING_FORM = [  # key, label, hint, kind
     ("clinic_name", "Department name", "", "text"),
+    ("clinic_address", "Address", "Letterhead of reports and e-mails", "text"),
+    ("clinic_phone", "Telephone", "e.g. +91 141 000 0000", "text"),
     ("base_url", "Portal address", "e.g. https://rpi.local", "text"),
     ("timezone", "Time zone", "e.g. Asia/Kolkata", "text"),
     ("unread_hours", "Unread study reminder (hours)", "", "number"),
@@ -36,13 +38,14 @@ SETTING_FORM = [  # key, label, hint, kind
     ("require_staff_2fa", "Two-step sign-in for staff", "", "flag"),
     ("upload_device_only", "Patient sign-up and scan upload", "Phones and home computers can always sign in, view reports and book", "flag"),
 ]
+OPTIONAL = {"clinic_address", "clinic_phone"}
 FLAG_LABELS = {"upload_device_only": ("From any device", "Only at the clinic device")}
 
 
 def validate(key: str, value: str) -> str | None:
     value = value.strip()
     if not value:
-        return "is required"
+        return None if key in OPTIONAL else "is required"
     if key == "timezone":
         try:
             ZoneInfo(value)
@@ -250,7 +253,7 @@ def blueprint(d) -> Blueprint:
             current = values
         else:
             current = db.settings()
-        return render_template("portal/admin_settings.html", fields=SETTING_FORM, flag_labels=FLAG_LABELS, current=current, errors=errors,
+        return render_template("portal/admin_settings.html", fields=SETTING_FORM, flag_labels=FLAG_LABELS, optional=OPTIONAL, current=current, errors=errors,
                                defaults=DEFAULT_SETTINGS, mail=mailer.status()), (400 if errors else 200)
 
     return bp

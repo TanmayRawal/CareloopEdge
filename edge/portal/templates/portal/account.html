@@ -18,6 +18,18 @@
 {% endif %}
 
 <div class="grid g2">
+  {% if me.role == 'doctor' %}
+  <section class="card">
+    <div class="card-h"><h2>Report signature</h2></div>
+    <form method="post" class="card-b form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="form" value="signature">
+      <p class="muted small">Printed under your name on every report you sign.</p>
+      <label class="field">Qualification and title<input name="credentials" value="{{ me.credentials or '' }}" maxlength="120" placeholder="e.g. MD (Radiodiagnosis), Consultant Radiologist"></label>
+      <label class="field">Medical council registration no.<input name="reg_no" value="{{ me.reg_no or '' }}" maxlength="60" placeholder="e.g. RMC 12345"></label>
+      <button class="btn primary" type="submit">Save</button>
+    </form>
+  </section>
+  {% endif %}
   <section class="card">
     <div class="card-h"><h2>Notifications</h2></div>
     <form method="post" class="card-b form">

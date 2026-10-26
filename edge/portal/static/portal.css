@@ -381,6 +381,15 @@ details.panel .panel-b { padding: 0 16px 14px; }
 .doc-sign { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; padding-top: 22px; }
 .doc-sign .sig b { display: block; font-size: 15px; } .doc-sign .sig small { color: #687079; }
 .doc-sign .ver { text-align: right; font: var(--fs-2xs) var(--mono); color: #687079; }
+.doc-head small { display: block; }
+.doc-status { display: inline-block; margin-top: 6px; padding: 2px 8px; border: 1px solid #1f6b3a; color: #1f6b3a; font-size: 11px;
+  font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.doc-status.amended { border-color: #9a5800; color: #9a5800; }
+.doc-imp .pre { margin-top: 4px; }
+.doc-sign .sig small { display: block; }
+.doc-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #dfe2e6; color: #687079; font-size: var(--fs-2xs); }
+.doc-foot p { margin: 0 0 4px; }
+.tpl-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--muted); margin: 2px 0 6px; font-weight: 400; }
 .doc-amend { background: #fbf0dc; border-left: 3px solid #9a5800; color: #15181c; border-radius: 2px; padding: 8px 12px; margin-top: 14px; font-size: var(--fs-sm); }
 
 /* charts */

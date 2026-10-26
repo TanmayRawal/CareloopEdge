@@ -24,6 +24,13 @@
   // ------------------------------------------------------------------ print
   $("#print-btn")?.addEventListener("click", () => window.print());
 
+  // ------------------------------------------------------------------ report: structured findings templates
+  $$("[data-tpl]").forEach(b => b.addEventListener("click", () => {
+    const t = $("#findings");
+    if (t.value.trim() && !confirm("Replace the findings with the template?")) return;
+    t.value = b.dataset.tpl; t.focus();
+  }));
+
   // ------------------------------------------------------------------ upload (drag & drop + steps)
   const dz = $("#dropzone"), input = $("#scan");
   if (dz && input) {

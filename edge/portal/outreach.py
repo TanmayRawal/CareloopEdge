@@ -85,6 +85,9 @@ def announce_plan(db, plan, now: float | None = None) -> None:
         text = plan["note"]
     link = {"consultation": f"/patient/book/{plan['case_id']}" if plan["case_id"] else "/patient/appointments",
             "repeat_scan": "/patient/upload", "referral": "/patient/documents"}.get(plan["kind"], "/patient/")
+    if plan["kind"] == "repeat_scan" and db.setting("upload_device_only") == "1":    # scans come in at the clinic
+        text, button, link = (f"Please have a follow-up MRI done and bring it (CD or USB drive) to {db.setting('clinic_name')}, "
+                              "where you can submit it from the CareLoop screen.", "View your next step", "/patient/")
     notify.notify(db, patient, "followup_planned", {"step": careplan.PLAN_TEXT[plan["kind"]].lower(),
                                                     "due": due.strftime("%d %b %Y"), "action": text},
                   link, dedupe=f"plan:{plan['id']}", now=now, actions=[(button, link)])

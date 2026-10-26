@@ -72,7 +72,9 @@ def blueprint(d) -> Blueprint:
                                history=history,
                                appt=scheduling.appointment(db, appt["id"]) if appt else None,
                                no_shows=scheduling.no_show_count(db, c["patient_id"]),
-                               plan=careplan.active(db, c["patient_id"]))
+                               plan=careplan.active(db, c["patient_id"]),
+                               defaults={"technique": services.technique_text(ai), "comparison": services.comparison_text(db, c)},
+                               templates={"normal": services.NORMAL_TEMPLATE, "lesion": services.LESION_TEMPLATE})
 
     @bp.post("/case/<cid>/sign")
     @auth.require("doctor")
@@ -85,7 +87,8 @@ def blueprint(d) -> Blueprint:
         agrees = {"yes": True, "no": False}.get(f.get("agrees"))
         try:
             v = services.sign_report(ctx, c, g.user, f.get("diagnosis", ""), agrees, f.get("findings", ""),
-                                     f.get("recommendation", ""), f.get("amendment_reason") or None, d.ip())
+                                     f.get("recommendation", ""), f.get("amendment_reason") or None, d.ip(),
+                                     {k: f.get(k, "") for k in services.SECTIONS})
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("doctor.case_review", cid=cid))

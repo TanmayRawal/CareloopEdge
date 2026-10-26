@@ -403,7 +403,7 @@ def test_patient_is_told_about_the_follow_up_the_doctor_decides(env):
                                              "findings": "Small mass.", "password": PW, "fu_kind": "repeat_scan", "fu_days": "7"})
     db = env["db"]
     mail = db.one("SELECT * FROM outbox WHERE to_email = 'pat@x.test' AND subject LIKE 'Your next step%'")
-    assert mail and "repeat mri" in mail["subject"].lower() and "/patient/upload" in mail["text"]
+    assert mail and "repeat mri" in mail["subject"].lower() and "CareLoop screen" in mail["text"]
     assert "meningioma" not in (mail["text"] + mail["html"]).lower()             # no clinical content in e-mail
     # a coordinator proposal is announced only once a doctor approves it
     pat = db.user_by_email("pat@x.test")["id"]

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from flask import render_template
 
-from edge.portal import notify
+from edge.portal import common, notify, scheduling
 
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".dcm", ".dicom"}
 SERIES_EXT = (".zip", ".nii", ".nii.gz")
@@ -165,25 +165,103 @@ def request_reupload(ctx: Ctx, case, doctor, message: str, ip: str | None) -> No
                   f"/patient/case/{case['id']}", dedupe=f"reupload:{case['id']}:{int(time.time())}")
 
 
+# ------------------------------------------------------------------ radiology report
+# Section order follows the ACR practice parameter for communication of diagnostic imaging findings:
+# indication, technique, comparison, findings, impression, recommendation.
+SECTIONS = ("indication", "technique", "comparison", "impression")
+NORMAL_TEMPLATE = ("Brain parenchyma: Normal grey-white matter differentiation. No focal lesion.\n"
+                   "Ventricles and CSF spaces: Normal in size and configuration.\n"
+                   "Midline: Central. No mass effect.\n"
+                   "Extra-axial spaces: No collection.\n"
+                   "Sella and pituitary: Normal.\n"
+                   "Posterior fossa: Normal.\n"
+                   "Orbits, paranasal sinuses and mastoids: Unremarkable within the field of view.")
+LESION_TEMPLATE = ("Lesion: [location], measuring [AP x TR x CC] mm. [Signal and enhancement characteristics].\n"
+                   "Perilesional oedema: [none / mild / moderate / marked].\n"
+                   "Mass effect: [sulcal effacement / ventricular compression / midline shift of _ mm].\n"
+                   "Ventricles and CSF spaces: \n"
+                   "Rest of the brain parenchyma: \n"
+                   "Sella and pituitary: \n"
+                   "Posterior fossa: \n"
+                   "Orbits, paranasal sinuses and mastoids: ")
+
+
+def technique_text(ai: dict | None) -> str:
+    """Default 'Technique' from what was actually received (the doctor can edit it)."""
+    s = (ai or {}).get("result", {}).get("series")
+    if not s:
+        return "Single two-dimensional MR image of the brain submitted for review."
+    what = "DICOM series" if s.get("source") == "dicom" else "NIfTI volume"
+    sp = s.get("spacing_mm") or []
+    spacing = f", voxel spacing {' x '.join(f'{v:g}' for v in sp)} mm" if len(sp) == 3 else ""
+    return (f"MRI of the brain received as a {what}{spacing}. Reviewed in axial, coronal and sagittal planes "
+            f"({s.get('n_slices', 0)} representative sections).")
+
+
+def comparison_text(db, case) -> str:
+    """Default 'Comparison': earlier reported MRI studies of this patient at this clinic."""
+    prior = db.q("SELECT id, created FROM cases WHERE patient_id = ? AND id != ? AND created < ? AND status = 'finalized' "
+                 "ORDER BY created DESC LIMIT 3", (case["patient_id"], case["id"], case["created"]))
+    if not prior:
+        return "None available."
+    zone = scheduling.tz(db)
+    return "; ".join(f"MRI brain of {scheduling.local(p['created'], zone):%d %b %Y} (accession {p['id'][:8].upper()})"
+                     for p in prior) + "."
+
+
+def report_doc(db, case, rep, doctor, version: int, signed_at: float, ai_version: str | None) -> dict:
+    """What the report document shows. The archived snapshot and the patient's portal view use the same one."""
+    patient = db.user(case["patient_id"])
+    profile = db.one("SELECT * FROM patient_profiles WHERE user_id = ?", (case["patient_id"],))
+    dob = (profile["dob"] if profile else None) or ""
+    age = common.age_from_dob(dob or None)
+    sex = (profile["sex"] if profile else None) or ""
+    zone = scheduling.tz(db)
+    agrees = rep["agrees_with_ai"]
+    return {
+        "clinic": db.setting("clinic_name"), "address": db.setting("clinic_address"), "phone": db.setting("clinic_phone"),
+        "patient": patient["name"], "mrn": common.mrn(patient["id"]),
+        "age_sex": " / ".join(x for x in (f"{age} y" if age is not None else "", sex) if x) or "—", "dob": dob or "—",
+        "accession": case["id"][:8].upper(), "exam": "MRI Brain",
+        "received": f"{scheduling.local(case['created'], zone):%d %b %Y}",
+        "reported": f"{scheduling.local(signed_at, zone):%d %b %Y, %H:%M}",
+        "status": "Amended" if version > 1 else "Final", "version": version, "amendment_reason": rep["amendment_reason"],
+        "indication": rep["indication"] or case["patient_note"] or "Not provided.",
+        "technique": rep["technique"] or "Not recorded.", "comparison": rep["comparison"] or "None available.",
+        "findings": rep["findings"], "diagnosis": common.CLASS_TEXT.get(rep["final_diagnosis"], rep["final_diagnosis"]),
+        "impression": rep["impression"] or "", "recommendation": rep["recommendation"] or "",
+        "doctor": doctor["name"], "credentials": doctor["credentials"] or "Radiologist", "reg_no": doctor["reg_no"] or "",
+        # a disclosure only: the AI output itself is never part of the patient's document
+        "ai_note": (f"Computer-aided image analysis (CareLoop-Edge model {ai_version}) was available to the reporting "
+                    "radiologist as decision support. This report is the radiologist's own interpretation.")
+                   if agrees is not None and ai_version else "",
+        "sha": (case["scan_sha256"] or "")[:16],
+    }
+
+
 def sign_report(ctx: Ctx, case, doctor, diagnosis: str, agrees: bool | None, findings: str, recommendation: str,
-                amendment_reason: str | None, ip: str | None) -> int:
-    """Render the immutable report snapshot (no AI content: it is the patient's document), store it encrypted,
-    and record the structured report with the snapshot's SHA-256."""
+                amendment_reason: str | None, ip: str | None, sections: dict | None = None) -> int:
+    """Render the immutable report snapshot (no AI output: it is the patient's document), store it encrypted,
+    and record the structured report with the snapshot's SHA-256. sections: indication, technique, comparison,
+    impression."""
     if not findings.strip():
         raise ValueError("Findings are required.")
     patient = ctx.db.user(case["patient_id"])
     ai = ctx.db.latest_ai(case["id"])
     version = ctx.db.next_report_version(case["id"])
-    profile = ctx.db.one("SELECT * FROM patient_profiles WHERE user_id = ?", (case["patient_id"],))
-    html = render_template("portal/report_snapshot.html", case=case, patient=patient, doctor=doctor, version=version,
-                           profile=profile,
-                           diagnosis=diagnosis, findings=findings, recommendation=recommendation,
-                           amendment_reason=amendment_reason, signed=time.strftime("%Y-%m-%d %H:%M"))
+    sections = {k: ((sections or {}).get(k) or "").strip() for k in SECTIONS}
+    rep = {"final_diagnosis": diagnosis, "agrees_with_ai": agrees, "findings": findings.strip(),
+           "recommendation": (recommendation or "").strip(), "amendment_reason": amendment_reason, **sections}
+    doc = report_doc(ctx.db, case, rep, doctor, version, time.time(), ai["model_version"] if ai else None)
+    html = render_template("portal/report_snapshot.html", doc=doc)
     sha = ctx.store.put(case["id"], f"report_v{version}", html.encode("utf-8"))
     v = ctx.db.add_report(case["id"], doctor["id"], diagnosis, agrees, findings, recommendation,
-                          ai["id"] if ai else None, sha, amendment_reason)
+                          ai["id"] if ai else None, sha, amendment_reason, sections)
     ctx.db.audit(doctor["id"], "report_signed" if v == 1 else "report_amended", case["id"],
                  {"version": v, "diagnosis": diagnosis, "agrees_with_ai": agrees}, ip)
     if v == 1:                                          # amendments are visible in the portal; no repeat e-mail
-        notify.notify(ctx.db, patient, "report_ready", {}, f"/patient/case/{case['id']}", dedupe=f"report:{case['id']}")
+        notify.notify(ctx.db, patient, "report_ready",
+                      {"exam": "MRI Brain", "accession": doc["accession"], "doctor": doctor["name"],
+                       "received": doc["received"]},
+                      f"/patient/case/{case['id']}", dedupe=f"report:{case['id']}")
     return v
