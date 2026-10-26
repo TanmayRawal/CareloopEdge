@@ -1,9 +1,9 @@
 {% extends "portal/base.html" %}
 {% block title %}My reports{% endblock %}
 {% block pcontent %}
-<div class="welcome">
-  <div><h1>My reports</h1><p class="muted">{{ me.name }}</p></div>
-  {% if intake_here() %}<a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>{% endif %}
+<div class="page-head">
+  <div><h1>My reports</h1><p class="muted">{{ me.name }} · {{ mrn(me.id) }}</p></div>
+  {% if intake_here() %}<a class="btn primary" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a scan</a>{% endif %}
 </div>
 {% if me.email and not me.email_verified %}
 <div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg>
@@ -12,63 +12,57 @@
   <form method="post" action="{{ url_for('auth.account') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <input type="hidden" name="form" value="verify_resend"><button class="btn sm" type="submit">Send a new link</button></form></div>
 {% endif %}
+
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
-{% if stage >= 0 %}
-<ol class="journey" aria-label="Care progress">
-  {% for label in ('Scan sent', 'Report ready', 'Consultation', 'Follow-up') %}
-    <li class="{{ 'done' if loop.index0 < stage else 'current' if loop.index0 == stage }}"><span class="dot">{% if loop.index0 < stage %}<svg class="ic"><use href="#i-check"/></svg>{% else %}{{ loop.index }}{% endif %}</span>{{ label }}</li>
-  {% endfor %}
-</ol>
-{% endif %}
-{% if plan and not upcoming %}
-<section class="card next-appt cta">
-  <div class="success-ic sm"><svg class="ic"><use href="#{{ 'i-send' if plan.kind == 'referral' else 'i-scan' if plan.kind == 'repeat_scan' else 'i-calendar' }}"/></svg></div>
-  <div class="grow"><span class="eyebrow">Your next step · by {{ fmt_iso(plan.due_date) }}</span>
-    <h2>{% if plan.kind == 'consultation' %}Book a consultation with your radiologist
-        {% elif plan.kind == 'repeat_scan' %}Have a follow-up MRI and {{ 'upload it here' if intake_here() else 'bring it to the clinic' }}
-        {% elif plan.kind == 'referral' %}Visit {{ ref.facility if ref else 'the specialist' }} with your referral letter
-        {% else %}{{ plan.note or 'Follow-up with your care team' }}{% endif %}</h2>
-    {% if plan.note and plan.kind != 'other' %}<div class="small muted">{{ plan.note }}</div>{% endif %}</div>
-  {% if plan.kind == 'consultation' and plan.case_id %}<a class="btn primary" href="{{ url_for('patient.book', cid=plan.case_id) }}">Book now</a>
-  {% elif plan.kind == 'repeat_scan' and intake_here() %}<a class="btn primary" href="{{ url_for('patient.upload') }}">Upload scan</a>
-  {% elif plan.kind == 'referral' and ref %}<a class="btn primary" href="{{ url_for('patient.referral', rid=ref.id) }}" target="_blank" rel="noopener">View letter</a>{% endif %}
-</section>
-{% endif %}
 {% if upcoming %}{% set a = upcoming[0] %}
-<section class="card next-appt">
-  <div class="at-date"><span>{{ fmt_day(a.start_ts).split(' ')[0] }}</span><b>{{ fmt_day(a.start_ts).split(' ')[1] }}</b><span>{{ fmt_day(a.start_ts).split(' ')[2] }}</span></div>
-  <div class="grow"><span class="eyebrow">Next appointment</span><h2>{{ fmt_clock(a.start_ts) }} · Consultation with {{ a.doctor_name }}</h2>
-    <div class="small muted">{{ a.room or clinic }} · please arrive 10 minutes early</div></div>
+<div class="next-step">
+  <div><b>Next appointment: {{ fmt_time(a.start_ts) }}</b>, consultation with {{ a.doctor_name }}
+    <div class="small">{{ a.room or clinic }}. Please arrive 10 minutes early.</div></div>
   <div class="row-actions">
-    <a class="btn sm" href="{{ url_for('patient.ics', aid=a.id) }}"><svg class="ic sm"><use href="#i-download"/></svg>Calendar</a>
+    <a class="btn sm" href="{{ url_for('patient.ics', aid=a.id) }}">Add to calendar</a>
     <a class="btn sm" href="{{ url_for('patient.appointments') }}">Manage</a>
   </div>
-</section>
-{% elif not plan %}{% set pending = ready|rejectattr('appt_id')|list %}
+</div>
+{% elif plan %}
+<div class="next-step">
+  <div><b>Next step, by {{ fmt_iso(plan.due_date) }}:</b>
+    {% if plan.kind == 'consultation' %}consultation with your radiologist
+    {% elif plan.kind == 'repeat_scan' %}follow-up MRI{% if not intake_here() %}, to be brought to {{ clinic }}{% endif %}
+    {% elif plan.kind == 'referral' %}appointment at {{ ref.facility if ref else 'the specialist' }} with your referral letter
+    {% else %}{{ plan.note or 'follow-up with your care team' }}{% endif %}
+    {% if plan.note and plan.kind != 'other' %}<div class="small">{{ plan.note }}</div>{% endif %}</div>
+  {% if plan.kind == 'consultation' and plan.case_id %}<a class="btn sm primary" href="{{ url_for('patient.book', cid=plan.case_id) }}">Book</a>
+  {% elif plan.kind == 'repeat_scan' and intake_here() %}<a class="btn sm primary" href="{{ url_for('patient.upload') }}">Upload</a>
+  {% elif plan.kind == 'referral' and ref %}<a class="btn sm" href="{{ url_for('patient.referral', rid=ref.id) }}" target="_blank" rel="noopener">Referral letter</a>{% endif %}
+</div>
+{% else %}{% set pending = ready|rejectattr('appt_id')|list %}
   {% if pending %}
-  <section class="card next-appt cta">
-    <div class="success-ic sm"><svg class="ic"><use href="#i-calendar"/></svg></div>
-    <div class="grow"><span class="eyebrow">Your report is ready</span><h2>Book a consultation to discuss it with your radiologist</h2></div>
-    <a class="btn primary" href="{{ url_for('patient.book', cid=pending[0].id) }}">Book now</a>
-  </section>
+  <div class="next-step">
+    <div><b>Your report of {{ fmt_date(pending[0].created) }} is ready.</b> Book a consultation to go through it with your radiologist.</div>
+    <a class="btn sm primary" href="{{ url_for('patient.book', cid=pending[0].id) }}">Book</a>
+  </div>
   {% endif %}
 {% endif %}
+
 <section class="card">
-  <div class="card-h"><h2>My studies</h2></div>
+  <div class="card-h"><h2>Studies</h2><span class="muted small">{{ cases|length }}</span></div>
   {% if not cases %}
-    <div class="empty"><svg class="ic"><use href="#i-image"/></svg><h2>No scans yet</h2>
-      {% if intake_here() %}<p>Upload a brain MRI image to have it reviewed by a radiologist.</p>
-      <a class="btn primary" href="{{ url_for('patient.upload') }}">Upload a scan</a>
-      {% else %}<p>Bring your MRI to {{ clinic }} and send it from the CareLoop screen there. Your report will appear here.</p>{% endif %}</div>
+    <div class="empty">
+      {% if intake_here() %}No studies yet. Upload a brain MRI to have it reported by a radiologist.
+      {% else %}No studies yet. Bring your MRI (CD or USB drive) to {{ clinic }} and send it from the CareLoop screen there.{% endif %}</div>
   {% else %}
+  <table class="table responsive">
+    <thead><tr><th>Received</th><th>Examination</th><th>Accession</th><th>Status</th><th></th></tr></thead>
+    <tbody>
     {% for c in cases %}
-    <a class="study" href="{{ url_for('patient.case', cid=c.id) }}">
-      <span class="thumb"><svg class="ic lg"><use href="#{{ 'i-file' if c.status == 'finalized' else 'i-image' }}"/></svg></span>
-      <span><span class="t">MRI Brain</span><br><span class="d">Uploaded {{ fmt_time(c.created) }}</span></span>
-      <span class="pill s-{{ c.status }}">{{ status_text[c.status] }}</span>
-      <span class="btn sm go">{{ 'View report' if c.status == 'finalized' else 'Details' }}</span>
-    </a>
+      <tr><td class="num nowrap" data-label="Received">{{ fmt_time(c.created) }}</td>
+        <td data-label="Examination">MRI Brain</td>
+        <td class="mono" data-label="Accession">{{ c.id[:8]|upper }}</td>
+        <td data-label="Status"><span class="pill s-{{ c.status }}">{{ status_text[c.status] }}</span></td>
+        <td class="right"><a class="btn sm" href="{{ url_for('patient.case', cid=c.id) }}">{{ 'Report' if c.status == 'finalized' else 'Open' }}</a></td></tr>
     {% endfor %}
+    </tbody>
+  </table>
   {% endif %}
 </section>
 {% endblock %}

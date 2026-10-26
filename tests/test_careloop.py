@@ -226,7 +226,7 @@ def test_sign_with_follow_up_then_coordinator_closes_the_loop(env):
     assert ref["status"] == "signed"
     # the patient sees the next step and the letter, never the AI output
     dash = p.get("/patient/").get_data(as_text=True)
-    assert "Regional Cancer Centre" in dash and "Your next step" in dash
+    assert "Regional Cancer Centre" in dash and "Next step, by" in dash
     letter = p.get(f"/patient/referrals/{ref['id']}").get_data(as_text=True)
     assert "Referral letter" in letter and "Neurosurgery opinion." in letter and "Grad-CAM" not in letter
     # the coordinator works the worklist and tracks the referral to completion

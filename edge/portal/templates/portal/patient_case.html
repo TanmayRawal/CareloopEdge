@@ -26,16 +26,14 @@
 {% else %}
 <div class="grid g-side">
   <section class="card">
-    <div class="card-h"><h2>Progress</h2></div>
+    <div class="card-h"><h2>Study</h2><span class="pill s-{{ case.status }}">{{ status_text[case.status] }}</span></div>
     <div class="card-b">
-      {% set order = ['awaiting_review', 'in_review', 'finalized'] %}
-      {% set idx = order.index(case.status) if case.status in order else 0 %}
-      <div class="track">
-        <div class="stp done"><span class="dot"><svg class="ic"><use href="#i-check"/></svg></span>Received</div>
-        <div class="stp {{ 'done' if idx >= 1 else 'current' }}"><span class="dot">{% if idx >= 1 %}<svg class="ic"><use href="#i-check"/></svg>{% endif %}</span>Radiologist review</div>
-        <div class="stp {{ 'current' if idx == 1 }}"><span class="dot"></span>Report ready</div>
-      </div>
-      <div class="section-label"></div>
+      <dl class="kv">
+        <dt>Examination</dt><dd>MRI Brain</dd>
+        <dt>Accession no.</dt><dd class="mono">{{ case.id[:8]|upper }}</dd>
+        <dt>Received</dt><dd>{{ fmt_time(case.created) }}</dd>
+        <dt>Status</dt><dd>{{ status_text[case.status] }}</dd>
+      </dl>
       {% if case.status == 'reupload_requested' %}
         <div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg><div><b>Your radiologist asked for a new image.</b><br>{{ case.doctor_message }}</div></div>
         {% if intake_here() %}
@@ -47,7 +45,7 @@
         </form>
         {% else %}<p>Please bring the new scan to {{ clinic }} and send it from the CareLoop screen there.</p>{% endif %}
       {% else %}
-        <p>Your scan has been received. The report will appear here once your radiologist has reviewed it.</p>
+        <p class="muted">The report appears on this page when your radiologist has signed it. You will also be told by e-mail.</p>
       {% endif %}
     </div>
   </section>

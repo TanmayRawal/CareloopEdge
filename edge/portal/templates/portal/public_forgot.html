@@ -2,11 +2,7 @@
 {% block title %}Forgot password{% endblock %}
 {% block bare %}
 <div class="auth">
-  <section class="auth-side">
-    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
-    <div class="tagline"><h1>Reset your password</h1><p>We will e-mail you a link to choose a new password.</p></div>
-    <div class="legal">© {{ clinic }} · Authorised use only</div>
-  </section>
+  {% include "portal/_auth_head.html" %}
   <section class="auth-main">
     <div class="auth-box">
       <h2>Forgot password</h2>
@@ -19,5 +15,6 @@
       <div class="auth-alt"><a href="{{ url_for('auth.login') }}">Back to sign in</a></div>
     </div>
   </section>
+  <footer class="auth-foot">Authorised use only. Access to this system is recorded.</footer>
 </div>
 {% endblock %}

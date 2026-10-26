@@ -1,0 +1,5 @@
+{# Letterhead of the sign-in pages: who runs this system and how to reach them. #}
+<header class="auth-head">
+  <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ clinic }}</span><br><span class="sub">{{ brand if "radiology" in clinic|lower else "Department of Radiology · " ~ brand }}</span></span></span>
+  {% if clinic_address or clinic_phone %}<span class="auth-contact">{{ clinic_address }}{% if clinic_address and clinic_phone %}<br>{% endif %}{% if clinic_phone %}Tel. {{ clinic_phone }}{% endif %}</span>{% endif %}
+</header>

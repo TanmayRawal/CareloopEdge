@@ -116,7 +116,7 @@ def test_notifications_bell_and_mark_read(env):
     p, d = env["app"].test_client(), env["app"].test_client()
     finalize(env, p, d)
     page = p.get("/patient/").get_data(as_text=True)
-    assert 'class="bell-n"' in page and "Your report is ready" in page
+    assert 'class="bell-n"' in page and "is ready.</b> Book a consultation" in page
     p.post("/notifications/read", data={"csrf": csrf(p, "/patient/")})
     assert 'class="bell-n"' not in p.get("/patient/").get_data(as_text=True)
 

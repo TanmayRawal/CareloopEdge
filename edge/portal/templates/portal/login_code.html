@@ -2,11 +2,7 @@
 {% block title %}Verification code{% endblock %}
 {% block bare %}
 <div class="auth">
-  <section class="auth-side">
-    <span class="pbrand">{% include "portal/_logo.html" %}<span><span class="name">{{ brand }}</span><br><span class="sub">{{ clinic }}</span></span></span>
-    <div class="tagline"><h1>Two-step sign-in</h1><p>Enter the code from your authenticator app.</p></div>
-    <div class="legal">© {{ clinic }} · Authorised use only</div>
-  </section>
+  {% include "portal/_auth_head.html" %}
   <section class="auth-main">
     <div class="auth-box">
       <h2>Verification code</h2>
@@ -26,5 +22,6 @@
       <div class="auth-alt"><a href="{{ url_for('auth.login') }}">Cancel</a></div>
     </div>
   </section>
+  <footer class="auth-foot">Authorised use only. Access to this system is recorded.</footer>
 </div>
 {% endblock %}
