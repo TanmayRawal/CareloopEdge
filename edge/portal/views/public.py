@@ -68,7 +68,9 @@ def blueprint(d) -> Blueprint:
                 if tokens.consume(db, purpose, raw) is None:
                     abort(410)
                 with db.tx() as c:
-                    c.execute("UPDATE users SET pw_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?",
+                    # the link arrived by e-mail, so the address is confirmed too
+                    c.execute("UPDATE users SET pw_hash = ?, failed_logins = 0, locked_until = NULL, email_verified = 1 "
+                              "WHERE id = ?",
                               (auth.hash_password(pw), user["id"]))
                 db.audit(user["id"], "invite_accepted" if purpose == "invite" else "password_reset", ip=d.ip())
                 session.clear()
@@ -76,6 +78,20 @@ def blueprint(d) -> Blueprint:
                 return redirect(url_for("auth.login"))
         return render_template("portal/public_password.html", user=user, invite=purpose == "invite", error=error), \
             (400 if error else 200)
+
+    @bp.get("/verify/<raw>")
+    def verify(raw):
+        limited()
+        t = tokens.consume(db, "verify", raw)
+        if t is None:
+            return render_template("portal/public_message.html", title="This link has expired",
+                                   message="Sign in and use “Send a new link” on your Account page."), 410
+        with db.tx() as c:
+            c.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (t["user_id"],))
+        db.audit(t["user_id"], "email_verified", ip=d.ip())
+        return render_template("portal/public_message.html", title="E-mail address confirmed",
+                               message="Thank you. You will now receive messages about your reports and appointments "
+                                       "at this address.", ok=True)
 
     @bp.route("/welcome/<raw>", methods=["GET", "POST"])
     def welcome(raw):

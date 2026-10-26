@@ -132,6 +132,7 @@ def create_app(engine, model_info: dict, data_dir: str | Path, key_file: str | P
     deps = SimpleNamespace(app=app, db=db, store=store, ctx=ctx, assistant=assistant, model_info=model_info,
                            data_dir=Path(data_dir), ip=lambda: request.remote_addr, get_case_or_404=get_case_or_404,
                            login_limiter=auth.RateLimiter(20, 60), register_limiter=auth.RateLimiter(5, 3600),
+                           kiosk_register_limiter=auth.RateLimiter(120, 3600),
                            booking_limiter=auth.RateLimiter(20, 3600), reset_limiter=auth.RateLimiter(5, 3600),
                            export_limiter=auth.RateLimiter(3, 3600), token_limiter=auth.RateLimiter(30, 600))
     from edge.portal.views import admin, auth as auth_views, care, case, device, doctor, notifications, patient, public

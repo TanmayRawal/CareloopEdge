@@ -167,6 +167,12 @@ def test_audit_chain_detects_edits_and_deletions(w):
     for i in range(5):
         db.audit(w["admin"]["id"], "login", detail={"i": i})
     assert db.verify_audit_chain() == {"ok": True, "n": 5, "bad_id": None}
+    with pytest.raises(sqlite3.IntegrityError):                       # the database refuses edits ...
+        db.conn.execute("UPDATE audit SET detail = '{}' WHERE id = 3")
+    with pytest.raises(sqlite3.IntegrityError):
+        db.conn.execute("DELETE FROM audit WHERE id = 2")
+    for t in ("audit_append_only_u", "audit_append_only_d"):          # ... so an attacker with the file drops the guard;
+        db.conn.execute(f"DROP TRIGGER {t}")                          # the hash chain still shows what was changed
     db.conn.execute("UPDATE audit SET detail = '{\"i\": 9}' WHERE id = 3")
     assert db.verify_audit_chain()["bad_id"] == 3
     db.conn.execute("UPDATE audit SET detail = '{\"i\": 2}' WHERE id = 3")

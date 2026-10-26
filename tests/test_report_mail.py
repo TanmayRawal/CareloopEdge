@@ -83,3 +83,53 @@ def test_referral_letter_is_a_formal_letter_with_the_imaging_summary(env):
                  "Reg. no. RMC 12345", "within the next two weeks"):
         assert text in letter
     assert "script" not in letter.lower()
+
+
+def test_no_email_until_the_address_is_confirmed(env):
+    import re
+    db = env["db"]
+    p = env["app"].test_client()
+    register(p, "new@x.test", "Nita Rao", confirm=False)
+    user = db.user_by_email("new@x.test")
+    assert not user["email_verified"]
+    from edge.portal import notify
+    notify.notify(db, user, "report_ready", {}, "/patient/")
+    subjects = [r["subject"] for r in db.q("SELECT subject FROM outbox WHERE to_email = 'new@x.test'")]
+    assert len(subjects) == 1 and subjects[0].startswith("Please confirm")           # only the confirmation
+    link = re.search(r"(/verify/[\w-]+)", db.one("SELECT text FROM outbox WHERE to_email = 'new@x.test'")["text"]).group(1)
+    assert "E-mail address confirmed" in env["app"].test_client().get(link).get_data(as_text=True)
+    assert env["app"].test_client().get(link).status_code == 410                      # works once
+    notify.notify(db, db.user(user["id"]), "report_ready", {}, "/patient/")
+    assert db.one("SELECT COUNT(*) AS n FROM outbox WHERE to_email = 'new@x.test'")["n"] == 2
+
+
+def test_password_change_signs_out_other_sessions(env):
+    a, b = env["app"].test_client(), env["app"].test_client()
+    register(a, "pw@x.test", "Pia Sen")
+    login(b, "pw@x.test")                                                            # second device
+    new = "another long passphrase 42"
+    a.post("/account", data={"csrf": csrf(a, "/account"), "form": "password", "current": PW, "new": new, "new2": new})
+    assert a.get("/patient/").status_code == 200                                     # this browser stays signed in
+    assert b.get("/patient/").status_code == 302                                     # the other one is signed out
+
+
+def test_signed_reports_cannot_be_edited_in_the_database(env):
+    import sqlite3
+    p, d = env["app"].test_client(), env["app"].test_client()
+    register(p, "im@x.test", "Imran Ali")
+    upload(p)
+    cid = env["db"].q("SELECT id FROM cases")[0]["id"]
+    login(d, "doc@clinic.test")
+    sign(env, d, cid)
+    for sql in ("UPDATE reports SET findings = 'x'", "DELETE FROM reports"):
+        with pytest.raises(sqlite3.IntegrityError):
+            env["db"].conn.execute(sql)
+
+
+def test_gzip_bomb_is_refused_without_inflating_it(monkeypatch):
+    import gzip
+    from neuroedge import volume
+    monkeypatch.setattr(volume, "MAX_NIFTI_BYTES", 1 << 20)
+    bomb = gzip.compress(b"\0" * (8 << 20))
+    with pytest.raises(ValueError, match="too large"):
+        volume.load_nifti(bomb)

@@ -300,7 +300,44 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN credentials TEXT;
     ALTER TABLE users ADD COLUMN reg_no TEXT
     """,
+    # v6: signed reports and the audit log are append-only in the database itself (not only by convention); one
+    # active appointment per study; e-mail addresses of self-registered patients are confirmed before e-mail is sent
+    """
+    CREATE TRIGGER reports_immutable_u BEFORE UPDATE ON reports
+        BEGIN SELECT RAISE(ABORT, 'signed reports are immutable: sign an amendment instead'); END;
+    CREATE TRIGGER reports_immutable_d BEFORE DELETE ON reports
+        BEGIN SELECT RAISE(ABORT, 'signed reports are immutable'); END;
+    CREATE TRIGGER audit_append_only_u BEFORE UPDATE ON audit WHEN OLD.hash IS NOT NULL
+        BEGIN SELECT RAISE(ABORT, 'the audit log is append-only'); END;
+    CREATE TRIGGER audit_append_only_d BEFORE DELETE ON audit
+        BEGIN SELECT RAISE(ABORT, 'the audit log is append-only'); END;
+    UPDATE appointments SET status = 'cancelled', updated = updated WHERE status IN ('booked','arrived') AND id NOT IN
+        (SELECT MIN(id) FROM appointments WHERE status IN ('booked','arrived') GROUP BY case_id);
+    CREATE UNIQUE INDEX appt_case_active ON appointments(case_id) WHERE status IN ('booked','arrived');
+    ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE tokens_v6 (
+        id INTEGER PRIMARY KEY,
+        purpose TEXT NOT NULL CHECK (purpose IN ('invite','reset','verify','appt_yes','appt_no')),
+        token_hash TEXT NOT NULL UNIQUE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ref_id INTEGER, created REAL NOT NULL, expires REAL NOT NULL, used_at REAL
+    );
+    INSERT INTO tokens_v6 SELECT id, purpose, token_hash, user_id, ref_id, created, expires, used_at FROM tokens;
+    DROP TABLE tokens;
+    ALTER TABLE tokens_v6 RENAME TO tokens
+    """,
 ]
+
+
+def _statements(sql: str) -> list[str]:
+    """Split a migration into statements; a trigger body (BEGIN ...; END) stays one statement."""
+    out, buf = [], ""
+    for part in sql.split(";"):
+        buf += part + ";"
+        if buf.strip(" \n;") and sqlite3.complete_statement(buf):
+            out.append(buf.strip())
+            buf = ""
+    return out
 
 
 def _audit_hash(prev: str, row) -> str:
@@ -333,7 +370,7 @@ class DB:
             for i, sql in enumerate(MIGRATIONS[v:], start=v + 1):
                 self.conn.execute("BEGIN")
                 try:
-                    for stmt in [s for s in sql.split(";") if s.strip()]:   # executescript would auto-commit
+                    for stmt in _statements(sql):                       # executescript would auto-commit
                         self.conn.execute(stmt)
                     self.conn.execute("DELETE FROM schema_version")
                     self.conn.execute("INSERT INTO schema_version VALUES (?)", (i,))

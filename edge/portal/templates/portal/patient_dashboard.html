@@ -5,6 +5,13 @@
   <div><h1>My reports</h1><p class="muted">{{ me.name }}</p></div>
   {% if intake_here() %}<a class="btn primary lg" href="{{ url_for('patient.upload') }}"><svg class="ic sm"><use href="#i-upload"/></svg>Upload a new scan</a>{% endif %}
 </div>
+{% if me.email and not me.email_verified %}
+<div class="alert warn"><svg class="ic sm"><use href="#i-alert"/></svg>
+  <span>Please confirm your e-mail address. We sent a link to <b>{{ me.email }}</b>; until you open it we cannot e-mail you
+    when your report is ready.</span>
+  <form method="post" action="{{ url_for('auth.account') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="form" value="verify_resend"><button class="btn sm" type="submit">Send a new link</button></form></div>
+{% endif %}
 {% set ready = cases|selectattr('status', 'equalto', 'finalized')|list %}
 {% if stage >= 0 %}
 <ol class="journey" aria-label="Care progress">

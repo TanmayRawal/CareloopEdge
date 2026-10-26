@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections import defaultdict, deque
 from functools import wraps
@@ -69,7 +70,11 @@ class RateLimiter:
 
     def hit(self, key: str) -> bool:
         """Record an event; False if the key exceeded the limit within the window."""
-        q, now = self.events[key], time.monotonic()
+        now = time.monotonic()
+        if len(self.events) > 5000:                      # drop keys whose events have all expired
+            for k in [k for k, q in self.events.items() if not q or now - q[-1] > self.window]:
+                del self.events[k]
+        q = self.events[key]
         while q and now - q[0] > self.window:
             q.popleft()
         q.append(now)
@@ -118,7 +123,12 @@ def verify_password(user, password: str) -> bool:
 def start_session(user) -> None:
     session.clear()                                  # new session on login: no fixation, fresh CSRF token
     now = time.time()
-    session.update(uid=int(user["id"]), role=user["role"], t_login=now, t_seen=now)
+    session.update(uid=int(user["id"]), role=user["role"], t_login=now, t_seen=now, pwv=pw_version(user))
+
+
+def pw_version(user) -> str:
+    """Changes whenever the password changes: sessions opened with an older password are no longer accepted."""
+    return hashlib.sha256((user["pw_hash"] or "").encode("utf-8")).hexdigest()[:16]
 
 
 def load_user(db) -> None:
@@ -134,7 +144,8 @@ def load_user(db) -> None:
         g.expired = True
         return
     user = db.user(uid)
-    if user is None or not user["active"] or user["role"] != session.get("role"):
+    if (user is None or not user["active"] or user["role"] != session.get("role")
+            or session.get("pwv") != pw_version(user)):
         session.clear()
         return
     session["t_seen"] = now
