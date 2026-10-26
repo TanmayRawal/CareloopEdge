@@ -141,8 +141,8 @@ fi
 chown root:neuroedge "$ETC/portal.key"; chmod 640 "$ETC/portal.key"
 install -d -m 750 -o neuroedge -g neuroedge "$STATE/portal"
 (cd "$APP/src" && runuser -u neuroedge -- "$APP/venv/bin/python" -m edge.portal.manage init --data "$STATE/portal" --key "$ETC/portal.key")
-# Links in e-mails point at this device (admins can change it under Settings).
-(cd "$APP/src" && runuser -u neuroedge -- "$APP/venv/bin/python" -m edge.portal.manage set-setting --data "$STATE/portal" base_url "https://$(hostname).local" >/dev/null)
+# Links in e-mails point at this device; first install only, so an address set later (Settings, Funnel) is kept.
+(cd "$APP/src" && runuser -u neuroedge -- "$APP/venv/bin/python" -m edge.portal.manage set-setting --data "$STATE/portal" --if-unset base_url "https://$(hostname).local" >/dev/null)
 # Outgoing e-mail credentials: empty until `sudo neuroedge-portal smtp-config`; never in the database.
 [[ -f "$ETC/smtp.env" ]] || install -m 640 -o root -g neuroedge /dev/null "$ETC/smtp.env"
 if [[ -n "$DEV_BUNDLE" ]]; then

@@ -60,6 +60,7 @@ def main() -> None:
     p.add_argument("--to", required=True)
     p = sub.add_parser("set-setting")
     p.add_argument("--data", required=True, type=Path)
+    p.add_argument("--if-unset", action="store_true", help="only if the setting was never saved (installer default)")
     p.add_argument("key")
     p.add_argument("value")
     p = sub.add_parser("verify-audit")
@@ -162,7 +163,8 @@ def main() -> None:
         print(f"last message: {row['status']}{' — ' + row['last_error'] if row['last_error'] else ''}")
     elif a.cmd == "set-setting":
         db = DB(a.data / "portal.db")
-        db.set_setting(a.key, a.value)
+        if not (a.if_unset and db.one("SELECT 1 FROM settings WHERE key = ?", (a.key,))):
+            db.set_setting(a.key, a.value)
         print(f"{a.key} = {db.setting(a.key)}")
     elif a.cmd == "verify-audit":
         res = DB(a.data / "portal.db").verify_audit_chain()

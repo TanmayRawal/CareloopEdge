@@ -137,3 +137,18 @@ def test_kiosk_install_removes_the_admin_console_autologin():
     from pathlib import Path
     s = (Path(__file__).resolve().parents[1] / "edge/install_pi.sh").read_text(encoding="utf-8")
     assert 'mv "$GETTY_AL" "$GETTY_AL.neuroedge-orig"' in s and 'eval "$KIOSK_RESTART"' in s
+
+
+def test_installer_keeps_the_configured_portal_address(tmp_path, monkeypatch):
+    import sys
+    from pathlib import Path
+    from edge.portal import manage
+    from edge.portal.db import DB
+    s = (Path(__file__).resolve().parents[1] / "edge/install_pi.sh").read_text(encoding="utf-8")
+    assert "set-setting --data \"$STATE/portal\" --if-unset base_url" in s
+    for argv, want in ((["set-setting", "--data", str(tmp_path), "--if-unset", "base_url", "https://pi.local"], "https://pi.local"),
+                       (["set-setting", "--data", str(tmp_path), "base_url", "https://x.ts.net"], "https://x.ts.net"),
+                       (["set-setting", "--data", str(tmp_path), "--if-unset", "base_url", "https://pi.local"], "https://x.ts.net")):
+        monkeypatch.setattr(sys, "argv", ["manage", *argv])
+        manage.main()
+        assert DB(tmp_path / "portal.db").setting("base_url") == want
