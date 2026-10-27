@@ -17,7 +17,7 @@ import ssl
 import threading
 import time
 from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid, parseaddr
 from pathlib import Path
 
 SMTP_ENV_FILE = Path(os.environ.get("NEUROEDGE_SMTP_ENV", "/etc/neuroedge/smtp.env"))
@@ -52,11 +52,16 @@ def status(cfg: dict | None = None) -> dict:
     return {"configured": False, "mode": None, "detail": "SMTP not configured"}
 
 
-def build_message(row, cfg: dict) -> EmailMessage:
+def build_message(row, cfg: dict, sender_name: str | None = None) -> EmailMessage:
     m = EmailMessage()
     sender = cfg.get("NEUROEDGE_SMTP_FROM") or cfg.get("NEUROEDGE_SMTP_USER") or "noreply@neuroedge.local"
-    m["From"], m["To"], m["Subject"] = sender, row["to_email"], row["subject"]
-    m["Date"], m["Message-ID"] = formatdate(localtime=True), make_msgid(domain="neuroedge.local")
+    name, addr = parseaddr(sender)
+    # Spam filters distrust a bare address and a Message-ID from a domain other than the sender's: give the clinic's
+    # name, and an ID on the sending domain.
+    m["From"] = formataddr((name or sender_name or "", addr)) if (name or sender_name) else addr
+    m["To"], m["Subject"] = row["to_email"], row["subject"]
+    m["Date"] = formatdate(localtime=True)
+    m["Message-ID"] = make_msgid(domain=addr.rpartition("@")[2] or "neuroedge.local")
     m["Auto-Submitted"] = "auto-generated"
     m.set_content(row["text"])
     if row["html"]:
@@ -123,7 +128,7 @@ def flush(db, now: float | None = None, limit: int = 50, cfg: dict | None = None
     try:
         for row in rows:
             try:
-                tr.send(build_message(row, cfg))
+                tr.send(build_message(row, cfg, db.setting("clinic_name")))
                 with db.tx() as c:
                     c.execute("UPDATE outbox SET status='sent', sent_at=?, attempts=attempts+1, last_error=NULL WHERE id=?",
                               (now, row["id"]))

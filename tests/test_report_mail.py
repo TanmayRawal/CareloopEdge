@@ -133,3 +133,13 @@ def test_gzip_bomb_is_refused_without_inflating_it(monkeypatch):
     bomb = gzip.compress(b"\0" * (8 << 20))
     with pytest.raises(ValueError, match="too large"):
         volume.load_nifti(bomb)
+
+
+def test_mail_headers_name_the_clinic_and_use_the_sender_domain():
+    from edge.portal import mailer
+    row = {"to_email": "p@x.test", "subject": "S", "text": "t", "html": None, "ics": None}
+    m = mailer.build_message(row, {"NEUROEDGE_SMTP_USER": "careloop.clinic@gmail.com"}, "CareLoop Clinic, Chomu")
+    assert m["From"] == '"CareLoop Clinic, Chomu" <careloop.clinic@gmail.com>'
+    assert m["Message-ID"].endswith("@gmail.com>")
+    m = mailer.build_message(row, {"NEUROEDGE_SMTP_FROM": "Dept <a@b.org>"}, "Ignored")
+    assert m["From"] == "Dept <a@b.org>" and m["Message-ID"].endswith("@b.org>")
