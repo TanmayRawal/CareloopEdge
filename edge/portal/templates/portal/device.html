@@ -38,10 +38,19 @@
   </main>
 
   <footer class="ds-foot">
-    {% if s.qr %}<span class="ds-qr" aria-hidden="true">{{ s.qr|safe }}</span>{% endif %}
+    {% if s.qr %}<button type="button" class="ds-qr" id="qr-open" aria-label="Show the QR code larger">{{ s.qr|safe }}</button>{% endif %}
     <span class="ds-url"><span>{{ 'Open on any phone or laptop' if s.public else 'Open on a phone or laptop on this network' }}</span><b>{{ s.url or ('https://' ~ s.host ~ '.local') }}</b></span>
     <span class="ds-legal">Research prototype · not a medical device</span>
   </footer>
+  {% if s.qr %}
+  <div class="ds-qrbig" id="qr-big" role="dialog" aria-label="QR code for the portal" hidden>
+    <div class="ds-qrbig-in">
+      <span class="ds-qrbig-code">{{ s.qr|safe }}</span>
+      <b>{{ s.url }}</b>
+      <span>Scan with your phone camera. Tap anywhere to close.</span>
+    </div>
+  </div>
+  {% endif %}
 </div>
 <script src="{{ asset('portal.js') }}"></script>
 </body>

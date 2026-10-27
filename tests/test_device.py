@@ -152,3 +152,11 @@ def test_installer_keeps_the_configured_portal_address(tmp_path, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["manage", *argv])
         manage.main()
         assert DB(tmp_path / "portal.db").setting("base_url") == want
+
+
+def test_qr_code_opens_large(env):
+    pytest.importorskip("segno")
+    env["db"].set_setting("base_url", "https://pi.example.ts.net")
+    page = env["app"].test_client().get("/device").get_data(as_text=True)
+    assert 'id="qr-open"' in page and 'id="qr-big"' in page and page.count("<svg") >= 2
+    assert "https://pi.example.ts.net" in page.split('id="qr-big"')[1]

@@ -71,6 +71,14 @@
   }));
 
   // ------------------------------------------------------------------ device home + kiosk
+  const qrBig = $("#qr-big");                    // the footer QR is small: tap it to show it full screen
+  if (qrBig) {
+    let shut;
+    const close = () => { qrBig.hidden = true; clearTimeout(shut); };
+    $("#qr-open").addEventListener("click", () => { qrBig.hidden = false; clearTimeout(shut); shut = setTimeout(close, 60000); });
+    qrBig.addEventListener("click", close);
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape") close(); });
+  }
   const clock = $("#dv-time");
   if (clock) {
     const tick = () => {
