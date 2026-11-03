@@ -35,3 +35,6 @@ server/.admin_token
 .claude/settings.local.json
 server/.init_*
 *.log
+
+# Submission decks and the evaluator access PDF (has evaluator passwords): never in git
+docs/submission/

@@ -1,9 +1,13 @@
 # CareLoop-Edge
 
-Assistive AI follow-up and continuity of care for brain MRI, running offline on a **Raspberry Pi**, so that no
-screened patient is lost between visits. (Repository and package name: NeuroEdge.)
+Assistive AI follow-up and continuity of care for brain MRI, running on a **Raspberry Pi 4 clinic kiosk** (7" touch
+screen), so that no screened patient is lost between visits. (Repository and package name: NeuroEdge.)
 
-Patients upload a scan to a clinic portal on the Pi. The AI result (calibrated probabilities, a 95% prediction set,
+**Health-a-thon 2026, team CareLoop-Edge (Y5XV55).** A hosted evaluation copy runs the same software on a small cloud
+server: <https://careloop-eval.3-111-140-240.sslip.io> (accounts are in the evaluator access document; fictional
+demo data only).
+
+Patients upload a whole MRI study (DICOM series or NIfTI, from a USB drive at the kiosk) to a clinic portal on the Pi. The AI result (calibrated probabilities, a 95% prediction set,
 an **exact, lesion-focused Grad-CAM** and the lesion outline) goes to the doctor's worklist. The doctor signs the
 final report, and the patient sees only that report. A doctor-approved **follow-up plan** (consultation, repeat MRI
 or referral) then goes to the care coordinator's worklist, ranked by an explainable risk score built from
@@ -13,8 +17,9 @@ and encrypted** bundle through a self-hosted registry.
 > Research prototype on public data. See the [model card](docs/MODEL_CARD.md).
 
 ```
- Patient ──HTTPS──► Pi clinic portal (Caddy TLS → Flask, SQLite, encrypted scan/report store)
-                    ├─ INT8 ResNet-50, lesion-attention head + segmentation (ONNX Runtime)   120 ms
+ Patient ──HTTPS──► Pi 4 kiosk portal (Caddy TLS → Flask, SQLite, encrypted scan/report store)
+                    ├─ INT8 ResNet-50, lesion-attention head + segmentation (ONNX Runtime)
+                    ├─ whole study: 36 slices in 3 planes → one result per patient    43–51 s on a Pi 4
                     ├─ exact Grad-CAM (28×28) · lesion outline · 95% conformal set · OOD reject/warn
                     ├─ doctor worklist → review → signed, versioned report → patient
                     ├─ consultation booking · reminders (in-app + e-mail) · attendance / no-shows
@@ -63,7 +68,22 @@ and encrypted** bundle through a self-hosted registry.
   * rebooking after a no-show;
   * a daily follow-up summary for the coordinator and pending approvals for doctors.
 
-## Results: v1, `mri/0.2.0` (details in [docs/FINDINGS.md](docs/FINDINGS.md) §10)
+## Results: v2, `mri/0.3.0`, whole-study model (current; details in the [model card](docs/MODEL_CARD.md))
+v1 read one image; our doctor partner (Dr. Madhur Saxena, BMCHRC Jaipur) pointed out that no radiologist confirms a
+tumour from a single slice, so v2 reads the whole study. Held-out patients, targets fixed before testing:
+
+| | v1 (one image) | **v2 (whole study)** | Target |
+|---|---|---|---|
+| Tumour-type macro-F1 | 0.71 | **0.98** | ≥ 0.85 |
+| Slice tumour AUROC | 0.72 | **0.95** | ≥ 0.90 |
+| False alarms on healthy brains (IXI) | 23% | **5%** | ≤ 10% |
+| Per class (patients) | | glioma 76/76, meningioma 62/68, pituitary 15/15, healthy 361/380 | |
+| Pi 4, whole study (load + 36 slices + explanations) | | **43–51 s** | |
+
+Limits: one training seed; test patients come from the same datasets as training; the external BraTS-Africa test is
+pending.
+
+## Earlier results: v1, `mri/0.2.0`, single image on a Pi (details in [docs/FINDINGS.md](docs/FINDINGS.md) §10)
 All numbers are for the deployed INT8 model on the leakage-free held-out test set, compared with v0.
 
 | | v0 | **v1** (3-seed mean ± sd) |
@@ -93,8 +113,8 @@ Key findings:
 | `training/` | Data manifests and leakage audit, training, ablation, calibration, export, INT8 quantization, XAI evaluation, acceptance report |
 | `server/` | Model registry (FastAPI), Docker Compose + Caddy, publish tool, live end-to-end check |
 | `edge/` | Pi runtime: engine, sync, clinic portal (`edge/portal`), language-model experiment (`edge/agent`, not used by the portal), benchmark, parity check, installer, Caddy, firewall, systemd units |
-| `docs/` | [Findings](docs/FINDINGS.md), [model card](docs/MODEL_CARD.md), [Pi deployment guide](docs/PI_DEPLOY.md) |
-| `tests/` | 133 tests: follow-up plans and risk score, referrals, two-step sign-in, audit chain, appointments, reminders, mailer, CAM exactness, crypto and tamper detection, leakage dedupe, portal access control and security, verifier, deploy files |
+| `docs/` | [Findings](docs/FINDINGS.md), [model card](docs/MODEL_CARD.md), [Pi deployment guide](docs/PI_DEPLOY.md), [ML walkthrough](docs/ML_Walkthrough.html), [demo video script](docs/DEMO_VIDEO_SCRIPT.md) |
+| `tests/` | 179 tests: follow-up plans and risk score, referrals, two-step sign-in, audit chain, appointments, reminders, mailer, CAM exactness, crypto and tamper detection, leakage dedupe, portal access control and security, verifier, deploy files |
 | `reference/` | The original notebook (reference only) |
 
 ## Quick start
@@ -123,11 +143,12 @@ Private keys and the admin token belong in a non-synced folder (e.g. `~/neuroedg
 or a cloud-synced directory.
 
 ## Status and next steps
-v1 runs end to end on the Pi: HTTPS portal, firewall, encrypted patient store, model `mri/0.2.0`. Known
-limitations are listed in the [model card](docs/MODEL_CARD.md).
+v2 runs end to end on the Raspberry Pi 4 kiosk: touch-screen kiosk, HTTPS portal, firewall, encrypted patient
+store, whole-study model `mri/0.3.0`, care loop with reminders and referral tracking. Known limitations are listed
+in the [model card](docs/MODEL_CARD.md).
 
 Next:
-* Calibration per data source, to reach 95% coverage on the test release.
-* BraTS-based fixes for the sequence shortcut.
-* The 3D MRI track.
-* Fit the Raspberry Pi **cooler**.
+* External whole-study test on BraTS-Africa; two more training seeds; a prospective test with BMCHRC.
+* Indian languages and voice for patients; SMS / WhatsApp reminders.
+* Calibration of the 95% set on patients rather than slices.
+* PACS / DICOM and ABDM integration.
