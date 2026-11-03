@@ -1,4 +1,17 @@
-# Deploying NeuroEdge on a Raspberry Pi (8 GB)
+# Deployment guide: Raspberry Pi 4 clinic kiosk, and a cloud copy on AWS
+
+The reference deployment is a **Raspberry Pi 4 Model B (4 GB) with the official 7" touch display**, used as the clinic
+kiosk. A Raspberry Pi works the same way (faster). The same installer also runs on any 64-bit ARM Debian server;
+section 8 sets up the hosted evaluation copy on AWS.
+
+| Section | What |
+|---|---|
+| 1–4 | Hardware, code, install, signed + encrypted model from the registry |
+| 5, 5b | Using the portal; the kiosk on the Pi's own screen |
+| 5c | Upgrading to the whole-study model `mri/0.3.0` |
+| 5d | Internet access from the Pi with Tailscale Funnel |
+| 6, 7 | Benchmark, operations |
+| 8 | Cloud evaluation copy on AWS EC2 |
 
 What runs on the Pi, all offline after setup:
 
@@ -18,9 +31,22 @@ its key is `/etc/neuroedge/portal.key`. Memory budget: web app ≈ 0.3 GB idle, 
 whole study (one at a time), so a 4 GB board is the minimum and 8 GB is comfortable.
 
 ## 1. Hardware and OS
-* Raspberry Pi, 8 GB, with the **cooler** (sustained inference throttles without it), the official
-  official USB-C supply, and a microSD card of 32 GB or more (an NVMe HAT is faster but optional).
-* Flash **Raspberry Pi OS Lite (64-bit)** with Raspberry Pi Imager. In the Imager settings, set a hostname
+The prototype kiosk (prices actually paid, INR):
+
+| Item | ₹ |
+|---|---|
+| Raspberry Pi 4 Model B, 4 GB | 12,000 |
+| Official Raspberry Pi 7" touch display | 7,000 |
+| SanDisk microSD (the kiosk runs from 32 GB; a 256 GB card was bought for the final build) | 4,000 |
+| Official power adapter | 1,000 |
+| Pen drive (patients' scan transfer) | 800 |
+| **Total** | **24,800** |
+
+* **Raspberry Pi 4 (4 GB):** a whole study takes 43–51 s (measured from the USB drive: DICOM series of 155 files
+  51 s, NIfTI 43 s). 4 GB is the minimum (see the memory budget above).
+* **Raspberry Pi (8 GB):** use the **cooler** (sustained inference throttles without it) and the 27 W
+  USB-C supply.
+* Flash **Raspberry Pi OS (64-bit)** with Raspberry Pi Imager (Lite, or the desktop image for the kiosk). In the Imager settings, set a hostname
   (e.g. `neuroedge`), a user, Wi-Fi or Ethernet, and enable SSH.
 * Boot, then: `sudo apt update && sudo apt full-upgrade -y && sudo reboot`.
 
@@ -181,14 +207,19 @@ It shows no patient data. Every portal page gets a "device home" button, and the
 minutes. The portal adapts to 800×480, 1024×600 and 1280×720 (tabs on the case page, touch-sized controls).
 
 **Hardware:**
-* a case that fits a Pi **with the cooler**;
-* the official supply (the screen draws from the Pi).
+* Pi 4: the official 7" display's kit ribbon fits the Pi 4's DSI port directly; use the official supply (the
+  screen draws from the Pi).
+* Pi: a case that fits the Pi **with the cooler**, and the official supply.
 
-| Screen | Cable on a Pi | Installer option |
+| Screen | Cable | Installer option |
 |---|---|---|
-| Original 7" Touch Display (800×480) | Raspberry Pi display cable (22-pin to 15-pin) | `--display td1` |
+| Original 7" Touch Display (800×480), **as on the reference Pi 4 kiosk** | Pi 4: kit ribbon; Pi: Raspberry Pi display cable (22-pin to 15-pin) | `--display td1` |
 | Touch Display 2 (720×1280 portrait panel) | included | `--display td2 --rotate 90` |
 | 7" HDMI (1024×600) | micro-HDMI to HDMI | `--display hdmi` |
+
+**Patients' scans at the kiosk:** the patient taps **Patient**, signs up on the touch screen and chooses the study
+from a USB drive (a DICOM series folder or a NIfTI file). The kiosk session mounts the drive without a password.
+By default (`upload_device_only = 1`), sign-up and upload are allowed only from the kiosk's own screen.
 
 ```bash
 sudo bash edge/install_pi.sh --kiosk --display td1
@@ -223,12 +254,44 @@ sudo reboot
    sudo neuroedge-sync status
    ```
    Expect `mri: version 0.3.0 verified OK`; the web app restarts by itself.
-4. **Benchmark whole studies** (target under 25 s per study):
+4. **Benchmark whole studies** (measured on the Pi 4: 43–51 s per study):
    ```bash
    cd /opt/neuroedge/src && sudo -u neuroedge env NEUROEDGE_HOME=/var/lib/neuroedge /opt/neuroedge/venv/bin/python -m edge.bench --series ~/test_uploads --llm 0
    ```
 5. **Rollback:** restore the code with `sudo tar -xzf ~/backup-pre-0.3.0/code.tgz -C /opt/neuroedge`, pull `0.2.0`
    again with `neuroedge-sync`, and run `sudo systemctl restart neuroedge-web`.
+
+## 5d. Internet access from the Pi (Tailscale Funnel)
+The doctor and patients reach the kiosk's portal from anywhere through one public HTTPS address, with no open
+ports at the clinic (the Pi only makes outbound connections). This is how the reference Pi 4 kiosk is reached.
+1. Install Tailscale (packages from pkgs.tailscale.com) and sign in:
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   ```
+   ```bash
+   sudo tailscale up
+   ```
+2. In the Tailscale admin console, enable HTTPS certificates and Funnel for the tailnet.
+3. Publish the portal (Caddy on `localhost:443`) and check it:
+   ```bash
+   sudo tailscale funnel --bg https+insecure://localhost:443
+   ```
+   ```bash
+   sudo tailscale funnel status
+   ```
+4. Make e-mail links and the kiosk's QR code use the public address:
+   ```bash
+   sudo neuroedge-portal set-setting base_url https://<hostname>.<tailnet>.ts.net
+   ```
+   Re-running the installer keeps this address (it sets `base_url` only on the first install).
+
+Notes:
+* Internet visitors cannot sign up or upload while `upload_device_only = 1`; that stays at the kiosk.
+* The installer makes Caddy start before `tailscaled`, and `tailscaled` wait for network time: the Pi has no
+  battery-backed clock, and Funnel's TLS fails until the clock is set. After a boot, the public address can take
+  about 5 minutes to work, so switch the kiosk on about 10 minutes before it is needed.
+* Funnel traffic is relayed through Tailscale's servers. If the relay path is slow (it was on the AWS copy:
+  30–60 s per page while the server answered locally in 0.01 s), serve HTTPS directly instead, as in section 8.
 
 ## 6. Benchmark (results go into docs/FINDINGS.md)
 ```bash
@@ -239,8 +302,8 @@ sudo -u neuroedge env NEUROEDGE_HOME=/var/lib/neuroedge /opt/neuroedge/venv/bin/
 For a dev-bundle install, add `--bundle-dir /var/lib/neuroedge/dev_bundle`.
 The images must be readable by the `neuroedge` user (home directories are not), so copy them to `/tmp` first.
 It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, SoC temperature and
-`vcgencmd get_throttled` (it should stay `0x0`). v1 (`mri/0.2.0`) on the Pi: 238 ms median, 250 ms p95
-(model 120 ms), peak RSS 261 MB.
+`vcgencmd get_throttled` (it should stay `0x0`). v1 (`mri/0.2.0`, single image) on the Pi: 238 ms median,
+250 ms p95 (model 120 ms), peak RSS 261 MB. v2 (`mri/0.3.0`, whole study of 36 slices) on the Pi 4: 43–51 s.
 
 ## 7. Operations
 | Task | Command |
@@ -258,6 +321,117 @@ It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, S
 | Portal CA fingerprint | `sudo neuroedge-ca` |
 | Firewall rules | `sudo nft list table inet neuroedge` |
 
+## 8. Cloud evaluation copy on AWS EC2
+The same software on a small ARM server, so evaluators can use the system without the kiosk. It keeps the secure
+model path (registry, signed and encrypted model, verified on the device); there is no kiosk screen, so sign-up and
+upload are opened to any device. Live copy: <https://careloop-eval.3-111-140-240.sslip.io> (fictional demo data).
+
+**1. Launch the server (AWS console)**
+* Region **ap-south-1 (Mumbai)**; instance **t4g.small** (2 vCPU ARM Graviton, 2 GB RAM; same ARM64 architecture as
+  the Pi, so the same pinned wheels install); AMI **Debian 13 (trixie) arm64**; **30 GB gp3**; an SSH key pair
+  (default user `admin`).
+* Security group, inbound:
+
+  | Type | Port | Source |
+  |---|---|---|
+  | SSH | 22 | My IP only |
+  | HTTP | 80 | Anywhere (Let's Encrypt challenge, redirect to HTTPS) |
+  | HTTPS | 443 | Anywhere |
+
+  The registry ports (8443, 8088) stay closed to the internet; it is used through an SSH tunnel.
+* **Elastic IP:** allocate one and associate it with the instance, so the address (and the HTTPS name built
+  from it) survives a stop and start.
+* Cost: about US$25–30 a month (instance, storage, public IPv4).
+
+**2. Prepare the OS** (over SSH): a 2 GB swap file, since a whole study briefly needs about 2.5 GB:
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+```
+```bash
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+Docker for the registry (Debian packages):
+```bash
+sudo apt-get install -y docker.io docker-compose docker-buildx
+```
+
+**3. Copy the code and install** (from the PC, in the repo; `git archive` keeps LF line endings):
+```bash
+git archive --format=tar HEAD | ssh admin@<elastic-ip> "mkdir -p ~/neuroedge-src && tar -x -C ~/neuroedge-src"
+```
+On the server, the normal installer without `--kiosk` or `--display` (the only Pi-specific steps, screen and
+kiosk, run only with those options):
+```bash
+cd ~/neuroedge-src && sudo bash edge/install_pi.sh
+```
+
+**4. Registry on the same server, model from the PC.** Follow section 4 with `server/.env` set to
+`DOMAIN=localhost`, `TLS=internal`, `HTTP_PORT=8088`, `HTTPS_PORT=8443`. Then:
+* Copy Caddy's root certificate out of the registry container (section 4) and re-run the installer with
+  `--ca-cert registry_root.crt` so the device trusts the registry.
+* Publish from the training PC through an SSH tunnel, so the signing key never leaves the PC:
+  ```bash
+  ssh -N -L 18443:localhost:8443 admin@<elastic-ip>
+  ```
+  ```bash
+  SSL_CERT_FILE=registry_root.crt NE_ADMIN_TOKEN=<token> python -m server.publish --bundle <bundle_dir> --name mri --version 0.3.0 --server https://localhost:18443 --signing-key ~/neuroedge_secrets/signing/signing_priv.pem
+  ```
+* Enroll and pull on the server (section 4, step 4, with `--server https://localhost:8443`), then
+  `sudo neuroedge-sync status` shows `mri: version 0.3.0 verified OK`.
+
+**5. Public HTTPS on the Elastic IP.** A free name that resolves to the IP: `<name>.<ip-with-dashes>.sslip.io`
+(for example `careloop-eval.3-111-140-240.sslip.io`). Append to `/etc/caddy/Caddyfile`, binding the instance's
+private address so `:443` on the Tailscale addresses stays free:
+```
+<name>.<ip-with-dashes>.sslip.io {
+	bind <private-ip>
+	encode gzip
+	request_body {
+		max_size 210MB
+	}
+	header {
+		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8080
+}
+http://<name>.<ip-with-dashes>.sslip.io {
+	bind <private-ip>
+	redir https://{host}{uri} permanent
+}
+```
+In the global block, `default_bind 127.0.0.1 [::1]` keeps the catch-all local-CA site on loopback. Then:
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl restart caddy
+```
+Caddy gets a Let's Encrypt certificate (ports 80 and 443 must already be open) and renews it. Re-running the
+installer replaces the Caddyfile, so add the block again afterwards.
+
+**6. Portal settings and accounts**
+```bash
+sudo neuroedge-portal set-setting base_url https://<name>.<ip-with-dashes>.sslip.io
+```
+```bash
+sudo neuroedge-portal set-setting upload_device_only 0
+```
+* Set the clinic name, address and phone under **Admin → Settings**.
+* Create the staff accounts with `sudo neuroedge-portal create-user` (passwords are typed, never on the command
+  line), and share evaluator logins privately, never in the repository.
+* E-mail: either `sudo neuroedge-portal smtp-config`, or demo mode, which saves each message as a file and lists it
+  under **Admin → E-mail**; put this line in `/etc/neuroedge/smtp.env`:
+  `NEUROEDGE_SMTP=file:/var/lib/neuroedge/mail_out`.
+
+**7. Snapshot the prepared state**, so it can be restored if evaluators change it:
+```bash
+sudo tar -czf /var/lib/neuroedge/backups/prepared-eval-$(date +%Y%m%d-%H%M).tar.gz -C /var/lib/neuroedge portal
+```
+To restore: stop `neuroedge-web` and `neuroedge-reminders.timer`, extract the archive over
+`/var/lib/neuroedge/portal`, and start them again.
+
+**Checks:** the public link from mobile data; each role's login; upload a test study → AI result → the doctor
+signs → the patient sees the report; the site comes back after `sudo reboot`.
+
 ## Security notes
 * **Network:** the portal is reachable only over HTTPS through Caddy. The Flask app and the LLM listen on loopback,
   and the firewall drops everything except SSH, HTTP(S) and mDNS (it also closes VNC and rpcbind).
@@ -270,4 +444,4 @@ It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, S
 * Services run as the unprivileged `neuroedge` user with a read-only filesystem view (`ProtectSystem=strict`).
 * Threat model: encryption protects the model and patient data in transit and at rest and blocks unenrolled
   downloads. It cannot stop someone with root on an enrolled Pi from reading the model from RAM or the portal key
-  from disk: the Pi has no hardware key store. Keep SSH key-only.
+  from disk: the Raspberry Pi has no hardware key store. Keep SSH key-only.

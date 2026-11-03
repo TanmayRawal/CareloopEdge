@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# NeuroEdge installer for Raspberry Pi (Raspberry Pi OS 64-bit, Bookworm or newer). Run from the repo root:
+# NeuroEdge installer for Raspberry Pi 4 / 5 (Raspberry Pi OS 64-bit, Bookworm or newer; also any arm64 Debian server,
+# e.g. the AWS evaluation copy, docs/PI_DEPLOY.md section 8). Run from the repo root:
 #
 #   sudo bash edge/install_pi.sh [--with-deep-explain] [--gguf FILE] [--ca-cert FILE] [--dev-bundle DIR]
 #                                [--kiosk] [--display td1|td2|hdmi] [--rotate 0|90|180|270] [--with-llm]
