@@ -38,3 +38,7 @@ server/.init_*
 
 # Submission decks and the evaluator access PDF (has evaluator passwords): never in git
 docs/submission/
+# Internal prep material (video and talk scripts, walkthroughs), not for the public repo
+docs/DEMO_VIDEO_SCRIPT.md
+docs/ML_Walkthrough.html
+docs/*Script*.pdf

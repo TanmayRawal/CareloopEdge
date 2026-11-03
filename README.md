@@ -113,7 +113,7 @@ Key findings:
 | `training/` | Data manifests and leakage audit, training, ablation, calibration, export, INT8 quantization, XAI evaluation, acceptance report |
 | `server/` | Model registry (FastAPI), Docker Compose + Caddy, publish tool, live end-to-end check |
 | `edge/` | Pi runtime: engine, sync, clinic portal (`edge/portal`), language-model experiment (`edge/agent`, not used by the portal), benchmark, parity check, installer, Caddy, firewall, systemd units |
-| `docs/` | [Findings](docs/FINDINGS.md), [model card](docs/MODEL_CARD.md), [Pi deployment guide](docs/PI_DEPLOY.md), [ML walkthrough](docs/ML_Walkthrough.html), [demo video script](docs/DEMO_VIDEO_SCRIPT.md) |
+| `docs/` | [Findings](docs/FINDINGS.md), [model card](docs/MODEL_CARD.md), [Pi deployment guide](docs/PI_DEPLOY.md) |
 | `tests/` | 179 tests: follow-up plans and risk score, referrals, two-step sign-in, audit chain, appointments, reminders, mailer, CAM exactness, crypto and tamper detection, leakage dedupe, portal access control and security, verifier, deploy files |
 | `reference/` | The original notebook (reference only) |
 
