@@ -59,8 +59,8 @@ The sections below describe the shared architecture and the single-slice `mri/0.
   proven better.
 * **FP32 vs INT8:** external macro-F1 0.842 → 0.836. v0 lost 0.843 → 0.729 here, which its docs had reported as
   0.843.
-* **Pi vs PC** on 40 scans: 40/40 identical predictions; max |Δp| 0.010; CAM Pearson ≥ 0.997.
-* **Pi speed:** full analysis 238 ms median, 250 ms p95.
+* **Raspberry Pi vs PC** on 40 scans: 40/40 identical predictions; max |Δp| 0.010; CAM Pearson ≥ 0.997.
+* **Raspberry Pi speed:** full analysis 238 ms median, 250 ms p95.
 * **Calibration:** temperature T = 2.56, fitted on cal; test ECE 0.042 → 0.024.
 * **Conformal 95% sets** cover **0.911** on test. That is up from 0.867, but **below the 0.93 target**.
   * Per class: glioma 0.83, meningioma 0.93, no tumor 0.99, pituitary 0.89.
@@ -154,6 +154,6 @@ The sections below describe the shared architecture and the single-slice `mri/0.
   * an nftables firewall admits only SSH, HTTP(S) and mDNS;
   * patient data is encrypted at rest with a separate key.
 * **Threat model limit:** someone with root access on an enrolled device can read the model and the portal key.
-  The Pi has no hardware key store.
+  The Raspberry Pi has no hardware key store.
 
 Full evidence and methods: [`docs/FINDINGS.md`](FINDINGS.md).

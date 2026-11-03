@@ -61,7 +61,7 @@ cancer patients are lost to follow-up in Indian hospital cohorts.
 | **Total per centre** | **24,800** |
 
 Running cost: about ₹0 per study (no cloud AI or per-scan API), about ₹40 a month of electricity, free public
-access (Tailscale) and e-mail (Gmail SMTP). A Raspberry Pi also works.
+access (Tailscale) and e-mail (Gmail SMTP).
 
 ## The AI model
 * **Architecture:** ResNet-50 backbone (ImageNet-pretrained, output stride 8) with an FPN segmentation head and a
@@ -96,7 +96,7 @@ reads the whole study. Held-out patients, targets fixed before testing, INT8 mod
 
 Full details: [model card](docs/MODEL_CARD.md) and [findings](docs/FINDINGS.md).
 
-### Earlier: v1, `mri/0.2.0`, single image on a Pi ([findings](docs/FINDINGS.md) §10)
+### Earlier: v1, `mri/0.2.0`, single image ([findings](docs/FINDINGS.md) §10)
 | | v0 | **v1** (3-seed mean ± sd) |
 |---|---|---|
 | Test macro-F1 | 0.935 | **0.944** (0.938 ± 0.007) |
@@ -104,7 +104,7 @@ Full details: [model card](docs/MODEL_CARD.md) and [findings](docs/FINDINGS.md).
 | Grad-CAM evidence inside the tumour | 0.15 | **0.73** (98% of the 28×28 ceiling) |
 | Pointing game (hotspot on the tumour) | 0.53 | **0.99** |
 | 95% prediction-set coverage | 0.87 | **0.91** (target 0.93 not met) |
-| Pi full analysis, median | 178 ms | **238 ms** |
+| Raspberry Pi full analysis, median | 178 ms | **238 ms** |
 | Registry end-to-end security check | 16/16 | **16/16** |
 
 A 1.7B local language model could not be trusted to interpret statistics, so it was removed from the portal (the
@@ -153,7 +153,7 @@ experiment stays in `edge/agent`, installed only with `install_pi.sh --with-llm`
 * **Consent:** recorded at sign-up and with each upload; data export and deletion requests.
 
 ## Deployment
-* **Raspberry Pi 4 kiosk** (and Pi): [docs/PI_DEPLOY.md](docs/PI_DEPLOY.md), sections 1–7: install, model
+* **Raspberry Pi 4 kiosk:** [docs/PI_DEPLOY.md](docs/PI_DEPLOY.md), sections 1–7: install, model
   registry, kiosk on the 7" screen, upgrading to `mri/0.3.0`, internet access with Tailscale Funnel.
 * **Cloud evaluation copy on AWS EC2:** [docs/PI_DEPLOY.md](docs/PI_DEPLOY.md) section 8: t4g.small (ARM),
   Debian 13, the same installer, the registry over an SSH tunnel, direct HTTPS with Let's Encrypt.

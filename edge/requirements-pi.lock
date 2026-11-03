@@ -1,4 +1,4 @@
-# Exact versions verified on the Raspberry Pi (Debian 13, Python 3.13) on 2026-10-01:
+# Exact versions verified on the Raspberry Pi (64-bit Raspberry Pi OS, Debian 13, Python 3.13) on 2026-10-01:
 # PC/Pi parity 40/40 predictions, max |dp| 0.016, CAM r >= 0.998 (docs/FINDINGS.md §9). Used by install_pi.sh as constraints.
 annotated-types==0.8.0
 anyio==4.15.1

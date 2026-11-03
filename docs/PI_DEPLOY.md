@@ -1,7 +1,7 @@
 # Deployment guide: Raspberry Pi 4 clinic kiosk, and a cloud copy on AWS
 
 The reference deployment is a **Raspberry Pi 4 Model B (4 GB) with the official 7" touch display**, used as the clinic
-kiosk. A Raspberry Pi works the same way (faster). The same installer also runs on any 64-bit ARM Debian server;
+kiosk. The same installer also runs on any 64-bit ARM Debian server;
 section 8 sets up the hosted evaluation copy on AWS.
 
 | Section | What |
@@ -44,8 +44,6 @@ The prototype kiosk (prices actually paid, INR):
 
 * **Raspberry Pi 4 (4 GB):** a whole study takes 43–51 s (measured from the USB drive: DICOM series of 155 files
   51 s, NIfTI 43 s). 4 GB is the minimum (see the memory budget above).
-* **Raspberry Pi (8 GB):** use the **cooler** (sustained inference throttles without it) and the 27 W
-  USB-C supply.
 * Flash **Raspberry Pi OS (64-bit)** with Raspberry Pi Imager (Lite, or the desktop image for the kiosk). In the Imager settings, set a hostname
   (e.g. `neuroedge`), a user, Wi-Fi or Ethernet, and enable SSH.
 * Boot, then: `sudo apt update && sudo apt full-upgrade -y && sudo reboot`.
@@ -118,7 +116,7 @@ Then on the Pi:
 4. On the Pi:
    ```bash
    sudo install -m 640 -g neuroedge signing_pub.pem /etc/neuroedge/signing_pub.pem
-   sudo neuroedge-sync enroll --server https://<registry> --token <token> --name pi-01 --signing-pub /etc/neuroedge/signing_pub.pem
+   sudo neuroedge-sync enroll --server https://<registry> --token <token> --name pi4-01 --signing-pub /etc/neuroedge/signing_pub.pem
    sudo neuroedge-sync pull --model mri
    sudo neuroedge-sync status        # "mri: version ... verified OK"
    ```
@@ -207,13 +205,12 @@ It shows no patient data. Every portal page gets a "device home" button, and the
 minutes. The portal adapts to 800×480, 1024×600 and 1280×720 (tabs on the case page, touch-sized controls).
 
 **Hardware:**
-* Pi 4: the official 7" display's kit ribbon fits the Pi 4's DSI port directly; use the official supply (the
-  screen draws from the Pi).
-* Pi: a case that fits the Pi **with the cooler**, and the official supply.
+* The official 7" display's kit ribbon fits the Pi 4's DSI port directly; use the official supply (the screen
+  draws from the Pi).
 
 | Screen | Cable | Installer option |
 |---|---|---|
-| Original 7" Touch Display (800×480), **as on the reference Pi 4 kiosk** | Pi 4: kit ribbon; Pi: Raspberry Pi display cable (22-pin to 15-pin) | `--display td1` |
+| Original 7" Touch Display (800×480), **as on the reference Pi 4 kiosk** | kit ribbon | `--display td1` |
 | Touch Display 2 (720×1280 portrait panel) | included | `--display td2 --rotate 90` |
 | 7" HDMI (1024×600) | micro-HDMI to HDMI | `--display hdmi` |
 
@@ -231,7 +228,7 @@ sudo reboot
   `https://localhost/device?kiosk=1` full-screen. The portal CA is trusted for that user, so there is no warning.
 * The on-screen keyboard (squeekboard) appears when a text field is tapped; a USB keyboard also works.
 * Settings (URL, rotation) are in `/etc/default/neuroedge-kiosk`; reboot after editing. On a desktop image the kiosk logs in through LightDM; on Lite, through the console on tty1.
-* Pi + original 7" display: the kit's 15-pin ribbon does not fit the Pi; use the Raspberry Pi display cable (22-pin to 15-pin). Power the adapter board from the Pi's 5 V / GND pins (jumper wires in the kit).
+* Original 7" display: power the adapter board from the Pi's 5 V / GND pins (jumper wires in the kit).
 * If the panel stays black, check `kmsprint` and the cable orientation, and that `/boot/firmware/config.txt` has the
   overlay line.
 
@@ -302,7 +299,7 @@ sudo -u neuroedge env NEUROEDGE_HOME=/var/lib/neuroedge /opt/neuroedge/venv/bin/
 For a dev-bundle install, add `--bundle-dir /var/lib/neuroedge/dev_bundle`.
 The images must be readable by the `neuroedge` user (home directories are not), so copy them to `/tmp` first.
 It reports the median and p95 analysis time per stage, LLM tokens/s, peak RAM, SoC temperature and
-`vcgencmd get_throttled` (it should stay `0x0`). v1 (`mri/0.2.0`, single image) on the Pi: 238 ms median,
+`vcgencmd get_throttled` (it should stay `0x0`). v1 (`mri/0.2.0`, single image): 238 ms median,
 250 ms p95 (model 120 ms), peak RSS 261 MB. v2 (`mri/0.3.0`, whole study of 36 slices) on the Pi 4: 43–51 s.
 
 ## 7. Operations

@@ -84,7 +84,7 @@ exec python -m edge.serve --bundle-dir ../model/mri_v1 --portal-data ../portal_d
 
 README = """# NeuroEdge: review package (v2 portal, model mri/0.2.0)
 
-Secure, explainable brain-tumor MRI review that runs offline on a Raspberry Pi. This package runs the same
+Secure, explainable brain-tumor MRI review that runs offline on a Raspberry Pi 4 clinic kiosk. This package runs the same
 clinic portal and trained model **on your laptop** so you can review the workflow, code, results and documentation.
 
 > Research prototype on public data; not a medical device.
@@ -151,7 +151,7 @@ template answers. To enable it:
 | Pointing game | 0.53 | **0.99** |
 | 95% prediction-set coverage | 0.87 | **0.91** (target 0.93 not met) |
 
-* Raspberry Pi: 238 ms per analysis; 40/40 predictions identical to the PC.
+* Raspberry Pi: 238 ms per single-image analysis; 40/40 predictions identical to the PC.
 * The official BRISC test split leaks: 566 of 1,000 test images are copies or mirrors of training images. All
   numbers above use a re-split by patient.
 * Known limitations are in the model card: the sequence shortcut in the "no tumor" class, coverage below the

@@ -125,11 +125,11 @@ recreation of the API container.
      container.
 * **Data at rest:** the stored blob is ciphertext (8.000 bits/byte entropy, no tar or file-name markers).
 
-## 9. Raspberry Pi deployment (8 GB, Debian 13, no cooler, phone charger)
+## 9. Raspberry Pi deployment (development board, 8 GB, Debian 13, no cooler, phone charger)
 The Pi was installed with `edge/install_pi.sh`, enrolled with the registry over verified TLS, and runs the
 signed, encrypted bundle decrypted in RAM. Benchmark: `edge/bench.py`, 40 held-out test scans, 4 threads.
 
-| Measure | Pi | PC (i7) | Plan target |
+| Measure | Raspberry Pi | PC (i7) | Plan target |
 |---|---|---|---|
 | Full analysis, median / p95 | **178 / 190 ms** | 97 ms | < 400 ms |
 | INT8 model (classifier + segmentation) | 47 ms | 12 ms | — |
@@ -143,7 +143,7 @@ signed, encrypted bundle decrypted in RAM. Benchmark: `edge/bench.py`, 40 held-o
 
 * **Thermals:** 51.8 → 83.7 °C. `get_throttled = 0xe0000`: the soft temperature limit was reached, with
   throttling and ARM-clock capping. Under-voltage did not occur (5.10 V), so the phone charger was adequate
-  for this load. LLM speed fell 8.9 → 8.2 tok/s across runs as the SoC heated. **Fit the cooler**
+  for this load. LLM speed fell 8.9 → 8.2 tok/s across runs as the SoC heated. **Fit a cooler**
   before production or before further benchmarks; the numbers above are therefore slightly pessimistic.
 * **Parity vs PC** (same INT8 bundle, 40 scans): predictions agree 40/40. Max |Δp| 0.016 (mean 0.0007);
   exact-CAM Pearson ≥ 0.998. Preprocessed inputs differ by ≤ 1.9e-5 (OpenCV 5.0 / NumPy 2.5 vs 4.13 / 2.2),
@@ -197,5 +197,5 @@ validation macro-F1 (seed 0), never chosen on test.
   stays 0.81 (v0: 0.39). The spatial envelope of the map comes partly from the segmentation-derived attention, so the
   map is "lesion-weighted classifier evidence", not classifier evidence alone. The rank order inside it still depends
   on the classifier. With all layers randomized, correlation returns to 0.57 (v0 0.51): input-intensity structure.
-* **Pi** (seed 0 INT8, 60 scans, 4 threads): full analysis median 238 ms / p95 250 ms (v0: 178 ms; target < 400 ms);
+* **Raspberry Pi** (seed 0 INT8, 60 scans, 4 threads): full analysis median 238 ms / p95 250 ms (v0: 178 ms; target < 400 ms);
   model 120 ms; peak RSS 261 MB; 43 → 63 °C, no throttling.

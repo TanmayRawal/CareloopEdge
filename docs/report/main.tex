@@ -205,10 +205,10 @@ Model security & OpenSSF Model Signing (ECDSA P-256), AES-256-GCM, X25519 + HKDF
 Registry & FastAPI, SQLite (named Docker volume), Caddy (TLS, local CA), Docker Compose \\
 Clinic portal & Flask, Jinja2, gunicorn, SQLite (WAL), server-rendered HTML + one self-hosted JS file \\
 Patient data security & AES-256-GCM blob store, Argon2id passwords, TOTP two-step sign-in, CSRF tokens, strict CSP, hash-chained audit log \\
-Device & Raspberry Pi (8\,GB) and Pi 4 (4\,GB), Raspberry Pi OS (Debian 13), Caddy HTTPS, nftables firewall, systemd units, Tailscale Funnel for remote access \\
+Device & Raspberry Pi 4 (4\,GB) with the official 7-inch display, Raspberry Pi OS (Debian 13), Caddy HTTPS, nftables firewall, systemd units, Tailscale Funnel for remote access \\
 Kiosk & labwc (Wayland), Chromium in kiosk mode, locked-down user, built-in touch keyboard \\
 Interface & IBM Plex Sans and Plex Mono (self-hosted), token-based design system, canvas 3D brain renderer \\
-Testing & pytest (164 automated tests), live end-to-end registry check, scripted browser walk-through (this report's figures) \\
+Testing & pytest (179 automated tests), live end-to-end registry check, scripted browser walk-through (this report's figures) \\
 \bottomrule
 \end{tabularx}
 \caption{Technology stack.}
@@ -340,7 +340,7 @@ bundle, and inference is ONNX Runtime on the CPU.
 \textbf{Measure} & \textbf{Raspberry Pi} & \textbf{PC (i7)} \\
 \midrule
 Single image, full analysis (median / p95) & 238 / 250\,ms & 97\,ms \\
-Whole study (36 slices + key-slice overlays) & 8--14\,s & 3--6\,s \\
+Whole study (36 slices + key-slice overlays) & 43--51\,s (Pi 4 kiosk) & 3--6\,s \\
 Peak memory, large 0.5\,mm study & 2.5\,GB & -- \\
 Pi vs PC agreement (40 scans) & 40/40, CAM $r \ge 0.997$ & -- \\
 Model size (INT8) & \multicolumn{2}{c}{24.7\,MB (FP32 96.6\,MB)} \\
@@ -492,9 +492,8 @@ the image filling the screen; touch targets are at least 44\,px.}
 % ================================================================================================ 11
 \section{Device deployment}
 \begin{itemize}
-\item \textbf{Raspberry Pi (8\,GB).} The main clinic device: portal, model \texttt{mri/0.3.0}, remote access through
-Tailscale Funnel.
-\item \textbf{Raspberry Pi 4 (4\,GB) with the official 7-inch display.} Installed from a newly written SD card
+\item \textbf{Raspberry Pi 4 (4\,GB) with the official 7-inch display.} The clinic kiosk: portal, model
+\texttt{mri/0.3.0}, remote access through Tailscale Funnel. Installed from a newly written SD card
 (Raspberry Pi OS, first-boot configuration with key-only SSH), enrolled with the registry, model verified, kiosk
 running on the screen. The language model is not installed, which keeps memory free for whole-study analysis.
 \item \textbf{Kiosk.} A locked-down \texttt{kiosk} user without password, sudo or SSH logs in on the display and opens the

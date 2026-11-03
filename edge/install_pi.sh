@@ -12,7 +12,7 @@
 #   --kiosk              the Pi's own screen shows the portal full-screen: device home (/device) -> portal, touch
 #                        friendly, on-screen keyboard. Runs as a locked-down user "kiosk" (no password, no sudo).
 #   --display MODEL      enable the panel driver in /boot/firmware/config.txt (reboot needed):
-#                        td1 = original 7" Touch Display (800x480; Pi needs the 22-to-15-pin display cable),
+#                        td1 = original 7" Touch Display (800x480; the reference Pi 4 kiosk),
 #                        td2 = Touch Display 2 (720x1280 portrait panel; use --rotate 90 for landscape), hdmi = none
 #   --rotate DEG         rotate the kiosk screen (e.g. 90 for Touch Display 2 in landscape)
 #   --with-llm           RESEARCH ONLY: also build llama.cpp and run the local language model (Qwen3-1.7B, ~1.6 GB RAM)
@@ -404,7 +404,7 @@ Next, enroll this Pi with the model registry. On the server machine, create a on
   curl -X POST -H "Authorization: Bearer \$NE_ADMIN_TOKEN" https://<registry>/v1/admin/enrollment-tokens
 Then on the Pi:
   sudo install -m 640 -g neuroedge signing_pub.pem $ETC/signing_pub.pem
-  sudo neuroedge-sync enroll --server https://<registry> --token <one-time-token> --name pi-01 --signing-pub $ETC/signing_pub.pem
+  sudo neuroedge-sync enroll --server https://<registry> --token <one-time-token> --name pi4-01 --signing-pub $ETC/signing_pub.pem
   sudo neuroedge-sync pull --model mri       # downloads, trial-decrypts and verifies; the web app then starts itself
   sudo neuroedge-sync status
 Benchmark:  cd $APP/src && sudo -u neuroedge env NEUROEDGE_HOME=$STATE $APP/venv/bin/python -m edge.bench --images <dir>

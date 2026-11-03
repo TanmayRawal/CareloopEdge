@@ -11,7 +11,7 @@ Measures, after a warm-up:
   series       (--series) engine.analyze_series() per study: .nii/.nii.gz/.zip files and folders of DICOM files
 Targets: the full analysis (classifier + seg INT8, Grad-CAM, lesion, overlays) < 400 ms per image; a whole study
 (36 slices, key-slice overlays) < 25 s.
-Run on the Pi with the cooler fitted; note the ambient temperature.
+Run on the Pi with a cooler fitted; note the ambient temperature.
 """
 
 from __future__ import annotations

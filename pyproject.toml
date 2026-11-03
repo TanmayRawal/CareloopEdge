@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "neuroedge"
 version = "0.1.0"
-description = "Secure, explainable brain-tumor MRI/CT classification for Raspberry Pi"
+description = "Secure, explainable brain-tumor MRI/CT classification for the Raspberry Pi 4 clinic kiosk"
 requires-python = ">=3.10"
 # Core runtime needed on every target (training PC, server, Pi).
 # torch is deliberately NOT a core dependency: the Pi fast path runs on onnxruntime + numpy.

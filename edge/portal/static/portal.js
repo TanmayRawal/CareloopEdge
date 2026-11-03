@@ -60,7 +60,7 @@
     });
   }
 
-  // ------------------------------------------------------------------ upload progress (a whole study: ~15-25 s on a Pi, ~45-50 s on a Pi 4)
+  // ------------------------------------------------------------------ upload progress (a whole study: ~45-50 s on the Pi 4 kiosk)
   $$('form[enctype="multipart/form-data"]').forEach(f => f.addEventListener("submit", () => {
     const files = $$('input[type=file][name="scan"]', f).flatMap(i => Array.from(i.files));
     if (!files.length) return;

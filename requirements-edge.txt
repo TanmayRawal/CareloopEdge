@@ -1,4 +1,4 @@
-# Raspberry Pi (64-bit Raspberry Pi OS). Installed by edge/install_pi.sh. The fast path needs no PyTorch.
+# Raspberry Pi 4 (64-bit Raspberry Pi OS). Installed by edge/install_pi.sh. The fast path needs no PyTorch.
 numpy
 opencv-python-headless
 onnxruntime

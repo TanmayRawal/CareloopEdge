@@ -1,6 +1,6 @@
 """Device-side model sync for the Raspberry Pi.
 
-  python -m edge.sync enroll --server https://registry.example.org --token <one-time> --name pi-lab \
+  python -m edge.sync enroll --server https://registry.example.org --token <one-time> --name pi4-lab \
          --signing-pub signing_pub.pem
   python -m edge.sync pull --model mri          # (systemd timer runs this daily)
   python -m edge.sync status
